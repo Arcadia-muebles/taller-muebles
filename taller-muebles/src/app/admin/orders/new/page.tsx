@@ -1,0 +1,25 @@
+import { AppShell } from "@/components/app-shell";
+import { OrderForm } from "@/components/order-form";
+
+export default function NewOrderPage() {
+  return (
+    <AppShell active="admin" user={{ name: "Rodrigo", role: "Administrador" }}>
+      <header className="border-b border-stone-200 pb-5">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">
+          Nueva nota
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-950">
+          Crear orden de produccion
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+          Esta pantalla concentra los datos que antes quedaban repartidos entre
+          hojas: venta, cliente, producto, fechas, prioridad y primera asignacion.
+        </p>
+      </header>
+
+      <div className="mt-5 max-w-5xl">
+        <OrderForm />
+      </div>
+    </AppShell>
+  );
+}
