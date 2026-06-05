@@ -1,7 +1,16 @@
-import { Download, FileUp, MessageSquarePlus, Paperclip } from "lucide-react";
-import { addOrderComment, uploadOrderAttachment } from "@/app/admin/orders/collaboration-actions";
+"use client";
+
+import { CheckCircle2, Download, FileUp, MessageSquarePlus, Paperclip, XCircle } from "lucide-react";
+import { useActionState, useRef } from "react";
+import {
+  addOrderComment,
+  type CollaborationActionResult,
+  uploadOrderAttachment,
+} from "@/app/admin/orders/collaboration-actions";
 import type { OrderAttachment, OrderComment } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
+
+const initialActionState: CollaborationActionResult = { ok: false, message: "" };
 
 export function OrderCollaboration({
   orderId,
@@ -14,6 +23,25 @@ export function OrderCollaboration({
   attachments: OrderAttachment[];
   canUpload: boolean;
 }) {
+  const commentFormRef = useRef<HTMLFormElement>(null);
+  const uploadFormRef = useRef<HTMLFormElement>(null);
+  const [commentState, commentAction] = useActionState(
+    async (_state: CollaborationActionResult, formData: FormData) => {
+      const result = await addOrderComment(formData);
+      if (result.ok) commentFormRef.current?.reset();
+      return result;
+    },
+    initialActionState,
+  );
+  const [uploadState, uploadAction] = useActionState(
+    async (_state: CollaborationActionResult, formData: FormData) => {
+      const result = await uploadOrderAttachment(formData);
+      if (result.ok) uploadFormRef.current?.reset();
+      return result;
+    },
+    initialActionState,
+  );
+
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <section className="rounded-lg border border-stone-200 bg-white">
@@ -24,11 +52,21 @@ export function OrderCollaboration({
             <p className="text-sm text-stone-500">Coordinación y decisiones sobre la orden.</p>
           </div>
         </div>
-        <form action={addOrderComment} className="border-b border-stone-100 p-4">
+        <form ref={commentFormRef} action={commentAction} className="border-b border-stone-100 p-4">
           <input type="hidden" name="orderId" value={orderId} />
-          <textarea name="body" required minLength={2} maxLength={1000} placeholder="Agregar comentario operativo..." className="min-h-24 w-full resize-none rounded-md border border-stone-200 bg-stone-50 p-3 text-sm outline-none focus:border-stone-400 focus:bg-white" />
-          <div className="mt-2 flex justify-end">
-            <SubmitButton pendingLabel="Publicando..." className="h-9 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">Publicar comentario</SubmitButton>
+          <textarea
+            name="body"
+            required
+            minLength={2}
+            maxLength={1000}
+            placeholder="Agregar comentario operativo..."
+            className="min-h-24 w-full resize-none rounded-md border border-stone-200 bg-stone-50 p-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+          />
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <ActionFeedback state={commentState} />
+            <SubmitButton pendingLabel="Publicando..." className="h-9 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">
+              Publicar comentario
+            </SubmitButton>
           </div>
         </form>
         <div className="max-h-80 divide-y divide-stone-100 overflow-y-auto">
@@ -56,16 +94,24 @@ export function OrderCollaboration({
           </div>
         </div>
         {canUpload ? (
-          <form action={uploadOrderAttachment} className="flex flex-col gap-3 border-b border-stone-100 p-4 sm:flex-row sm:items-end">
+          <form ref={uploadFormRef} action={uploadAction} className="border-b border-stone-100 p-4">
             <input type="hidden" name="orderId" value={orderId} />
-            <label className="flex-1 text-xs font-medium uppercase tracking-[0.12em] text-stone-500">
+            <label className="block text-xs font-medium uppercase tracking-[0.12em] text-stone-500">
               Archivo, máximo 10 MB
-              <input name="file" required type="file" className="mt-2 block w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium" />
+              <input
+                name="file"
+                required
+                type="file"
+                className="mt-2 block w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium"
+              />
             </label>
-            <SubmitButton pendingLabel="Subiendo..." className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">
-              <FileUp className="size-4" />
-              Subir
-            </SubmitButton>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <ActionFeedback state={uploadState} />
+              <SubmitButton pendingLabel="Subiendo..." className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">
+                <FileUp className="size-4" />
+                Subir
+              </SubmitButton>
+            </div>
           </form>
         ) : null}
         <div className="max-h-80 divide-y divide-stone-100 overflow-y-auto">
@@ -73,7 +119,7 @@ export function OrderCollaboration({
             <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 p-4 transition hover:bg-stone-50">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{attachment.fileName}</p>
-                <p className="mt-1 text-xs text-stone-500">{formatBytes(attachment.fileSize)} · {attachment.fileType}</p>
+                <p className="mt-1 text-xs text-stone-500">{formatBytes(attachment.fileSize)} / {attachment.fileType}</p>
               </div>
               <Download className="size-4 shrink-0 text-stone-400" />
             </a>
@@ -82,6 +128,20 @@ export function OrderCollaboration({
         </div>
       </section>
     </div>
+  );
+}
+
+function ActionFeedback({ state }: { state: CollaborationActionResult }) {
+  if (!state.message) {
+    return <span className="text-xs text-stone-400">Los cambios se guardan en la actividad de la orden.</span>;
+  }
+
+  const Icon = state.ok ? CheckCircle2 : XCircle;
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${state.ok ? "text-emerald-700" : "text-rose-700"}`}>
+      <Icon className="size-3.5" />
+      {state.message}
+    </span>
   );
 }
 
