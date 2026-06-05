@@ -3,18 +3,20 @@ import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
-  CheckCircle2,
   Clock,
   FileText,
+  History,
   MessageSquareText,
-  PackageCheck,
-  Pencil,
   ShieldCheck,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { OrderActions } from "@/components/order-actions";
+import { OrderCollaboration } from "@/components/order-collaboration";
 import { StatusBadge } from "@/components/status-badge";
+import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
-import { getOrder } from "@/lib/repositories/production";
+import { getSystemSettings } from "@/lib/repositories/settings";
+import { getOrder, listOrderAttachments, listOrderAudit, listOrderComments } from "@/lib/repositories/production";
 import { deliveryLabel, formatDate } from "@/lib/utils";
 
 type OrderDetailPageProps = {
@@ -22,17 +24,26 @@ type OrderDetailPageProps = {
 };
 
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
+  const user = await requireSession(["admin", "manager", "viewer"]);
   const { id } = await params;
-  const order = await getOrder(id);
+  const [order, audit, comments, attachments, settings] = await Promise.all([
+    getOrder(id),
+    listOrderAudit(id),
+    listOrderComments(id),
+    listOrderAttachments(id),
+    getSystemSettings(),
+  ]);
 
   if (!order) {
     notFound();
   }
 
   const progress = completionPercent(order);
+  const canEditOrder = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
+  const canClose = !settings.production.requireQualityApproval || order.steps.find((step) => step.key === "quality")?.status === "done";
 
   return (
-    <AppShell active="admin" user={{ name: "Rodrigo", role: "Administrador" }}>
+    <AppShell active="admin" user={user}>
       <header className="flex flex-col gap-4 border-b border-stone-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <Link
@@ -60,16 +71,9 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
-            <Pencil className="size-4" />
-            Editar
-          </button>
-          <button className="inline-flex h-10 items-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white">
-            <CheckCircle2 className="size-4" />
-            Cerrar orden
-          </button>
-        </div>
+        {canEditOrder ? (
+          <OrderActions orderId={order.id} canClose={canClose} />
+        ) : null}
       </header>
 
       <section className="mt-5 grid gap-5 xl:grid-cols-[1fr_380px]">
@@ -121,6 +125,11 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                       <div>
                         <p className="font-semibold">{step.label}</p>
                         <p className="mt-1 text-sm text-stone-500">{step.owner}</p>
+                        {step.notes ? (
+                          <p className="mt-2 max-w-xl rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2 text-xs font-medium text-rose-700">
+                            {step.notes}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
@@ -158,6 +167,28 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 
           <section className="rounded-lg border border-stone-200 bg-white p-4">
             <div className="flex items-center gap-3">
+              <History className="size-5 text-stone-500" />
+              <div>
+                <h2 className="text-base font-semibold">Actividad reciente</h2>
+                <p className="text-sm text-stone-500">Cambios relevantes de esta orden.</p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-3">
+              {audit.slice(0, 8).map((entry) => (
+                <div key={entry.id} className="border-l-2 border-stone-200 pl-3">
+                  <p className="text-sm font-medium text-stone-800">{auditActionLabel(entry.action)}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-stone-500">{entry.summary}</p>
+                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-stone-400">
+                    {new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(entry.createdAt))}
+                  </p>
+                </div>
+              ))}
+              {!audit.length ? <p className="text-sm text-stone-500">Aún no hay actividad registrada.</p> : null}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-stone-200 bg-white p-4">
+            <div className="flex items-center gap-3">
               <MessageSquareText className="size-5 text-stone-500" />
               <div>
                 <h2 className="text-base font-semibold">Observaciones</h2>
@@ -169,23 +200,17 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             </p>
           </section>
 
-          <section className="rounded-lg border border-stone-200 bg-white p-4">
-            <div className="flex items-center gap-3">
-              <PackageCheck className="size-5 text-stone-500" />
-              <div>
-                <h2 className="text-base font-semibold">Proximas acciones</h2>
-                <p className="text-sm text-stone-500">Para la conexion real.</p>
-              </div>
-            </div>
-            <ul className="mt-4 space-y-2 text-sm text-stone-600">
-              <li>Registrar cambios en audit_logs.</li>
-              <li>Permitir adjuntos desde Supabase Storage.</li>
-              <li>Actualizar stock por consumo o ajuste.</li>
-              <li>Notificar bloqueos y atrasos.</li>
-            </ul>
-          </section>
         </aside>
       </section>
+
+      <div className="mt-5">
+        <OrderCollaboration
+          orderId={order.id}
+          comments={comments}
+          attachments={attachments}
+          canUpload={canEditOrder}
+        />
+      </div>
     </AppShell>
   );
 }
@@ -199,4 +224,15 @@ function Info({ label, value, strong }: { label: string; value: string; strong?:
       </p>
     </div>
   );
+}
+
+function auditActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    create_order: "Orden creada",
+    update_order: "Orden actualizada",
+    update_step: "Etapa actualizada",
+    close_order: "Orden cerrada",
+    cancel_order: "Orden cancelada",
+  };
+  return labels[action] ?? action;
 }

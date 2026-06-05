@@ -28,7 +28,40 @@ button {
   cursor: pointer;
 }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #78716c;
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 ::selection {
   background: #1c1917;
   color: #ffffff;
+}
+
+@media print {
+  aside,
+  button,
+  form,
+  input,
+  select,
+  textarea {
+    display: none !important;
+  }
+
+  body,
+  main {
+    background: white !important;
+  }
+
+  main {
+    padding-left: 0 !important;
+  }
 }

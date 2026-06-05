@@ -143,6 +143,13 @@ create table public.audit_logs (
   created_at timestamptz not null default now()
 );
 
+create table public.system_settings (
+  id boolean primary key default true check (id),
+  value jsonb not null default '{}'::jsonb,
+  updated_by uuid references public.profiles(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
 create index orders_store_status_idx on public.orders (store_id, status);
 create index orders_delivery_date_idx on public.orders (delivery_date) where completed_at is null;
 create index orders_client_name_idx on public.orders using gin (to_tsvector('spanish', client_name));
@@ -229,10 +236,72 @@ as $$
 $$;
 
 grant usage on schema app_private to authenticated;
+revoke all on function app_private.current_profile_id() from public;
+revoke all on function app_private.current_role() from public;
+revoke all on function app_private.current_area() from public;
+revoke all on function app_private.is_admin_or_manager() from public;
 grant execute on function app_private.current_profile_id() to authenticated;
 grant execute on function app_private.current_role() to authenticated;
 grant execute on function app_private.current_area() to authenticated;
 grant execute on function app_private.is_admin_or_manager() to authenticated;
+
+create or replace function public.record_stock_movement(
+  p_material_id uuid,
+  p_movement_type public.stock_movement_type,
+  p_quantity numeric,
+  p_notes text default null,
+  p_order_id uuid default null
+)
+returns numeric
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  current_value numeric;
+  next_value numeric;
+begin
+  if not app_private.is_admin_or_manager() then
+    raise exception 'Insufficient permissions';
+  end if;
+  if p_movement_type not in ('in', 'out', 'adjustment') then
+    raise exception 'Unsupported stock movement type';
+  end if;
+  if p_quantity <= 0 then
+    raise exception 'Quantity must be positive';
+  end if;
+
+  select current_quantity into current_value
+  from public.materials
+  where id = p_material_id
+  for update;
+
+  if current_value is null then
+    raise exception 'Material not found';
+  end if;
+
+  next_value := case
+    when p_movement_type = 'in' then current_value + p_quantity
+    when p_movement_type = 'out' then current_value - p_quantity
+    when p_movement_type = 'adjustment' then p_quantity
+    else current_value
+  end;
+
+  if next_value < 0 then
+    raise exception 'Insufficient stock';
+  end if;
+
+  update public.materials set current_quantity = next_value where id = p_material_id;
+  insert into public.stock_movements (material_id, order_id, movement_type, quantity, notes, created_by)
+  values (p_material_id, p_order_id, p_movement_type, p_quantity, p_notes, app_private.current_profile_id());
+  return next_value;
+end;
+$$;
+
+revoke all on function public.record_stock_movement(uuid, public.stock_movement_type, numeric, text, uuid)
+from public;
+grant execute on function public.record_stock_movement(uuid, public.stock_movement_type, numeric, text, uuid)
+to authenticated;
 
 alter table public.stores enable row level security;
 alter table public.profiles enable row level security;
@@ -243,6 +312,7 @@ alter table public.order_attachments enable row level security;
 alter table public.materials enable row level security;
 alter table public.stock_movements enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.system_settings enable row level security;
 
 create policy "stores readable by active users"
 on public.stores for select
@@ -257,11 +327,11 @@ using (
   or app_private.is_admin_or_manager()
 );
 
-create policy "profiles managed by admins and managers"
+create policy "profiles managed by admins"
 on public.profiles for all
 to authenticated
-using (app_private.is_admin_or_manager())
-with check (app_private.is_admin_or_manager());
+using (app_private.current_role() = 'admin')
+with check (app_private.current_role() = 'admin');
 
 create policy "orders readable by active users"
 on public.orders for select
@@ -271,7 +341,10 @@ using (app_private.current_profile_id() is not null);
 create policy "orders inserted by admins and managers"
 on public.orders for insert
 to authenticated
-with check (app_private.is_admin_or_manager());
+with check (
+  app_private.is_admin_or_manager()
+  and created_by = app_private.current_profile_id()
+);
 
 create policy "orders updated by admins and managers"
 on public.orders for update
@@ -298,9 +371,12 @@ using (
   or assigned_to = app_private.current_profile_id()
 )
 with check (
-  app_private.is_admin_or_manager()
-  or step = app_private.current_area()
-  or assigned_to = app_private.current_profile_id()
+  (
+    app_private.is_admin_or_manager()
+    or step = app_private.current_area()
+    or assigned_to = app_private.current_profile_id()
+  )
+  and updated_by = app_private.current_profile_id()
 );
 
 create policy "comments readable by active users"
@@ -352,18 +428,59 @@ using (app_private.is_admin_or_manager());
 create policy "audit logs inserted by active users"
 on public.audit_logs for insert
 to authenticated
-with check (profile_id = app_private.current_profile_id() or app_private.is_admin_or_manager());
+with check (profile_id = app_private.current_profile_id());
+
+create policy "system settings readable by active users"
+on public.system_settings for select
+to authenticated
+using (app_private.current_profile_id() is not null);
+
+create policy "system settings managed by admins"
+on public.system_settings for all
+to authenticated
+using (app_private.current_role() = 'admin')
+with check (
+  app_private.current_role() = 'admin'
+  and updated_by = app_private.current_profile_id()
+);
 
 grant usage on schema public to authenticated;
 grant select on public.stores to authenticated;
 grant select on public.profiles to authenticated;
-grant select, insert, update on public.orders to authenticated;
-grant select, insert, update on public.production_steps to authenticated;
+grant select, insert on public.orders to authenticated;
+grant update (
+  store_id,
+  internal_code,
+  sales_note_number,
+  client_name,
+  product_name,
+  material,
+  color,
+  status,
+  condition,
+  priority,
+  is_warranty,
+  entry_date,
+  delivery_date,
+  completed_at,
+  assigned_to,
+  observations
+) on public.orders to authenticated;
+grant select, insert on public.production_steps to authenticated;
+grant update (status, started_at, completed_at, blocked_reason, notes, updated_by)
+on public.production_steps to authenticated;
 grant select, insert on public.order_comments to authenticated;
 grant select, insert on public.order_attachments to authenticated;
 grant select, insert, update on public.materials to authenticated;
 grant select, insert on public.stock_movements to authenticated;
 grant select, insert on public.audit_logs to authenticated;
+grant select, insert, update on public.system_settings to authenticated;
+
+grant usage on schema public, app_private to service_role;
+grant all privileges on all tables in schema public to service_role;
+grant all privileges on all sequences in schema public to service_role;
+grant execute on all functions in schema public to service_role;
+grant execute on all functions in schema app_private to service_role;
 
 insert into storage.buckets (id, name, public)
 values ('order-attachments', 'order-attachments', false)

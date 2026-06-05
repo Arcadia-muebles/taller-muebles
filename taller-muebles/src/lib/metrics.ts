@@ -28,6 +28,7 @@ export function blockedOrders(orders: Order[]) {
 }
 
 export function completionPercent(order: Order) {
+  if (!order.steps.length) return 0;
   const done = order.steps.filter((step) => step.status === "done").length;
   return Math.round((done / order.steps.length) * 100);
 }

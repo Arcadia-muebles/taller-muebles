@@ -14,13 +14,25 @@ export type StepStatus = "pending" | "active" | "done" | "blocked";
 
 export type Role = "admin" | "manager" | "operator" | "viewer";
 
+export type AreaKey = "structure" | "cutting" | "sewing" | "upholstery" | "quality";
+
 export type ProductionStep = {
-  key: "structure" | "cutting" | "sewing" | "upholstery" | "quality";
+  key: AreaKey;
   label: string;
   owner: string;
   status: StepStatus;
+  notes?: string;
   startedAt?: string;
   completedAt?: string;
+};
+
+export type AppUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  area?: AreaKey;
+  active: boolean;
 };
 
 export type Order = {
@@ -55,4 +67,92 @@ export type StockItem = {
   available: number;
   minimum: number;
   store: StoreCode | "general";
+  active?: boolean;
+};
+
+export type StockMovement = {
+  id: string;
+  materialId: string;
+  materialName: string;
+  type: "in" | "out" | "adjustment";
+  quantity: number;
+  notes: string;
+  createdAt: string;
+};
+
+export type AuditEntry = {
+  id: string;
+  orderId: string;
+  action: string;
+  summary: string;
+  createdAt: string;
+};
+
+export type OrderComment = {
+  id: string;
+  orderId: string;
+  author: string;
+  body: string;
+  createdAt: string;
+};
+
+export type OrderAttachment = {
+  id: string;
+  orderId: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  url: string;
+  createdAt: string;
+};
+
+export type SystemSettings = {
+  general: {
+    businessName: string;
+    timezone: string;
+    workdayStart: string;
+    workdayEnd: string;
+    workdays: number[];
+  };
+  production: {
+    steps: Array<{
+      key: AreaKey;
+      label: string;
+      targetDays: number;
+      enabled: boolean;
+      required: boolean;
+    }>;
+    allowParallelSteps: boolean;
+    requireQualityApproval: boolean;
+    autoCompleteAfterQuality: boolean;
+  };
+  orders: {
+    defaultPriority: Order["priority"];
+    requireAssignedPerson: boolean;
+    requireMaterialAndColor: boolean;
+    requireObservationsForWarranty: boolean;
+    enforceUniqueSalesNote: boolean;
+    allowPastDeliveryDates: boolean;
+    archiveCompletedAfterDays: number;
+  };
+  alerts: {
+    upcomingDeliveryDays: number;
+    urgentDeliveryDays: number;
+    blockedAfterHours: number;
+    stockAlertsEnabled: boolean;
+    deliveryAlertsEnabled: boolean;
+    blockedAlertsEnabled: boolean;
+    dailySummaryEnabled: boolean;
+    dailySummaryTime: string;
+  };
+  permissions: {
+    managersCanEditOrders: boolean;
+    managersCanManageStock: boolean;
+    operatorsCanStartSteps: boolean;
+    operatorsCanCompleteSteps: boolean;
+    operatorsCanBlockSteps: boolean;
+    requireBlockReason: boolean;
+  };
+  updatedAt?: string;
+  updatedBy?: string;
 };

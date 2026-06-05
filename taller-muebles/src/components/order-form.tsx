@@ -3,9 +3,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, CalendarDays, CheckCircle2, FileText, Save, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useTransition } from "react";
 import { useForm } from "react-hook-form";
-import { createOrder, type CreateOrderState } from "@/app/admin/orders/actions";
+import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
 import { orderSchema, type OrderFormValues } from "@/lib/validation/order";
 
 const inputClass =
@@ -17,31 +17,34 @@ const initialState: CreateOrderState = {
   message: "",
 };
 
-export function OrderForm() {
-  const [state, formAction, pending] = useActionState(createOrder, initialState);
+export function OrderForm({ orderId, initialValues, assignees }: { orderId?: string; initialValues?: OrderFormValues; assignees: string[] }) {
+  const action = orderId ? updateOrder.bind(null, orderId) : createOrder;
+  const [state, formAction, actionPending] = useActionState(action, initialState);
+  const [formPending, startTransition] = useTransition();
   const {
     register,
-    trigger,
+    handleSubmit,
     formState: { errors },
   } = useForm<OrderFormValues>({
     resolver: zodResolver(orderSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       store: "LH",
       priority: "normal",
       isWarranty: false,
       entryDate: new Date().toISOString().slice(0, 10),
     },
   });
+  const pending = actionPending || formPending;
+  const submit = handleSubmit((_values, event) => {
+    if (!(event?.target instanceof HTMLFormElement)) return;
+    const formData = new FormData(event.target);
+    startTransition(() => formAction(formData));
+  });
 
   return (
     <form
       action={formAction}
-      onSubmit={async (event) => {
-        const valid = await trigger();
-        if (!valid) {
-          event.preventDefault();
-        }
-      }}
+      onSubmit={submit}
       className="space-y-5"
     >
       {state.message ? (
@@ -91,11 +94,7 @@ export function OrderForm() {
           <Field label="Responsable inicial" error={errors.assignedTo?.message}>
             <select {...register("assignedTo")} className={inputClass}>
               <option value="">Seleccionar</option>
-              <option value="Gustavo Rojas">Gustavo Rojas</option>
-              <option value="Jan Spork">Jan Spork</option>
-              <option value="Tony">Tony</option>
-              <option value="LC01">LC01</option>
-              <option value="LG02">LG02</option>
+              {assignees.map((assignee) => <option key={assignee} value={assignee}>{assignee}</option>)}
             </select>
           </Field>
           <Field label="Producto / modelo" error={errors.productName?.message} full>
@@ -161,7 +160,7 @@ export function OrderForm() {
           className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Save className="size-4" />
-          {pending ? "Guardando..." : "Guardar nota"}
+          {pending ? "Guardando..." : orderId ? "Guardar cambios" : "Guardar nota"}
         </button>
       </div>
     </form>

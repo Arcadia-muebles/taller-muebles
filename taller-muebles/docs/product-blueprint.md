@@ -180,14 +180,12 @@ Casos realistas:
 
 ## Pendientes Para La Siguiente Iteracion
 
-- Definir columnas definitivas con planilla real.
-- Definir usuarios reales y permisos.
-- Crear esquema Supabase.
-- Conectar autenticacion.
-- Reemplazar datos demo por queries reales.
-- Implementar acciones de crear/editar/cerrar orden.
-- Implementar historial de cambios.
-- Definir reglas exactas de stock.
+- Crear o recibir el proyecto Supabase definitivo del cliente.
+- Aplicar la migracion validada y cargar variables de produccion.
+- Crear los usuarios reales y revisar permisos con Rodrigo.
+- Validar columnas, reglas de stock y flujo final contra la planilla real.
+- Verificar despliegue, tabletas del taller y recuperacion de acceso.
+- Agregar funciones de IA solo despues de acumular datos operativos confiables.
 
 ## Estado De Implementacion
 
@@ -195,17 +193,19 @@ Casos realistas:
 
 - Proyecto Next.js con TypeScript, Tailwind y App Router.
 - Panel administrador separado del panel taller.
-- Login visual y accion server-side preparada para Supabase OTP.
-- Tabla administrativa con busqueda, detalle de orden y creacion de nota.
-- Vista taller con filtros por proceso y acciones demo para iniciar, terminar o bloquear etapas.
-- Capa de repositorio que usa Supabase cuando hay variables de entorno y fallback demo cuando no.
-- Migracion SQL inicial con tablas, enums, indices, RLS, permisos y bucket privado para adjuntos.
+- Login real con Supabase Auth, proteccion por sesion y rutas por rol.
+- Tabla administrativa con busqueda, filtros, detalle, creacion, edicion, cierre e historial.
+- Vista taller responsive con cola por area, detalle dedicado y transiciones de etapa validadas.
+- Comentarios, adjuntos privados, auditoria, stock, usuarios, reportes y reglas configurables.
+- Capa de repositorio con Supabase persistente y fallback local persistente cuando no hay variables.
+- Migracion SQL con tablas, enums, indices, RLS, permisos explicitos y bucket privado para adjuntos.
+- Supabase CLI inicializado, migracion aplicada localmente y tipos TypeScript generados desde la base.
+- Matriz RLS validada localmente con admin, manager, operator y viewer.
+- QA visual realizado en escritorio y movil de 390 px.
 
 ### Siguiente trabajo tecnico
 
-- Crear proyecto Supabase del cliente y cargar `.env.local`.
-- Ejecutar migracion inicial.
-- Generar tipos Supabase reales desde la base.
-- Cambiar acciones demo por Server Actions persistentes.
-- Activar middleware/proteccion por sesion y rol.
-- Crear usuarios reales: admin, manager, operario, viewer.
+- Vincular el repositorio al proyecto Supabase definitivo.
+- Aplicar la migracion y volver a generar tipos desde ese proyecto.
+- Repetir pruebas RLS y flujos completos con usuarios reales.
+- Configurar variables y despliegue de produccion en Vercel.

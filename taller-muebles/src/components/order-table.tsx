@@ -8,7 +8,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Paperclip, Search, ShieldCheck } from "lucide-react";
+import { ArrowUpDown, Paperclip, Search, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Order } from "@/lib/types";
@@ -28,6 +28,17 @@ const priorityLabel = {
 
 export function OrderTable({ orders }: OrderTableProps) {
   const [globalFilter, setGlobalFilter] = useState("");
+  const [storeFilter, setStoreFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const filteredOrders = useMemo(
+    () =>
+      orders.filter(
+        (order) =>
+          (storeFilter === "all" || order.store === storeFilter) &&
+          (priorityFilter === "all" || order.priority === priorityFilter),
+      ),
+    [orders, priorityFilter, storeFilter],
+  );
 
   const columns = useMemo<ColumnDef<Order>[]>(
     () => [
@@ -156,7 +167,7 @@ export function OrderTable({ orders }: OrderTableProps) {
   // TanStack Table returns runtime helpers that React Compiler intentionally skips.
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
-    data: orders,
+    data: filteredOrders,
     columns,
     state: { globalFilter },
     onGlobalFilterChange: setGlobalFilter,
@@ -166,21 +177,48 @@ export function OrderTable({ orders }: OrderTableProps) {
   });
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white">
+    <section className="min-w-0 rounded-lg border border-stone-200 bg-white">
       <div className="flex flex-col gap-3 border-b border-stone-200 p-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-base font-semibold">Ordenes de produccion</h2>
-          <p className="text-sm text-stone-500">Vista central para administracion y seguimiento.</p>
+          <p className="text-sm text-stone-500">{table.getFilteredRowModel().rows.length} órdenes visibles.</p>
         </div>
-        <label className="relative w-full md:w-80">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
-          <input
-            value={globalFilter}
-            onChange={(event) => setGlobalFilter(event.target.value)}
-            placeholder="Buscar cliente, codigo o producto"
-            className="h-10 w-full rounded-md border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-          />
-        </label>
+        <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row">
+          <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none">
+            <option value="all">Todas las tiendas</option>
+            <option value="LH">Leather House</option>
+            <option value="LR">La Reina</option>
+          </select>
+          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none">
+            <option value="all">Toda prioridad</option>
+            <option value="critical">Crítica</option>
+            <option value="high">Alta</option>
+            <option value="normal">Normal</option>
+          </select>
+          <label className="relative w-full md:w-72">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+            <input
+              value={globalFilter}
+              onChange={(event) => setGlobalFilter(event.target.value)}
+              placeholder="Buscar cliente, código o producto"
+              className="h-10 w-full rounded-md border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+            />
+          </label>
+          {globalFilter || storeFilter !== "all" || priorityFilter !== "all" ? (
+            <button
+              type="button"
+              onClick={() => {
+                setGlobalFilter("");
+                setStoreFilter("all");
+                setPriorityFilter("all");
+              }}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-600 hover:bg-stone-50"
+            >
+              <X className="size-4" />
+              Limpiar
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -211,6 +249,13 @@ export function OrderTable({ orders }: OrderTableProps) {
                 ))}
               </tr>
             ))}
+            {!table.getRowModel().rows.length ? (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-10 text-center text-sm text-stone-500">
+                  No hay órdenes que coincidan con los filtros.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>

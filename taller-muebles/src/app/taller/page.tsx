@@ -1,15 +1,18 @@
-import { Clock, Factory, LogOut, UserRound } from "lucide-react";
+import { Clock, Factory, UserRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { WorkerQueue } from "@/components/worker-queue";
+import { requireSession, roleLabel } from "@/lib/auth";
 import { activeOrders } from "@/lib/metrics";
 import { listOrders } from "@/lib/repositories/production";
+import { getSystemSettings } from "@/lib/repositories/settings";
 
 export default async function WorkshopPage() {
-  const orders = await listOrders();
+  const user = await requireSession(["operator"]);
+  const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
   const active = activeOrders(orders);
 
   return (
-    <AppShell active="taller" user={{ name: "Operario demo", role: "Produccion" }}>
+    <AppShell active="taller" user={user}>
       <header className="flex flex-col gap-4 border-b border-stone-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">
@@ -26,15 +29,8 @@ export default async function WorkshopPage() {
         <div className="flex flex-wrap gap-2">
           <div className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
             <UserRound className="size-4" />
-            Operario demo
+            {roleLabel(user.role)}
           </div>
-          <a
-            href="/admin"
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white"
-          >
-            <LogOut className="size-4" />
-            Admin
-          </a>
         </div>
       </header>
 
@@ -75,7 +71,16 @@ export default async function WorkshopPage() {
       </section>
 
       <div className="mt-5">
-        <WorkerQueue orders={active} />
+        <WorkerQueue
+          orders={active}
+          user={user}
+          permissions={{
+            canStart: settings.permissions.operatorsCanStartSteps,
+            canComplete: settings.permissions.operatorsCanCompleteSteps,
+            canBlock: settings.permissions.operatorsCanBlockSteps,
+            requireBlockReason: settings.permissions.requireBlockReason,
+          }}
+        />
       </div>
     </AppShell>
   );

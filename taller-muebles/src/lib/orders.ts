@@ -1,9 +1,4 @@
-import { orders } from "./mock-data";
 import type { OrderStatus, StepStatus } from "./types";
-
-export function getOrderById(id: string) {
-  return orders.find((order) => order.id === id);
-}
 
 export function orderStatusLabel(status: OrderStatus) {
   const labels: Record<OrderStatus, string> = {

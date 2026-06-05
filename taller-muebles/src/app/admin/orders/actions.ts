@@ -1,9 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
+import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
+import { cancelLocalOrder, closeLocalOrder, createLocalOrder, updateLocalOrder } from "@/lib/local-store";
 import { createClient } from "@/lib/supabase/server";
+import { listOrders } from "@/lib/repositories/production";
+import { getSystemSettings } from "@/lib/repositories/settings";
 import { orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
 
 export type CreateOrderState = {
@@ -24,6 +29,11 @@ export async function createOrder(
   _prevState: CreateOrderState,
   formData: FormData,
 ): Promise<CreateOrderState> {
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
+    return { status: "error", message: "Tu perfil no tiene permiso para crear órdenes." };
+  }
   const parsed = orderSchema.safeParse({
     store: formData.get("store"),
     salesNoteNumber: formData.get("salesNoteNumber"),
@@ -45,16 +55,33 @@ export async function createOrder(
       message: formatZodError(parsed.error),
     };
   }
+  const ruleError = await validateOrderRules(parsed.data, settings);
+  if (ruleError) return { status: "error", message: ruleError };
 
   if (!hasSupabaseConfig()) {
+    const order = await createLocalOrder({
+      ...parsed.data,
+      stepKeys: settings.production.steps.filter((step) => step.enabled).map((step) => step.key),
+    });
+    revalidatePath("/admin");
+    revalidatePath("/taller");
+
     return {
       status: "success",
-      message:
-        "Modo demo: la orden fue validada. Con Supabase configurado se insertara en la base y creara sus etapas.",
+      message: "Orden creada en almacenamiento local.",
+      orderId: order.id,
     };
   }
 
   const supabase = await createClient();
+  const profileId = await getCurrentProfileId(supabase);
+  if (!profileId) return { status: "error", message: "No se pudo identificar tu perfil." };
+  const { data: assignee } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("full_name", parsed.data.assignedTo)
+    .eq("active", true)
+    .maybeSingle();
   const { data: store, error: storeError } = await supabase
     .from("stores")
     .select("id")
@@ -85,6 +112,8 @@ export async function createOrder(
       entry_date: parsed.data.entryDate,
       delivery_date: parsed.data.deliveryDate,
       observations: parsed.data.observations,
+      assigned_to: assignee?.id ?? null,
+      created_by: profileId,
     })
     .select("id")
     .single();
@@ -96,20 +125,24 @@ export async function createOrder(
     };
   }
 
+  const enabledStepKeys = new Set(settings.production.steps.filter((step) => step.enabled).map((step) => step.key));
+  const enabledStepSeed = stepSeed.filter((step) => enabledStepKeys.has(step.step));
   const { error: stepsError } = await supabase.from("production_steps").insert(
-    stepSeed.map((step) => ({
+    enabledStepSeed.map((step, index) => ({
       order_id: order.id,
       step: step.step,
-      sort_order: step.sort_order,
-      status: step.sort_order === 1 ? "active" : "pending",
+      sort_order: index + 1,
+      status: index === 0 ? "active" : "pending",
       notes:
-        step.sort_order === 1
+        index === 0
           ? `Responsable inicial sugerido: ${parsed.data.assignedTo}`
           : null,
+      assigned_to: index === 0 ? assignee?.id ?? null : null,
     })),
   );
 
   if (stepsError) {
+    await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id);
     return {
       status: "error",
       message: stepsError.message,
@@ -121,6 +154,7 @@ export async function createOrder(
     action: "create_order",
     entity: "orders",
     entity_id: order.id,
+    profile_id: profileId,
     new_value: parsed.data.salesNoteNumber,
   });
 
@@ -134,6 +168,194 @@ export async function createOrder(
   };
 }
 
+export async function updateOrder(
+  orderId: string,
+  _prevState: CreateOrderState,
+  formData: FormData,
+): Promise<CreateOrderState> {
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
+    return { status: "error", message: "Tu perfil no tiene permiso para editar órdenes." };
+  }
+  const parsed = orderSchema.safeParse({
+    store: formData.get("store"),
+    salesNoteNumber: formData.get("salesNoteNumber"),
+    clientName: formData.get("clientName"),
+    productName: formData.get("productName"),
+    material: formData.get("material"),
+    color: formData.get("color"),
+    entryDate: formData.get("entryDate"),
+    deliveryDate: formData.get("deliveryDate"),
+    priority: formData.get("priority"),
+    assignedTo: formData.get("assignedTo"),
+    observations: formData.get("observations")?.toString() ?? "",
+    isWarranty: parseBooleanFormValue(formData.get("isWarranty")),
+  });
+  if (!parsed.success) return { status: "error", message: formatZodError(parsed.error) };
+  const ruleError = await validateOrderRules(parsed.data, settings, orderId);
+  if (ruleError) return { status: "error", message: ruleError };
+
+  if (!hasSupabaseConfig()) {
+    const updated = await updateLocalOrder(orderId, parsed.data);
+    if (!updated) return { status: "error", message: "No se encontró la orden." };
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) return { status: "error", message: "No se pudo identificar tu perfil." };
+    const { data: assignee } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("full_name", parsed.data.assignedTo)
+      .eq("active", true)
+      .maybeSingle();
+    const { data: store } = await supabase.from("stores").select("id").eq("code", parsed.data.store).maybeSingle();
+    if (!store) return { status: "error", message: "No se encontró la tienda." };
+    const { error } = await supabase.from("orders").update({
+      store_id: store.id,
+      internal_code: parsed.data.salesNoteNumber,
+      sales_note_number: parsed.data.salesNoteNumber,
+      client_name: parsed.data.clientName,
+      product_name: parsed.data.productName,
+      material: parsed.data.material,
+      color: parsed.data.color,
+      priority: parsed.data.priority,
+      is_warranty: parsed.data.isWarranty,
+      entry_date: parsed.data.entryDate,
+      delivery_date: parsed.data.deliveryDate,
+      observations: parsed.data.observations,
+      assigned_to: assignee?.id ?? null,
+    }).eq("id", orderId);
+    if (error) return { status: "error", message: error.message };
+    await supabase.from("audit_logs").insert({
+      order_id: orderId,
+      action: "update_order",
+      entity: "orders",
+      entity_id: orderId,
+      profile_id: profileId,
+      new_value: parsed.data.salesNoteNumber,
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/admin/orders/${orderId}/edit`);
+  revalidatePath("/taller");
+  return { status: "success", message: "Cambios guardados correctamente.", orderId };
+}
+
+export async function cancelOrder(formData: FormData) {
+  const user = await requireSession(["admin", "manager"]);
+  if (user.role === "manager" && !(await getSystemSettings()).permissions.managersCanEditOrders) return;
+  const id = formData.get("orderId")?.toString();
+  if (!id) return;
+
+  if (!hasSupabaseConfig()) {
+    await cancelLocalOrder(id);
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) return;
+    await supabase.from("orders").update({ status: "cancelled" }).eq("id", id);
+    await supabase.from("audit_logs").insert({
+      order_id: id,
+      action: "cancel_order",
+      entity: "orders",
+      entity_id: id,
+      profile_id: profileId,
+      field_name: "status",
+      new_value: "cancelled",
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/taller");
+  redirect("/admin");
+}
+
+export async function closeOrder(formData: FormData) {
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) return;
+  const id = formData.get("orderId")?.toString();
+  if (!id) return;
+
+  if (!hasSupabaseConfig()) {
+    if (settings.production.requireQualityApproval) {
+      const { getLocalOrder } = await import("@/lib/local-store");
+      const order = await getLocalOrder(id);
+      if (order?.steps.find((step) => step.key === "quality")?.status !== "done") return;
+    }
+    await closeLocalOrder(id);
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) return;
+    if (settings.production.requireQualityApproval) {
+      const { data: quality } = await supabase
+        .from("production_steps")
+        .select("status")
+        .eq("order_id", id)
+        .eq("step", "quality")
+        .maybeSingle();
+      if (quality?.status !== "done") return;
+    }
+    await supabase
+      .from("orders")
+      .update({ status: "completed", condition: "delivered" })
+      .eq("id", id);
+    await supabase
+      .from("production_steps")
+      .update({ status: "done", completed_at: new Date().toISOString(), updated_by: profileId })
+      .eq("order_id", id);
+    await supabase.from("audit_logs").insert({
+      order_id: id,
+      action: "close_order",
+      entity: "orders",
+      entity_id: id,
+      profile_id: profileId,
+      field_name: "status",
+      new_value: "completed",
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/taller");
+  revalidatePath(`/admin/orders/${id}`);
+}
+
 function formatZodError(error: z.ZodError) {
   return error.issues.map((issue) => issue.message).join(" ");
+}
+
+async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return null;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("user_id", auth.user.id)
+    .eq("active", true)
+    .maybeSingle();
+  return profile?.id ?? null;
+}
+
+async function validateOrderRules(
+  input: z.infer<typeof orderSchema>,
+  settings: Awaited<ReturnType<typeof getSystemSettings>>,
+  currentOrderId?: string,
+) {
+  if (!settings.orders.allowPastDeliveryDates && input.deliveryDate < new Date().toISOString().slice(0, 10)) {
+    return "La fecha de entrega no puede estar en el pasado.";
+  }
+  if (settings.orders.requireObservationsForWarranty && input.isWarranty && !input.observations?.trim()) {
+    return "Las órdenes de garantía requieren observaciones.";
+  }
+  if (settings.orders.enforceUniqueSalesNote) {
+    const duplicate = (await listOrders()).some(
+      (order) => order.id !== currentOrderId && order.store === input.store && order.code === input.salesNoteNumber,
+    );
+    if (duplicate) return "Ya existe una orden con esta nota de venta en la tienda seleccionada.";
+  }
+  return null;
 }
