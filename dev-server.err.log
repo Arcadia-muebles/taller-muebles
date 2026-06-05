@@ -1,0 +1,8 @@
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3000
+- PID:          11344
+- Dir:          C:\Users\ninch\OneDrive\Documents\Taller de Muebles\taller-muebles
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 11344 /F to stop it.
