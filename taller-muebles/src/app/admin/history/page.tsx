@@ -28,7 +28,12 @@ export default async function HistoryPage() {
       </section>
 
       <div className="mt-5">
-        <OrderTable orders={historical} />
+        <OrderTable
+          orders={historical}
+          title="Historial de ordenes"
+          description={`${historical.length} ordenes cerradas o canceladas.`}
+          emptyText="No hay ordenes historicas registradas."
+        />
       </div>
     </AppShell>
   );

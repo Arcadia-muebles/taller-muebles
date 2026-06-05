@@ -91,7 +91,7 @@ export default async function AdminPage() {
       </section>
 
       <section className="mt-5 min-w-0">
-        <OrderTable orders={active} />
+        <OrderTable orders={active} canEditOrders={canEditOrders} />
       </section>
 
       <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">

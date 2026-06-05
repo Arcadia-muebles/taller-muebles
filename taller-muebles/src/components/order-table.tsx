@@ -8,7 +8,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Paperclip, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowUpDown, Eye, MoreHorizontal, Paperclip, Pencil, Search, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Order } from "@/lib/types";
@@ -18,6 +18,10 @@ import { StatusBadge } from "./status-badge";
 
 type OrderTableProps = {
   orders: Order[];
+  canEditOrders?: boolean;
+  title?: string;
+  description?: string;
+  emptyText?: string;
 };
 
 const priorityLabel = {
@@ -26,7 +30,13 @@ const priorityLabel = {
   critical: "Critica",
 };
 
-export function OrderTable({ orders }: OrderTableProps) {
+export function OrderTable({
+  orders,
+  canEditOrders = false,
+  title = "Ordenes de produccion",
+  description,
+  emptyText = "No hay ordenes que coincidan con los filtros.",
+}: OrderTableProps) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [storeFilter, setStoreFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -160,8 +170,47 @@ export function OrderTable({ orders }: OrderTableProps) {
           </div>
         ),
       },
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) => {
+          const order = row.original;
+          const canEdit = canEditOrders && !["completed", "cancelled"].includes(order.status);
+
+          return (
+            <details className="group relative">
+              <summary
+                aria-label={`Acciones para ${order.code}`}
+                className="grid size-9 cursor-pointer list-none place-items-center rounded-md border border-stone-200 bg-white text-stone-500 transition hover:border-stone-300 hover:text-stone-950 [&::-webkit-details-marker]:hidden"
+              >
+                <MoreHorizontal className="size-4" />
+              </summary>
+              <div className="absolute right-0 top-10 z-20 w-44 overflow-hidden rounded-lg border border-stone-200 bg-white p-1 text-sm shadow-xl shadow-stone-950/10">
+                <Link
+                  href={`/admin/orders/${order.id}`}
+                  className="flex h-9 items-center gap-2 rounded-md px-2.5 font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950"
+                >
+                  <Eye className="size-4 text-stone-400" />
+                  Ver detalle
+                </Link>
+                {canEdit ? (
+                  <Link
+                    href={`/admin/orders/${order.id}/edit`}
+                    className="flex h-9 items-center gap-2 rounded-md px-2.5 font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950"
+                  >
+                    <Pencil className="size-4 text-stone-400" />
+                    Editar nota
+                  </Link>
+                ) : (
+                  <p className="px-2.5 py-2 text-xs leading-5 text-stone-400">Solo lectura</p>
+                )}
+              </div>
+            </details>
+          );
+        },
+      },
     ],
-    [],
+    [canEditOrders],
   );
 
   // TanStack Table returns runtime helpers that React Compiler intentionally skips.
@@ -180,8 +229,10 @@ export function OrderTable({ orders }: OrderTableProps) {
     <section className="min-w-0 rounded-lg border border-stone-200 bg-white">
       <div className="flex flex-col gap-3 border-b border-stone-200 p-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-base font-semibold">Ordenes de produccion</h2>
-          <p className="text-sm text-stone-500">{table.getFilteredRowModel().rows.length} órdenes visibles.</p>
+          <h2 className="text-base font-semibold">{title}</h2>
+          <p className="text-sm text-stone-500">
+            {description ?? `${table.getFilteredRowModel().rows.length} ordenes visibles.`}
+          </p>
         </div>
         <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row">
           <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none">
@@ -252,7 +303,7 @@ export function OrderTable({ orders }: OrderTableProps) {
             {!table.getRowModel().rows.length ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-10 text-center text-sm text-stone-500">
-                  No hay órdenes que coincidan con los filtros.
+                  {emptyText}
                 </td>
               </tr>
             ) : null}
