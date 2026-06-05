@@ -28,7 +28,9 @@ export type StockActionResult = { ok: boolean; message: string };
 
 export async function createStockItem(formData: FormData) {
   const user = await requireSession(["admin", "manager"]);
-  if (user.role === "manager" && !(await getSystemSettings()).permissions.managersCanManageStock) return;
+  if (user.role === "manager" && !(await getSystemSettings()).permissions.managersCanManageStock) {
+    return { ok: false, message: "Tu perfil no puede crear materiales." };
+  }
   const parsed = stockSchema.safeParse({
     name: formData.get("name"),
     category: formData.get("category"),
@@ -38,26 +40,35 @@ export async function createStockItem(formData: FormData) {
     store: formData.get("store"),
   });
 
-  if (!parsed.success) return;
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa los datos del material." };
+  }
 
-  if (!hasSupabaseConfig()) {
-    await createLocalStockItem(parsed.data);
-  } else {
-    const supabase = await createClient();
-    const storeId = parsed.data.store === "general"
-      ? null
-      : (await supabase.from("stores").select("id").eq("code", parsed.data.store).maybeSingle()).data?.id ?? null;
-    await supabase.from("materials").insert({
-      store_id: storeId,
-      name: parsed.data.name,
-      category: parsed.data.category,
-      unit: parsed.data.unit,
-      current_quantity: parsed.data.available,
-      minimum_quantity: parsed.data.minimum,
-    });
+  try {
+    if (!hasSupabaseConfig()) {
+      await createLocalStockItem(parsed.data);
+    } else {
+      const supabase = await createClient();
+      const storeId = parsed.data.store === "general"
+        ? null
+        : (await supabase.from("stores").select("id").eq("code", parsed.data.store).maybeSingle()).data?.id ?? null;
+      const { error } = await supabase.from("materials").insert({
+        store_id: storeId,
+        name: parsed.data.name,
+        category: parsed.data.category,
+        unit: parsed.data.unit,
+        current_quantity: parsed.data.available,
+        minimum_quantity: parsed.data.minimum,
+      });
+      if (error) return { ok: false, message: `No fue posible crear el material: ${error.message}` };
+    }
+  } catch (error) {
+    console.error("Stock item creation failed:", error);
+    return { ok: false, message: "No fue posible crear el material. Intenta nuevamente." };
   }
   revalidatePath("/admin");
   revalidatePath("/admin/stock");
+  return { ok: true, message: "Material registrado correctamente." };
 }
 
 export async function removeStockItem(formData: FormData) {

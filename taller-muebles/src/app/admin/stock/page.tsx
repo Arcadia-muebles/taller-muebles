@@ -1,9 +1,8 @@
 import { ArrowDown, ArrowUp, Boxes, Plus, TriangleAlert } from "lucide-react";
-import { createStockItem } from "@/app/admin/stock/actions";
 import { AppShell } from "@/components/app-shell";
+import { StockCreateForm } from "@/components/stock-create-form";
 import { StockAdjustmentButton } from "@/components/stock-adjustment-button";
 import { DeactivateStockButton } from "@/components/deactivate-stock-button";
-import { SubmitButton } from "@/components/submit-button";
 import { requireSession } from "@/lib/auth";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { listStockItems, listStockMovements } from "@/lib/repositories/production";
@@ -35,54 +34,7 @@ export default async function StockPage() {
       </header>
 
       {canEdit ? (
-        <form id="nuevo-material" action={createStockItem} className="mt-5 rounded-lg border border-stone-200 bg-white p-4">
-          <h2 className="text-base font-semibold">Registrar material</h2>
-          <p className="mt-1 text-sm text-stone-500">
-            Las cantidades disponible y minima se registran usando la misma unidad de medida.
-          </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-6">
-            <label className="grid gap-1.5 text-xs font-medium text-stone-600 md:col-span-2">
-              Material
-              <input name="name" required placeholder="Ej. Cuero negro" className="h-10 rounded-md border border-stone-200 px-3 text-sm text-stone-950" />
-            </label>
-            <label className="grid gap-1.5 text-xs font-medium text-stone-600">
-              Categoria
-              <input name="category" required placeholder="Ej. Cuero" className="h-10 rounded-md border border-stone-200 px-3 text-sm text-stone-950" />
-            </label>
-            <label className="grid gap-1.5 text-xs font-medium text-stone-600">
-              Unidad de medida
-              <select name="unit" required defaultValue="unidad" className="h-10 rounded-md border border-stone-200 px-3 text-sm text-stone-950">
-                <option value="unidad">Unidad</option>
-                <option value="metro">Metro</option>
-                <option value="m2">Metro cuadrado</option>
-                <option value="kg">Kilogramo</option>
-                <option value="litro">Litro</option>
-                <option value="plancha">Plancha</option>
-                <option value="rollo">Rollo</option>
-              </select>
-            </label>
-            <label className="grid gap-1.5 text-xs font-medium text-stone-600">
-              Cantidad disponible
-              <input name="available" required type="number" min="0" step="1" placeholder="0" className="h-10 rounded-md border border-stone-200 px-3 text-sm text-stone-950" />
-            </label>
-            <label className="grid gap-1.5 text-xs font-medium text-stone-600">
-              Alerta bajo
-              <input name="minimum" required type="number" min="0" step="1" placeholder="0" className="h-10 rounded-md border border-stone-200 px-3 text-sm text-stone-950" />
-            </label>
-            <label className="grid gap-1.5 text-xs font-medium text-stone-600">
-              Ubicacion
-              <select name="store" defaultValue="general" className="h-10 rounded-md border border-stone-200 px-3 text-sm text-stone-950">
-                <option value="general">General</option>
-                <option value="LH">LH</option>
-                <option value="LR">LR</option>
-              </select>
-            </label>
-            <SubmitButton pendingLabel="Agregando..." className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">
-              <Plus className="size-4" />
-              Agregar
-            </SubmitButton>
-          </div>
-        </form>
+        <StockCreateForm />
       ) : null}
 
       <section className="mt-5 grid gap-3 md:grid-cols-3">
