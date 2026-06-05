@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronRight, Pause, Play, Search, X } from "lucide-react";
+import { Check, CheckCircle2, ChevronRight, Pause, Play, Search, X, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { updateProductionStep } from "@/app/taller/actions";
@@ -45,6 +45,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [blockTarget, setBlockTarget] = useState<Order | null>(null);
   const [blockReason, setBlockReason] = useState("");
+  const [pendingTarget, setPendingTarget] = useState<{ orderId: string; status: StepStatus } | null>(null);
   const [pendingAction, startTransition] = useTransition();
 
   const areas = user.role === "operator"
@@ -75,6 +76,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
     const step = nextStep(order);
     if (!step) return;
 
+    setPendingTarget({ orderId: order.id, status });
     startTransition(async () => {
       const result = await updateProductionStep({
         orderId: order.id,
@@ -91,10 +93,12 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
         setFeedback({ tone: "success", text: `${order.code}: ${step.label} actualizado a ${statusLabel(status)}.` });
         setBlockTarget(null);
         setBlockReason("");
+        setPendingTarget(null);
         return;
       }
 
       setFeedback({ tone: "error", text: `${order.code}: ${result.message}` });
+      setPendingTarget(null);
     });
   }
 
@@ -106,15 +110,30 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
             <h2 className="text-base font-semibold">Cola de trabajo</h2>
             <p className="text-sm text-stone-500">Vista simplificada para actualizar procesos.</p>
           </div>
-          <label className="relative w-full lg:w-80">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="h-10 w-full rounded-md border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none focus:border-stone-400 focus:bg-white"
-              placeholder="Buscar orden"
-            />
-          </label>
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <label className="relative w-full lg:w-80">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="h-10 w-full rounded-md border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none focus:border-stone-400 focus:bg-white"
+                placeholder="Buscar orden"
+              />
+            </label>
+            {query || area !== assignedArea ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setArea(assignedArea);
+                }}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-600 transition hover:bg-stone-50 hover:text-stone-950"
+              >
+                <X className="size-4" />
+                Limpiar
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
@@ -133,10 +152,19 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
           ))}
         </div>
         {feedback ? (
-          <div role="status" className={`mt-4 rounded-md border px-3 py-2 text-sm font-medium ${feedback.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
-            {feedback.text}
+          <div role="status" className={`mt-4 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm font-medium ${feedback.tone === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
+            <span className="inline-flex items-center gap-2">
+              {feedback.tone === "success" ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
+              {feedback.text}
+            </span>
+            <button type="button" onClick={() => setFeedback(null)} aria-label="Ocultar mensaje" className="grid size-7 place-items-center rounded-md hover:bg-white/60">
+              <X className="size-3.5" />
+            </button>
           </div>
         ) : null}
+        <p className="mt-3 text-xs text-stone-500">
+          {visible.length} {visible.length === 1 ? "trabajo visible" : "trabajos visibles"} en {area}.
+        </p>
       </div>
 
       <div className="grid gap-3 p-4 xl:grid-cols-2">
@@ -145,6 +173,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
           const canActivate = permissions.canStart && (step?.status === "pending" || step?.status === "blocked");
           const canComplete = permissions.canComplete && step?.status === "active";
           const canBlock = permissions.canBlock && (step?.status === "pending" || step?.status === "active");
+          const isPendingForOrder = pendingAction && pendingTarget?.orderId === order.id;
           return (
             <article key={order.id} className={`rounded-lg border p-4 ${stepTone(step)}`}>
               <div className="flex items-start justify-between gap-4">
@@ -197,7 +226,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                   className="inline-flex h-10 items-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Play className="size-4" />
-                  {step?.status === "blocked" ? "Reanudar" : "Iniciar"}
+                  {isPendingForOrder && pendingTarget?.status === "active" ? "Actualizando..." : step?.status === "blocked" ? "Reanudar" : "Iniciar"}
                 </button> : null}
                 {canComplete ? <button
                   onClick={() => updateStep(order, "done")}
@@ -205,7 +234,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                   className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Check className="size-4" />
-                  Terminar
+                  {isPendingForOrder && pendingTarget?.status === "done" ? "Terminando..." : "Terminar"}
                 </button> : null}
                 {canBlock ? <button
                   onClick={() => permissions.requireBlockReason ? setBlockTarget(order) : updateStep(order, "blocked")}
@@ -213,7 +242,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                   className="inline-flex h-10 items-center gap-2 rounded-md border border-rose-200 bg-white px-3 text-sm font-medium text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Pause className="size-4" />
-                  Bloquear
+                  {isPendingForOrder && pendingTarget?.status === "blocked" ? "Bloqueando..." : "Bloquear"}
                 </button> : null}
                 <Link
                   href={user.role === "operator" ? `/taller/orders/${order.id}` : `/admin/orders/${order.id}`}
@@ -228,7 +257,9 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
         })}
         {!visible.length ? (
           <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 p-6 text-sm text-stone-500 xl:col-span-2">
-            No hay trabajos disponibles para este filtro.
+            {query
+              ? `No hay trabajos que coincidan con "${query}".`
+              : `No hay trabajos disponibles para ${area}.`}
           </div>
         ) : null}
       </div>
@@ -253,9 +284,16 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                 autoFocus
                 value={blockReason}
                 onChange={(event) => setBlockReason(event.target.value)}
+                maxLength={300}
                 placeholder="Ej. Falta cuero color coñac para continuar."
                 className="mt-2 min-h-28 w-full resize-none rounded-md border border-stone-200 bg-stone-50 p-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
               />
+              <span className="mt-2 flex items-center justify-between gap-3 text-xs">
+                <span className={blockReason.trim().length < 5 ? "text-rose-600" : "text-stone-500"}>
+                  Mínimo 5 caracteres para dejar trazabilidad.
+                </span>
+                <span className="font-medium text-stone-400">{blockReason.trim().length}/300</span>
+              </span>
             </label>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setBlockTarget(null)} className="h-10 rounded-md border border-stone-200 bg-white px-4 text-sm font-medium text-stone-700">
