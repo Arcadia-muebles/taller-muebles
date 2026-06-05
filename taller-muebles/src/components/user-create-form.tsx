@@ -1,11 +1,12 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { CheckCircle2, Plus, XCircle } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
 import { createUser, type UserActionResult } from "@/app/admin/users/actions";
 import { SubmitButton } from "./submit-button";
 
 const initialState: UserActionResult = { ok: false, message: "" };
+const inputClass = "h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-950 outline-none transition focus:border-stone-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-50";
 
 export function UserCreateForm({ supabaseEnabled, disabled }: { supabaseEnabled: boolean; disabled: boolean }) {
   const [role, setRole] = useState("operator");
@@ -59,24 +60,52 @@ export function UserCreateForm({ supabaseEnabled, disabled }: { supabaseEnabled:
             <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" className={inputClass} />
           </Field>
         ) : null}
-        <div className={supabaseEnabled ? "flex items-end xl:col-span-4" : "flex items-end xl:col-span-6"}>
-          <SubmitButton disabled={disabled} pendingLabel="Creando..." className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+        <div className={supabaseEnabled ? "flex flex-col justify-end gap-2 xl:col-span-4" : "flex flex-col justify-end gap-2 xl:col-span-5"}>
+          <ActionFeedback state={state} supabaseEnabled={supabaseEnabled} disabled={disabled} />
+        </div>
+        <div className="flex items-end">
+          <SubmitButton disabled={disabled} pendingLabel="Creando..." className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
             <Plus className="size-4" />
             Crear usuario
           </SubmitButton>
         </div>
       </div>
-      {state.message ? (
-        <p role="status" className={`mt-3 rounded-md border px-3 py-2 text-sm ${state.ok ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
-          {state.message}
-        </p>
-      ) : null}
     </form>
   );
 }
 
-const inputClass = "h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-950 disabled:cursor-not-allowed disabled:opacity-50";
-
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return <label className={`grid gap-1.5 text-xs font-medium text-stone-600 ${className ?? ""}`}>{label}{children}</label>;
+}
+
+function ActionFeedback({
+  state,
+  supabaseEnabled,
+  disabled,
+}: {
+  state: UserActionResult;
+  supabaseEnabled: boolean;
+  disabled: boolean;
+}) {
+  if (state.message) {
+    const Icon = state.ok ? CheckCircle2 : XCircle;
+    return (
+      <p role="status" className={`inline-flex items-center gap-1.5 text-xs font-medium ${state.ok ? "text-emerald-700" : "text-rose-700"}`}>
+        <Icon className="size-3.5" />
+        {state.message}
+      </p>
+    );
+  }
+
+  if (disabled) {
+    return <p className="text-xs text-amber-700">La administración de cuentas requiere la clave de servicio.</p>;
+  }
+
+  return (
+    <p className="text-xs text-stone-400">
+      {supabaseEnabled
+        ? "La cuenta se crea confirmada y con perfil operativo asignado."
+        : "El perfil local queda disponible inmediatamente para probar permisos."}
+    </p>
+  );
 }
