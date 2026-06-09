@@ -29,6 +29,63 @@ const emptyData: LocalData = {
   users: [],
 };
 
+const defaultLocalUsers: AppUser[] = [
+  {
+    id: "local-admin-rodrigo",
+    email: "admin@taller.local",
+    name: "Rodrigo",
+    role: "admin",
+    active: true,
+  },
+  {
+    id: "local-worker-structure",
+    email: "estructura@taller.local",
+    name: "Gustavo Rojas",
+    role: "operator",
+    area: "structure",
+    active: true,
+  },
+  {
+    id: "local-worker-cutting",
+    email: "corte@taller.local",
+    name: "Carolina Soto",
+    role: "operator",
+    area: "cutting",
+    active: true,
+  },
+  {
+    id: "local-worker-sewing",
+    email: "costura@taller.local",
+    name: "Marcela Diaz",
+    role: "operator",
+    area: "sewing",
+    active: true,
+  },
+  {
+    id: "local-worker-upholstery",
+    email: "tapiceria@taller.local",
+    name: "Pedro Morales",
+    role: "operator",
+    area: "upholstery",
+    active: true,
+  },
+  {
+    id: "local-worker-quality",
+    email: "calidad@taller.local",
+    name: "Valentina Ruiz",
+    role: "operator",
+    area: "quality",
+    active: true,
+  },
+  {
+    id: "local-worker-taller",
+    email: "taller@taller.local",
+    name: "Equipo Taller",
+    role: "operator",
+    active: true,
+  },
+];
+
 const stepDefinitions: Array<{ key: AreaKey; label: string; ownerFallback: string }> = [
   { key: "structure", label: "Estructura", ownerFallback: "Estructura" },
   { key: "cutting", label: "Corte", ownerFallback: "Corte" },
@@ -52,7 +109,7 @@ async function readData(): Promise<LocalData> {
   const raw = await readFile(dataFile, "utf8");
   const parsed = JSON.parse(raw) as Partial<LocalData>;
 
-  return {
+  const data = {
     orders: parsed.orders ?? [],
     stockItems: parsed.stockItems ?? [],
     stockMovements: parsed.stockMovements ?? [],
@@ -62,6 +119,9 @@ async function readData(): Promise<LocalData> {
     users: parsed.users ?? [],
     settings: parsed.settings,
   };
+  const normalized = normalizeLocalData(data);
+  if (normalized.changed) await writeData(normalized.data);
+  return normalized.data;
 }
 
 async function writeData(data: LocalData) {
@@ -90,15 +150,21 @@ export async function createLocalOrder(input: {
   assignedTo: string;
   observations?: string;
   isWarranty: boolean;
-  stepKeys?: AreaKey[];
+  steps?: SystemSettings["production"]["steps"];
 }) {
   const data = await readData();
   const id = crypto.randomUUID();
-  const enabledSteps = stepDefinitions.filter((step) => !input.stepKeys || input.stepKeys.includes(step.key));
+  const enabledSteps = (input.steps?.length ? input.steps : stepDefinitions.map((step) => ({
+    key: step.key,
+    label: step.label,
+    targetDays: 0,
+    enabled: true,
+    required: true,
+  }))).filter((step) => step.enabled);
   const steps: ProductionStep[] = enabledSteps.map((step, index) => ({
     key: step.key,
     label: step.label,
-    owner: index === 0 ? input.assignedTo : step.ownerFallback,
+    owner: index === 0 ? input.assignedTo : pickLocalStepOwner(data, step.key, step.label),
     status: index === 0 ? "active" : "pending",
     startedAt: index === 0 ? today() : undefined,
   }));
@@ -340,6 +406,11 @@ export async function listLocalUsers() {
   return (await readData()).users;
 }
 
+export async function getLocalUserByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  return (await readData()).users.find((user) => user.email.toLowerCase() === normalizedEmail);
+}
+
 export async function upsertLocalUser(user: Omit<AppUser, "id" | "active">) {
   const data = await readData();
   const existing = data.users.find((item) => item.email === user.email);
@@ -387,4 +458,37 @@ function addAudit(data: LocalData, orderId: string, action: string, summary: str
     summary,
     createdAt: new Date().toISOString(),
   });
+}
+
+function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolean } {
+  let changed = false;
+  const usersByEmail = new Set(data.users.map((user) => user.email.toLowerCase()));
+  for (const user of defaultLocalUsers) {
+    if (!usersByEmail.has(user.email.toLowerCase())) {
+      data.users.push(user);
+      changed = true;
+    }
+  }
+
+  for (const order of data.orders) {
+    for (const step of order.steps) {
+      if (step.owner === step.label || step.owner === stepDefinitions.find((item) => item.key === step.key)?.ownerFallback) {
+        const nextOwner = pickLocalStepOwner(data, step.key, step.owner);
+        if (nextOwner !== step.owner) {
+          step.owner = nextOwner;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return { data, changed };
+}
+
+function pickLocalStepOwner(data: LocalData, area: AreaKey, fallback: string) {
+  return (
+    data.users.find((user) => user.active && user.role === "operator" && user.area === area)?.name ??
+    data.users.find((user) => user.active && user.role === "operator" && !user.area)?.name ??
+    fallback
+  );
 }

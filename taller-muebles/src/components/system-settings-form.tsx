@@ -7,10 +7,12 @@ import {
   Clock3,
   Factory,
   LockKeyhole,
+  Plus,
   RotateCcw,
   Save,
   Settings2,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { saveSystemSettings } from "@/app/admin/settings/actions";
@@ -196,24 +198,68 @@ function GeneralSection({ settings, setSettings, disabled }: SectionProps) {
 
 function ProductionSection({ settings, setSettings, disabled }: SectionProps) {
   const updateProduction = (patch: Partial<SystemSettings["production"]>) => setSettings({ ...settings, production: { ...settings.production, ...patch } });
+  const updateStep = (index: number, patch: Partial<SystemSettings["production"]["steps"][number]>) => {
+    const nextSteps = settings.production.steps.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item);
+    updateProduction({
+      steps: nextSteps,
+      ...qualityDependentPatch(nextSteps, settings.production),
+    });
+  };
+  const addStep = () => {
+    const key = uniqueStepKey(settings.production.steps.map((step) => step.key), "nueva_etapa");
+    updateProduction({
+      steps: [
+        ...settings.production.steps,
+        { key, label: "Nueva etapa", targetDays: 1, enabled: true, required: false },
+      ],
+    });
+  };
+  const removeStep = (index: number) => {
+    if (settings.production.steps.length <= 1) return;
+    const nextSteps = settings.production.steps.filter((_, itemIndex) => itemIndex !== index);
+    updateProduction({ steps: nextSteps, ...qualityDependentPatch(nextSteps, settings.production) });
+  };
   return (
     <div className="space-y-6">
       <div className="overflow-hidden rounded-lg border border-stone-200">
-        <div className="hidden grid-cols-[1fr_120px_90px_90px] gap-3 bg-stone-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-stone-400 sm:grid">
-          <span>Etapa</span><span>Plazo objetivo</span><span>Activa</span><span>Obligatoria</span>
+        <div className="hidden grid-cols-[minmax(0,1fr)_120px_90px_90px_44px] gap-3 bg-stone-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-stone-400 sm:grid">
+          <span>Etapa</span><span>Plazo objetivo</span><span>Activa</span><span>Obligatoria</span><span />
         </div>
         {settings.production.steps.map((step, index) => (
-          <div key={step.key} className="grid gap-3 border-t border-stone-100 p-4 first:border-t-0 sm:grid-cols-[1fr_120px_90px_90px] sm:items-center">
+          <div key={step.key} className="grid gap-3 border-t border-stone-100 p-4 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_120px_90px_90px_44px] sm:items-center">
             <div>
-              <input disabled={disabled} value={step.label} onChange={(event) => updateProduction({ steps: settings.production.steps.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) })} className={inputClass} />
+              <input
+                disabled={disabled}
+                value={step.label}
+                onChange={(event) => updateStep(index, { label: event.target.value })}
+                className={inputClass}
+              />
               <p className="mt-1 font-mono text-[11px] text-stone-400">{step.key}</p>
             </div>
-            <label className="relative"><input disabled={disabled} type="number" min="0" max="90" value={step.targetDays} onChange={(event) => updateProduction({ steps: settings.production.steps.map((item, itemIndex) => itemIndex === index ? { ...item, targetDays: Number(event.target.value) } : item) })} className={`${inputClass} pr-10`} /><span className="absolute right-3 top-3 text-xs text-stone-400">dias</span></label>
-            <Toggle compact disabled={disabled} checked={step.enabled} onChange={(checked) => updateProduction({ steps: settings.production.steps.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: checked } : item) })} />
-            <Toggle compact disabled={disabled || !step.enabled} checked={step.required} onChange={(checked) => updateProduction({ steps: settings.production.steps.map((item, itemIndex) => itemIndex === index ? { ...item, required: checked } : item) })} />
+            <label className="relative"><input disabled={disabled} type="number" min="0" max="90" value={step.targetDays} onChange={(event) => updateStep(index, { targetDays: Number(event.target.value) })} className={`${inputClass} pr-10`} /><span className="absolute right-3 top-3 text-xs text-stone-400">dias</span></label>
+            <Toggle compact disabled={disabled} checked={step.enabled} onChange={(checked) => updateStep(index, { enabled: checked, required: checked ? step.required : false })} />
+            <Toggle compact disabled={disabled || !step.enabled} checked={step.required} onChange={(checked) => updateStep(index, { required: checked })} />
+            <button
+              type="button"
+              disabled={disabled || settings.production.steps.length <= 1}
+              onClick={() => removeStep(index)}
+              aria-label={`Eliminar etapa ${step.label}`}
+              className="grid size-10 place-items-center rounded-md border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              <Trash2 className="size-4" />
+            </button>
           </div>
         ))}
       </div>
+      <button
+        type="button"
+        disabled={disabled || settings.production.steps.length >= 20}
+        onClick={addStep}
+        className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <Plus className="size-4" />
+        Agregar etapa
+      </button>
       <div className="grid gap-3">
         <RuleRow title="Permitir etapas en paralelo" description="Una orden puede tener mas de una etapa activa al mismo tiempo." checked={settings.production.allowParallelSteps} disabled={disabled} onChange={(value) => updateProduction({ allowParallelSteps: value })} />
         <RuleRow title="Exigir aprobacion de calidad" description="Evita cerrar una orden sin completar la revision final." checked={settings.production.requireQualityApproval} disabled={disabled} onChange={(value) => updateProduction({ requireQualityApproval: value })} />
@@ -303,4 +349,39 @@ function Toggle({ checked, onChange, disabled, compact = false }: { checked: boo
 
 function GroupLabel({ title }: { title: string }) {
   return <div className="flex items-center gap-2"><Clock3 className="size-4 text-stone-400" /><p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">{title}</p></div>;
+}
+
+function slugifyStepKey(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32);
+}
+
+function uniqueStepKey(existing: string[], base: string) {
+  const cleanBase = slugifyStepKey(base) || "etapa";
+  const used = new Set(existing);
+  if (!used.has(cleanBase)) return cleanBase;
+  for (let index = 2; index <= 99; index += 1) {
+    const candidate = `${cleanBase}_${index}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return `${cleanBase}_${Date.now().toString(36)}`;
+}
+
+function qualityDependentPatch(
+  steps: SystemSettings["production"]["steps"],
+  production: SystemSettings["production"],
+): Partial<SystemSettings["production"]> {
+  const qualityEnabled = steps.some((step) => step.key === "quality" && step.enabled);
+  if (qualityEnabled) return {};
+  if (!production.requireQualityApproval && !production.autoCompleteAfterQuality) return {};
+  return {
+    requireQualityApproval: false,
+    autoCompleteAfterQuality: false,
+  };
 }

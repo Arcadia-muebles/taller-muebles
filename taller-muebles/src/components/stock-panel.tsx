@@ -22,7 +22,7 @@ export function StockPanel({ items }: StockPanelProps) {
         {risky.map((item) => (
           <div
             key={item.id}
-            className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-3"
+            className="flex min-w-0 flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex min-w-0 items-center gap-3">
               <TriangleAlert className="size-4 shrink-0 text-amber-700" />
@@ -33,7 +33,7 @@ export function StockPanel({ items }: StockPanelProps) {
                 </p>
               </div>
             </div>
-            <p className="whitespace-nowrap text-sm font-semibold text-amber-950">
+            <p className="text-sm font-semibold text-amber-950">
               {item.available} {item.unit}
             </p>
           </div>

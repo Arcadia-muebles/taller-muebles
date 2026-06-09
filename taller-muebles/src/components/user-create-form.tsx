@@ -47,7 +47,8 @@ export function UserCreateForm({ supabaseEnabled, disabled }: { supabaseEnabled:
           </select>
         </Field>
         <Field label="Área">
-          <select disabled={disabled || role !== "operator"} name="area" defaultValue="structure" className={inputClass}>
+          <select disabled={disabled || role !== "operator"} name="area" defaultValue="" className={inputClass}>
+            <option value="">Todas las etapas</option>
             <option value="structure">Estructura</option>
             <option value="cutting">Corte</option>
             <option value="sewing">Costura</option>

@@ -6,11 +6,13 @@ import { useMemo, useState, useTransition } from "react";
 import { updateProductionStep } from "@/app/taller/actions";
 import type { AreaKey, Order, ProductionStep, Role, StepStatus } from "@/lib/types";
 import { deliveryLabel, formatDate } from "@/lib/utils";
+import { filterWorkerOrders, nextWorkStep } from "@/lib/workshop-access";
 import { StatusBadge } from "./status-badge";
 
 type WorkerQueueProps = {
   orders: Order[];
   user: {
+    name: string;
     role: Role;
     area?: AreaKey;
   };
@@ -21,14 +23,6 @@ type WorkerQueueProps = {
     requireBlockReason: boolean;
   };
 };
-
-function nextStep(order: Order) {
-  return (
-    order.steps.find((step) => step.status === "active") ??
-    order.steps.find((step) => step.status === "blocked") ??
-    order.steps.find((step) => step.status === "pending")
-  );
-}
 
 function stepTone(step?: ProductionStep) {
   if (!step) return "border-emerald-200 bg-emerald-50";
@@ -48,9 +42,6 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
   const [pendingTarget, setPendingTarget] = useState<{ orderId: string; status: StepStatus } | null>(null);
   const [pendingAction, startTransition] = useTransition();
 
-  const areas = user.role === "operator"
-    ? [assignedArea]
-    : ["Todos", "Estructura", "Corte", "Costura", "Tapiceria", "Revision"];
   const workingOrders = useMemo(
     () =>
       orders.map((order) => ({
@@ -62,18 +53,25 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
       })),
     [orders, overrides],
   );
+  const areas = useMemo(() => {
+    if (user.role === "operator" && user.area) return [assignedArea];
+    return [
+      "Todos",
+      ...Array.from(new Set(workingOrders.flatMap((order) => order.steps.map((step) => step.label)))),
+    ];
+  }, [assignedArea, user.area, user.role, workingOrders]);
 
   const visible = useMemo(() => {
-    return workingOrders.filter((order) => {
-      const step = nextStep(order);
+    return filterWorkerOrders(user, workingOrders).filter((order) => {
+      const step = nextWorkStep(order);
       const matchesArea = area === "Todos" || step?.label === area;
       const text = `${order.code} ${order.client} ${order.product}`.toLowerCase();
       return matchesArea && text.includes(query.toLowerCase());
     });
-  }, [area, workingOrders, query]);
+  }, [area, workingOrders, query, user]);
 
   function updateStep(order: Order, status: StepStatus, reason?: string) {
-    const step = nextStep(order);
+    const step = nextWorkStep(order);
     if (!step) return;
 
     setPendingTarget({ orderId: order.id, status });
@@ -103,12 +101,12 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
   }
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white">
+    <section className="min-w-0 rounded-lg border border-stone-200 bg-white">
       <div className="border-b border-stone-200 p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold">Cola de trabajo</h2>
-            <p className="text-sm text-stone-500">Vista simplificada para actualizar procesos.</p>
+            <p className="text-sm text-stone-500">Control operativo para iniciar, terminar o bloquear etapas.</p>
           </div>
           <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
             <label className="relative w-full lg:w-80">
@@ -136,7 +134,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
           </div>
         </div>
 
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-4 flex flex-wrap gap-2 pb-1">
           {areas.map((item) => (
             <button
               key={item}
@@ -169,26 +167,26 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
 
       <div className="grid gap-3 p-4 xl:grid-cols-2">
         {visible.map((order) => {
-          const step = nextStep(order);
+          const step = nextWorkStep(order);
           const canActivate = permissions.canStart && (step?.status === "pending" || step?.status === "blocked");
           const canComplete = permissions.canComplete && step?.status === "active";
           const canBlock = permissions.canBlock && (step?.status === "pending" || step?.status === "active");
           const isPendingForOrder = pendingAction && pendingTarget?.orderId === order.id;
           return (
-            <article key={order.id} className={`rounded-lg border p-4 ${stepTone(step)}`}>
-              <div className="flex items-start justify-between gap-4">
+            <article key={order.id} className={`min-w-0 rounded-lg border p-4 ${stepTone(step)}`}>
+              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-mono text-sm font-semibold">{order.code}</p>
                     <StatusBadge type="order" value={order.status} />
                   </div>
                   <h3 className="mt-3 truncate text-lg font-semibold">{order.client}</h3>
-                  <p className="mt-1 text-sm text-stone-600">{order.product}</p>
-                  <p className="mt-1 text-xs text-stone-500">
+                  <p className="mt-1 line-clamp-2 text-sm text-stone-600">{order.product}</p>
+                  <p className="mt-1 truncate text-xs text-stone-500">
                     {order.material} / {order.color}
                   </p>
                 </div>
-                <div className="shrink-0 text-right">
+                <div className="shrink-0 text-left sm:text-right">
                   <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">
                     Entrega
                   </p>
@@ -246,7 +244,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                 </button> : null}
                 <Link
                   href={user.role === "operator" ? `/taller/orders/${order.id}` : `/admin/orders/${order.id}`}
-                  className="ml-auto inline-flex h-10 items-center gap-1 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+                  className="inline-flex h-10 items-center gap-1 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-600 transition hover:border-stone-300 hover:text-stone-950 sm:ml-auto"
                 >
                   Detalle
                   <ChevronRight className="size-4" />
@@ -271,7 +269,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                 <p className="text-xs font-medium uppercase tracking-[0.16em] text-rose-600">Bloqueo productivo</p>
                 <h3 id="block-title" className="mt-2 text-xl font-semibold">Registrar motivo del bloqueo</h3>
                 <p className="mt-2 text-sm leading-6 text-stone-600">
-                  {blockTarget.code} · {nextStep(blockTarget)?.label}. El motivo quedará visible para administración.
+                  {blockTarget.code} · {nextWorkStep(blockTarget)?.label}. El motivo quedara visible para administracion.
                 </p>
               </div>
               <button type="button" onClick={() => setBlockTarget(null)} aria-label="Cerrar" className="grid size-9 shrink-0 place-items-center rounded-md border border-stone-200 text-stone-500">
@@ -316,14 +314,14 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
 }
 
 function areaLabel(area: AreaKey) {
-  const labels: Record<AreaKey, string> = {
+  const labels: Record<string, string> = {
     structure: "Estructura",
     cutting: "Corte",
     sewing: "Costura",
     upholstery: "Tapiceria",
     quality: "Revision",
   };
-  return labels[area];
+  return labels[area] ?? area;
 }
 
 function statusLabel(status: StepStatus) {

@@ -1,11 +1,12 @@
 import { ArrowDown, ArrowUp, Boxes, Plus, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { StockCreateForm } from "@/components/stock-create-form";
-import { StockAdjustmentButton } from "@/components/stock-adjustment-button";
 import { DeactivateStockButton } from "@/components/deactivate-stock-button";
+import { StockAdjustmentButton } from "@/components/stock-adjustment-button";
+import { StockCreateForm } from "@/components/stock-create-form";
 import { requireSession } from "@/lib/auth";
-import { getSystemSettings } from "@/lib/repositories/settings";
 import { listStockItems, listStockMovements } from "@/lib/repositories/production";
+import { getSystemSettings } from "@/lib/repositories/settings";
+import type { StockItem, StockMovement } from "@/lib/types";
 
 export default async function StockPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
@@ -15,27 +16,23 @@ export default async function StockPage() {
 
   return (
     <AppShell active="admin" user={user}>
-      <header className="flex flex-col gap-4 border-b border-stone-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">
-            Stock
-          </p>
+      <header className="flex min-w-0 flex-col gap-4 border-b border-stone-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">Stock</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Materiales y alertas</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
             Control inicial de cuero, madera, espuma y materiales que pueden frenar produccion.
           </p>
         </div>
         {canEdit ? (
-          <a href="#nuevo-material" className="inline-flex h-10 items-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white">
+          <a href="#nuevo-material" className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white">
             <Plus className="size-4" />
             Nuevo material
           </a>
         ) : null}
       </header>
 
-      {canEdit ? (
-        <StockCreateForm />
-      ) : null}
+      {canEdit ? <StockCreateForm /> : null}
 
       <section className="mt-5 grid gap-3 md:grid-cols-3">
         <div className="rounded-lg border border-stone-200 bg-white p-4">
@@ -50,40 +47,42 @@ export default async function StockPage() {
         </div>
       </section>
 
-      <section className="mt-5 rounded-lg border border-stone-200 bg-white">
+      <section className="mt-5 min-w-0 rounded-lg border border-stone-200 bg-white">
         <div className="border-b border-stone-200 p-4">
           <h2 className="text-base font-semibold">Inventario base</h2>
           <p className="text-sm text-stone-500">Primera vista para validar reglas antes de automatizar consumos.</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px]">
-            <thead className="bg-stone-50 text-left text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+
+        <div className="grid gap-3 p-3 xl:hidden">
+          {items.map((item) => <StockCard key={item.id} item={item} canEdit={canEdit} />)}
+          {!items.length ? <EmptyState text="No hay materiales registrados." /> : null}
+        </div>
+
+        <div className="hidden xl:block">
+          <table className="w-full table-fixed">
+            <thead className="bg-stone-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
               <tr>
-                <th className="px-4 py-3">Material</th>
-                <th className="px-4 py-3">Categoria</th>
-                <th className="px-4 py-3">Cantidad disponible</th>
-                <th className="px-4 py-3">Alerta bajo</th>
-                <th className="px-4 py-3">Unidad de medida</th>
-                <th className="px-4 py-3">Ubicacion</th>
-                {canEdit ? <th className="px-4 py-3">Accion</th> : null}
+                <th className="px-3 py-3">Material</th>
+                <th className="px-3 py-3">Categoria</th>
+                <th className="px-3 py-3">Disponible</th>
+                <th className="px-3 py-3">Minimo</th>
+                <th className="px-3 py-3">Unidad</th>
+                <th className="px-3 py-3">Ubicacion</th>
+                {canEdit ? <th className="px-3 py-3">Accion</th> : null}
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id} className="border-t border-stone-100">
-                  <td className="px-4 py-3 text-sm font-medium">{item.name}</td>
-                  <td className="px-4 py-3 text-sm text-stone-600">{item.category}</td>
-                  <td className="px-4 py-3 text-sm font-semibold">
-                    {item.available}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-stone-600">
-                    {item.minimum}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-stone-600">{item.unit}</td>
-                  <td className="px-4 py-3 text-sm text-stone-600">{item.store}</td>
+                  <td className="px-3 py-3 text-sm font-medium"><span className="block truncate">{item.name}</span></td>
+                  <td className="px-3 py-3 text-sm text-stone-600"><span className="block truncate">{item.category}</span></td>
+                  <td className="px-3 py-3 text-sm font-semibold">{item.available}</td>
+                  <td className="px-3 py-3 text-sm text-stone-600">{item.minimum}</td>
+                  <td className="px-3 py-3 text-sm text-stone-600"><span className="block truncate">{item.unit}</span></td>
+                  <td className="px-3 py-3 text-sm text-stone-600">{item.store}</td>
                   {canEdit ? (
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
                         <StockAdjustmentButton item={item} />
                         <DeactivateStockButton itemId={item.id} itemName={item.name} />
                       </div>
@@ -93,9 +92,7 @@ export default async function StockPage() {
               ))}
               {!items.length ? (
                 <tr>
-                  <td colSpan={canEdit ? 7 : 6} className="px-4 py-10 text-center text-sm text-stone-500">
-                    No hay materiales registrados.
-                  </td>
+                  <td colSpan={canEdit ? 7 : 6} className="px-4 py-10 text-center text-sm text-stone-500">No hay materiales registrados.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -105,30 +102,71 @@ export default async function StockPage() {
 
       <section className="mt-5 rounded-lg border border-stone-200 bg-white">
         <div className="border-b border-stone-200 p-4">
-          <h2 className="text-base font-semibold">Últimos movimientos</h2>
+          <h2 className="text-base font-semibold">Ultimos movimientos</h2>
           <p className="text-sm text-stone-500">Entradas, consumos y ajustes registrados.</p>
         </div>
         <div className="divide-y divide-stone-100">
-          {movements.slice(0, 12).map((movement) => (
-            <div key={movement.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <span className={movement.type === "out" ? "grid size-9 place-items-center rounded-md bg-rose-50 text-rose-700" : "grid size-9 place-items-center rounded-md bg-emerald-50 text-emerald-700"}>
-                  {movement.type === "out" ? <ArrowDown className="size-4" /> : <ArrowUp className="size-4" />}
-                </span>
-                <div>
-                  <p className="text-sm font-semibold">{movement.materialName}</p>
-                  <p className="mt-0.5 text-xs text-stone-500">{movement.notes}</p>
-                </div>
-              </div>
-              <div className="text-left sm:text-right">
-                <p className="text-sm font-semibold">{movement.type === "out" ? "-" : movement.type === "in" ? "+" : "="}{movement.quantity}</p>
-                <p className="text-xs text-stone-500">{new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(movement.createdAt))}</p>
-              </div>
-            </div>
-          ))}
-          {!movements.length ? <p className="p-6 text-sm text-stone-500">Aún no hay movimientos registrados.</p> : null}
+          {movements.slice(0, 12).map((movement) => <MovementRow key={movement.id} movement={movement} />)}
+          {!movements.length ? <p className="p-6 text-sm text-stone-500">Aun no hay movimientos registrados.</p> : null}
         </div>
       </section>
     </AppShell>
   );
+}
+
+function StockCard({ item, canEdit }: { item: StockItem; canEdit: boolean }) {
+  return (
+    <article className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-stone-950">{item.name}</p>
+          <p className="mt-1 truncate text-xs text-stone-500">{item.category} · {item.store}</p>
+        </div>
+        <p className="text-sm font-semibold">{item.available} <span className="text-xs font-medium text-stone-500">{item.unit}</span></p>
+      </div>
+      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+        <Info label="Alerta bajo" value={String(item.minimum)} />
+        <Info label="Ubicacion" value={item.store} />
+      </div>
+      {canEdit ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <StockAdjustmentButton item={item} />
+          <DeactivateStockButton itemId={item.id} itemName={item.name} />
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function MovementRow({ movement }: { movement: StockMovement }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className={movement.type === "out" ? "grid size-9 shrink-0 place-items-center rounded-md bg-rose-50 text-rose-700" : "grid size-9 shrink-0 place-items-center rounded-md bg-emerald-50 text-emerald-700"}>
+          {movement.type === "out" ? <ArrowDown className="size-4" /> : <ArrowUp className="size-4" />}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{movement.materialName}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-stone-500">{movement.notes}</p>
+        </div>
+      </div>
+      <div className="shrink-0 text-left sm:text-right">
+        <p className="text-sm font-semibold">{movement.type === "out" ? "-" : movement.type === "in" ? "+" : "="}{movement.quantity}</p>
+        <p className="text-xs text-stone-500">{new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(movement.createdAt))}</p>
+      </div>
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-stone-200 bg-white p-2">
+      <p className="font-medium uppercase tracking-[0.12em] text-stone-400">{label}</p>
+      <p className="mt-1 truncate font-semibold text-stone-700">{value}</p>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 p-6 text-center text-sm text-stone-500">{text}</div>;
 }

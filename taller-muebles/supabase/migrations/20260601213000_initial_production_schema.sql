@@ -23,7 +23,6 @@ create type public.order_condition as enum (
   'delivered'
 );
 create type public.priority_level as enum ('normal', 'high', 'critical');
-create type public.step_key as enum ('structure', 'cutting', 'sewing', 'upholstery', 'quality');
 create type public.step_status as enum ('pending', 'active', 'done', 'blocked');
 create type public.stock_movement_type as enum ('in', 'out', 'adjustment', 'reserved', 'released');
 
@@ -40,7 +39,7 @@ create table public.profiles (
   store_id uuid references public.stores(id) on delete set null,
   full_name text not null,
   role public.user_role not null default 'operator',
-  area public.step_key,
+  area text,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -73,7 +72,8 @@ create table public.orders (
 create table public.production_steps (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id) on delete cascade,
-  step public.step_key not null,
+  step text not null,
+  step_label text not null,
   sort_order int not null,
   status public.step_status not null default 'pending',
   assigned_to uuid references public.profiles(id) on delete set null,
@@ -212,7 +212,7 @@ as $$
 $$;
 
 create or replace function app_private.current_area()
-returns public.step_key
+returns text
 language sql
 stable
 security definer

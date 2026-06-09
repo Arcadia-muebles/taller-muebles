@@ -25,7 +25,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
       <div className="mt-5 max-w-5xl">
         <OrderForm
           orderId={order.id}
-          assignees={Array.from(new Set([order.assignedTo, ...users.filter((item) => item.active && item.role !== "viewer").map((item) => item.name)]))}
+          assignees={Array.from(new Set([order.assignedTo, ...users.filter((item) => item.active && item.role === "operator").map((item) => item.name)]))}
           initialValues={{
             store: order.store,
             salesNoteNumber: order.code,

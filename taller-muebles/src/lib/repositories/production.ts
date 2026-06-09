@@ -34,14 +34,6 @@ type OrderRecord = OrderRow & {
   production_steps: StepRecord[] | null;
 };
 
-const stepLabels: Record<StepRow["step"], string> = {
-  structure: "Estructura",
-  cutting: "Corte",
-  sewing: "Costura",
-  upholstery: "Tapiceria",
-  quality: "Revision",
-};
-
 const conditionLabels: Record<string, Order["condition"]> = {
   none: "Sin condicion",
   warehouse: "En bodega",
@@ -299,11 +291,19 @@ function mapOrderRecord(record: OrderRecord): Order {
 function mapStepRecord(record: StepRecord): ProductionStep {
   return {
     key: record.step,
-    label: stepLabels[record.step],
+    label: record.step_label || labelFromStepKey(record.step),
     owner: record.assigned_profile?.full_name ?? "Sin asignar",
     status: record.status as StepStatus,
     notes: record.notes ?? undefined,
     startedAt: record.started_at?.slice(0, 10),
     completedAt: record.completed_at?.slice(0, 10),
   };
+}
+
+function labelFromStepKey(step: string) {
+  return step
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Etapa";
 }

@@ -10,7 +10,7 @@ export default async function NewOrderPage() {
   const settings = await getSystemSettings();
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) redirect("/admin");
   const users = await listUsers();
-  const assignees = users.filter((item) => item.active && item.role !== "viewer").map((item) => item.name);
+  const assignees = users.filter((item) => item.active && item.role === "operator").map((item) => item.name);
 
   return (
     <AppShell active="admin" user={user}>

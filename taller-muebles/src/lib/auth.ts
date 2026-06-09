@@ -4,13 +4,13 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { AppUser, Role } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { upsertLocalUser } from "@/lib/local-store";
+import { getLocalUserByEmail } from "@/lib/local-store";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 const sessionCookie = "tm_session";
 
-export type SessionUser = Pick<AppUser, "email" | "name" | "role" | "area">;
+export type SessionUser = Pick<AppUser, "id" | "email" | "name" | "role" | "area">;
 
 export async function getSessionUser(): Promise<SessionUser | null> {
   if (hasSupabaseConfig()) {
@@ -24,7 +24,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const profileClient = hasSupabaseAdminConfig() ? getSupabaseAdmin() : supabase;
     const { data: profile, error: profileError } = await profileClient
       .from("profiles")
-      .select("full_name, role, area, active")
+      .select("id, full_name, role, area, active")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -33,6 +33,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       return null;
     }
     return {
+      id: profile.id,
       email: user.email ?? "",
       name: profile.full_name,
       role: profile.role,
@@ -44,14 +45,23 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   if (!value) return null;
 
   try {
-    return JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as SessionUser;
+    const decoded = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<SessionUser>;
+    if (!decoded.email) return null;
+    const localUser = await getLocalUserByEmail(decoded.email);
+    if (!localUser?.active) return null;
+    return {
+      id: localUser.id,
+      email: localUser.email,
+      name: localUser.name,
+      role: localUser.role,
+      area: localUser.area,
+    };
   } catch {
     return null;
   }
 }
 
 export async function signInLocal(user: SessionUser) {
-  await upsertLocalUser({ ...user, area: user.area });
   (await cookies()).set(sessionCookie, encodeSession(user), {
     httpOnly: true,
     sameSite: "lax",

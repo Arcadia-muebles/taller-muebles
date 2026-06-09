@@ -5,6 +5,7 @@ import { StatCard } from "@/components/stat-card";
 import { requireSession } from "@/lib/auth";
 import { activeOrders, areaLoad, blockedOrders, completionPercent, overdueOrders, urgentOrders } from "@/lib/metrics";
 import { listOrders } from "@/lib/repositories/production";
+import type { Order } from "@/lib/types";
 import { deliveryLabel, formatDate } from "@/lib/utils";
 
 export default async function ReportsPage() {
@@ -23,9 +24,7 @@ export default async function ReportsPage() {
   return (
     <AppShell active="admin" user={user}>
       <header className="border-b border-stone-200 pb-5">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">
-          Reportes
-        </p>
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">Reportes</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Indicadores del taller</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
           Reportes iniciales para operar. La IA se conectara sobre esta base para explicar atrasos y sugerir prioridades.
@@ -39,22 +38,22 @@ export default async function ReportsPage() {
         <StatCard label="Bloqueadas" value={String(blocked.length)} helper="Requieren decision." icon={BarChart3} tone={blocked.length ? "rose" : "neutral"} />
       </section>
 
-      <section className="mt-5 grid gap-5 xl:grid-cols-[420px_1fr]">
-        <div className="rounded-lg border border-stone-200 bg-white">
+      <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)]">
+        <div className="min-w-0 rounded-lg border border-stone-200 bg-white">
           <div className="border-b border-stone-200 p-4">
-            <h2 className="text-base font-semibold">Carga por área</h2>
+            <h2 className="text-base font-semibold">Carga por area</h2>
             <p className="text-sm text-stone-500">Etapas activas y bloqueadas.</p>
           </div>
           <div className="divide-y divide-stone-100">
             {load.map((area) => (
               <div key={area.label} className="p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold">{area.label}</p>
-                  <p className="text-xs font-medium text-stone-500">{area.active + area.blocked} pendientes</p>
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                  <p className="truncate text-sm font-semibold">{area.label}</p>
+                  <p className="shrink-0 text-xs font-medium text-stone-500">{area.active + area.blocked} pendientes</p>
                 </div>
-                <div className="mt-3 flex gap-1">
-                  <span className="h-2 rounded-full bg-blue-500" style={{ width: `${Math.max(area.active * 18, 8)}px` }} />
-                  {area.blocked ? <span className="h-2 rounded-full bg-rose-500" style={{ width: `${Math.max(area.blocked * 18, 8)}px` }} /> : null}
+                <div className="mt-3 flex min-w-0 gap-1">
+                  <span className="h-2 max-w-full rounded-full bg-blue-500" style={{ width: `${Math.min(Math.max(area.active * 18, 8), 220)}px` }} />
+                  {area.blocked ? <span className="h-2 max-w-full rounded-full bg-rose-500" style={{ width: `${Math.min(Math.max(area.blocked * 18, 8), 140)}px` }} /> : null}
                 </div>
                 <p className="mt-2 text-xs text-stone-500">{area.active} activas · {area.blocked} bloqueadas · {area.done} terminadas</p>
               </div>
@@ -63,26 +62,46 @@ export default async function ReportsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-stone-200 bg-white">
+        <div className="min-w-0 rounded-lg border border-stone-200 bg-white">
           <div className="border-b border-stone-200 p-4">
-            <h2 className="text-base font-semibold">Órdenes en riesgo</h2>
+            <h2 className="text-base font-semibold">Ordenes en riesgo</h2>
             <p className="text-sm text-stone-500">Entregas cercanas, bloqueadas o con avance insuficiente.</p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
-              <thead className="bg-stone-50 text-left text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
-                <tr><th className="px-4 py-3">Orden</th><th className="px-4 py-3">Cliente</th><th className="px-4 py-3">Entrega</th><th className="px-4 py-3">Avance</th></tr>
+
+          <div className="grid gap-3 p-3 lg:hidden">
+            {riskOrders.map((order) => <RiskCard key={order.id} order={order} />)}
+            {!riskOrders.length ? <EmptyState /> : null}
+          </div>
+
+          <div className="hidden lg:block">
+            <table className="w-full table-fixed">
+              <thead className="bg-stone-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
+                <tr>
+                  <th className="px-3 py-3">Orden</th>
+                  <th className="px-3 py-3">Cliente</th>
+                  <th className="px-3 py-3">Entrega</th>
+                  <th className="px-3 py-3">Avance</th>
+                </tr>
               </thead>
               <tbody>
                 {riskOrders.map((order) => (
                   <tr key={order.id} className="border-t border-stone-100">
-                    <td className="px-4 py-3"><Link href={`/admin/orders/${order.id}`} className="font-mono text-sm font-semibold hover:underline">{order.code}</Link></td>
-                    <td className="px-4 py-3 text-sm">{order.client}</td>
-                    <td className="px-4 py-3"><p className="text-sm font-medium">{formatDate(order.deliveryDate)}</p><p className="text-xs font-semibold text-rose-600">{deliveryLabel(order.deliveryDate, false)}</p></td>
-                    <td className="px-4 py-3 text-sm font-semibold">{completionPercent(order)}%</td>
+                    <td className="px-3 py-3">
+                      <Link href={`/admin/orders/${order.id}`} className="block truncate font-mono text-sm font-semibold hover:underline">{order.code}</Link>
+                    </td>
+                    <td className="px-3 py-3 text-sm"><span className="block truncate">{order.client}</span></td>
+                    <td className="px-3 py-3">
+                      <p className="truncate text-sm font-medium">{formatDate(order.deliveryDate)}</p>
+                      <p className="truncate text-xs font-semibold text-rose-600">{deliveryLabel(order.deliveryDate, false)}</p>
+                    </td>
+                    <td className="px-3 py-3 text-sm font-semibold">{completionPercent(order)}%</td>
                   </tr>
                 ))}
-                {!riskOrders.length ? <tr><td colSpan={4} className="px-4 py-10 text-center text-sm text-stone-500">No hay órdenes en riesgo.</td></tr> : null}
+                {!riskOrders.length ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-stone-500">No hay ordenes en riesgo.</td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -90,4 +109,24 @@ export default async function ReportsPage() {
       </section>
     </AppShell>
   );
+}
+
+function RiskCard({ order }: { order: Order }) {
+  return (
+    <article className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link href={`/admin/orders/${order.id}`} className="truncate font-mono text-sm font-semibold hover:underline">{order.code}</Link>
+          <p className="mt-2 truncate text-sm font-semibold text-stone-950">{order.client}</p>
+        </div>
+        <p className="shrink-0 text-sm font-semibold">{completionPercent(order)}%</p>
+      </div>
+      <p className="mt-2 text-sm font-medium">{formatDate(order.deliveryDate)}</p>
+      <p className="text-xs font-semibold text-rose-600">{deliveryLabel(order.deliveryDate, false)}</p>
+    </article>
+  );
+}
+
+function EmptyState() {
+  return <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 p-6 text-center text-sm text-stone-500">No hay ordenes en riesgo.</div>;
 }

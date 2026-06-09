@@ -35,7 +35,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
             name="email"
             type="email"
             autoComplete="email"
-            placeholder="rodrigo@empresa.cl"
+            placeholder={panel === "admin" ? "admin@taller.local" : "taller@taller.local"}
             className="h-11 w-full rounded-md border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none transition focus:border-stone-500 focus:bg-white"
           />
         </div>
@@ -57,7 +57,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
         </div>
       </label>
 
-      {!supabaseEnabled ? <label className="mt-4 block">
+      <label className="mt-4 block">
         <span className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">
           Entrar a
         </span>
@@ -71,25 +71,24 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
             Taller
           </label>
         </div>
-      </label> : null}
-      {supabaseEnabled ? <input type="hidden" name="panel" value="admin" /> : null}
+      </label>
 
-      {!supabaseEnabled && panel === "taller" ? (
-        <label className="mt-4 block">
-          <span className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">
-            Área asignada
-          </span>
-          <select name="area" defaultValue="structure" className="mt-2 h-11 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm outline-none transition focus:border-stone-500 focus:bg-white">
-            <option value="structure">Estructura</option>
-            <option value="cutting">Corte</option>
-            <option value="sewing">Costura</option>
-            <option value="upholstery">Tapicería</option>
-            <option value="quality">Revisión y calidad</option>
-          </select>
-          <p className="mt-2 text-xs leading-5 text-stone-500">
-            El operario solo podrá actualizar etapas de esta área.
-          </p>
-        </label>
+      {!supabaseEnabled ? (
+        <div className="mt-4 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-5 text-stone-600">
+          {panel === "admin" ? (
+            <>
+              <p className="font-semibold text-stone-800">Cuenta admin demo</p>
+              <p>admin@taller.local</p>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold text-stone-800">Cuentas taller demo</p>
+              <p>taller@taller.local</p>
+              <p>estructura@taller.local / corte@taller.local / costura@taller.local</p>
+              <p>tapiceria@taller.local / calidad@taller.local</p>
+            </>
+          )}
+        </div>
       ) : null}
 
       {state.message ? (
@@ -114,8 +113,8 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
 
       <p className="mt-4 text-xs leading-5 text-stone-500">
         {supabaseEnabled
-          ? "Acceso protegido. Tu perfil determina automáticamente los módulos y acciones disponibles."
-          : "Modo local de desarrollo: cualquier correo y clave sirven. Selecciona el panel y área para simular permisos."}
+          ? "Acceso protegido. Tu perfil determina automaticamente los modulos y acciones disponibles."
+          : "Modo local de desarrollo: usa una cuenta demo o una cuenta creada por un administrador. La clave puede ser cualquier texto."}
       </p>
     </form>
   );

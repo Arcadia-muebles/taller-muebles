@@ -68,12 +68,12 @@ export default async function UsersPage() {
 }
 
 function areaLabel(area: AreaKey) {
-  const labels: Record<AreaKey, string> = {
+  const labels: Record<string, string> = {
     structure: "Estructura",
     cutting: "Corte",
     sewing: "Costura",
     upholstery: "Tapiceria",
     quality: "Revision",
   };
-  return labels[area];
+  return labels[area] ?? area;
 }

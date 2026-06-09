@@ -20,7 +20,7 @@ export function AppShell({ active, user, children }: AppShellProps) {
   const canEditAdmin = user?.role === "admin";
   const localMode = !hasSupabaseConfig();
   return (
-    <div className="min-h-screen bg-stone-100 text-stone-950">
+    <div className="min-h-screen overflow-x-hidden bg-stone-100 text-stone-950">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-stone-200 bg-white px-4 py-5 lg:block">
         <div className="flex items-center gap-3 border-b border-stone-200 pb-5">
           <div className="grid size-10 place-items-center rounded-lg bg-stone-950 text-sm font-semibold text-white">
@@ -56,8 +56,8 @@ export function AppShell({ active, user, children }: AppShellProps) {
         </div>
       </aside>
 
-      <main className="lg:pl-64">
-        <div className="mx-auto flex min-h-screen w-full max-w-[1500px] flex-col px-4 py-4 sm:px-6 lg:px-8">
+      <main className="min-w-0 lg:pl-64">
+        <div className="mx-auto flex min-h-screen w-full max-w-[1500px] min-w-0 flex-col px-4 py-4 sm:px-6 lg:px-8">
           <MobileNavigation active={active} user={user} />
           {children}
         </div>

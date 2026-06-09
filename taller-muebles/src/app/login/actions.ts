@@ -4,21 +4,13 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSessionUser, signInLocal, signOut } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
+import { getLocalUserByEmail } from "@/lib/local-store";
 import { createClient } from "@/lib/supabase/server";
 
 const loginSchema = z.object({
   email: z.string().email("Ingresa un correo valido."),
   password: z.string().min(1, "Ingresa una clave."),
   panel: z.enum(["admin", "taller"]),
-  area: z.enum(["structure", "cutting", "sewing", "upholstery", "quality"]).optional(),
-}).superRefine((input, context) => {
-  if (input.panel === "taller" && !input.area) {
-    context.addIssue({
-      code: "custom",
-      path: ["area"],
-      message: "Selecciona el area asignada.",
-    });
-  }
 });
 
 export type LoginState = {
@@ -34,7 +26,6 @@ export async function requestLogin(
     email: formData.get("email"),
     password: formData.get("password"),
     panel: formData.get("panel"),
-    area: formData.get("area") || undefined,
   });
 
   if (!parsed.success) {
@@ -55,19 +46,31 @@ export async function requestLogin(
     const user = await getSessionUser();
     if (!user) {
       await supabase.auth.signOut();
-      return { status: "error", message: "Tu perfil no está activo o no tiene permisos asignados." };
+      return { status: "error", message: "Tu perfil no esta activo o no tiene permisos asignados." };
+    }
+    if (parsed.data.panel === "admin" && user.role === "operator") {
+      await supabase.auth.signOut();
+      return { status: "error", message: "Este usuario es de taller y no puede entrar al panel administrador." };
+    }
+    if (parsed.data.panel === "taller" && user.role !== "operator") {
+      await supabase.auth.signOut();
+      return { status: "error", message: "Este usuario no tiene una cuenta de trabajador de taller." };
     }
     redirect(user.role === "operator" ? "/taller" : "/admin");
   } else {
-    const role = parsed.data.panel === "admin" ? "admin" : "operator";
-    await signInLocal({
-      email: parsed.data.email,
-      name: parsed.data.email.split("@")[0] ?? parsed.data.email,
-      role,
-      area: role === "operator" ? parsed.data.area : undefined,
-    });
+    const localUser = await getLocalUserByEmail(parsed.data.email);
+    if (!localUser?.active) {
+      return { status: "error", message: "No existe un usuario activo con ese correo." };
+    }
+    if (parsed.data.panel === "admin" && localUser.role === "operator") {
+      return { status: "error", message: "Este usuario es de taller y no puede entrar al panel administrador." };
+    }
+    if (parsed.data.panel === "taller" && localUser.role !== "operator") {
+      return { status: "error", message: "Este usuario no tiene una cuenta de trabajador de taller." };
+    }
 
-    redirect(parsed.data.panel === "taller" ? "/taller" : "/admin");
+    await signInLocal(localUser);
+    redirect(localUser.role === "operator" ? "/taller" : "/admin");
   }
 }
 

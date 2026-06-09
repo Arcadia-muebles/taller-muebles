@@ -14,7 +14,7 @@ export type StepStatus = "pending" | "active" | "done" | "blocked";
 
 export type Role = "admin" | "manager" | "operator" | "viewer";
 
-export type AreaKey = "structure" | "cutting" | "sewing" | "upholstery" | "quality";
+export type AreaKey = string;
 
 export type ProductionStep = {
   key: AreaKey;

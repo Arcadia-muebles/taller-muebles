@@ -17,12 +17,12 @@ const settingsSchema = z.object({
   }),
   production: z.object({
     steps: z.array(z.object({
-      key: z.enum(["structure", "cutting", "sewing", "upholstery", "quality"]),
+      key: z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/),
       label: z.string().trim().min(2).max(40),
       targetDays: z.number().int().min(0).max(90),
       enabled: boolean,
       required: boolean,
-    })).length(5),
+    })).min(1).max(20),
     allowParallelSteps: boolean,
     requireQualityApproval: boolean,
     autoCompleteAfterQuality: boolean,
@@ -60,6 +60,14 @@ const settingsSchema = z.object({
   }
   if (!settings.production.steps.some((step) => step.enabled)) {
     context.addIssue({ code: "custom", path: ["production", "steps"], message: "Debe existir al menos una etapa activa." });
+  }
+  const keys = settings.production.steps.map((step) => step.key);
+  if (new Set(keys).size !== keys.length) {
+    context.addIssue({ code: "custom", path: ["production", "steps"], message: "Las claves de las etapas no pueden repetirse." });
+  }
+  const labels = settings.production.steps.map((step) => step.label.trim().toLocaleLowerCase("es-CL"));
+  if (new Set(labels).size !== labels.length) {
+    context.addIssue({ code: "custom", path: ["production", "steps"], message: "Los nombres de las etapas no pueden repetirse." });
   }
   const qualityEnabled = settings.production.steps.find((step) => step.key === "quality")?.enabled;
   if (!qualityEnabled && (settings.production.requireQualityApproval || settings.production.autoCompleteAfterQuality)) {

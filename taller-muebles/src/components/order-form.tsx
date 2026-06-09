@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, CalendarDays, CheckCircle2, FileText, Save, XCircle } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, FileText, Paperclip, Save, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useTransition } from "react";
 import { useForm } from "react-hook-form";
@@ -145,6 +145,30 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
           </Field>
         </div>
       </section>
+
+      {!orderId ? (
+        <section className="rounded-lg border border-stone-200 bg-white">
+          <div className="flex items-center gap-3 border-b border-stone-200 p-4">
+            <Paperclip className="size-5 text-stone-500" />
+            <div>
+              <h2 className="text-base font-semibold">Archivo adjunto</h2>
+              <p className="text-sm text-stone-500">Plano, foto, PDF u otro documento de respaldo.</p>
+            </div>
+          </div>
+
+          <div className="p-4">
+            <Field label="Adjunto inicial">
+              <input
+                name="file"
+                type="file"
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                className="block w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-stone-800"
+              />
+            </Field>
+            <p className="mt-2 text-xs text-stone-500">Maximo 10 MB. Se puede dejar vacio y adjuntar despues desde el detalle de la orden.</p>
+          </div>
+        </section>
+      ) : null}
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
         <Link

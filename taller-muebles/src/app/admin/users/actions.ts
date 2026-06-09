@@ -11,12 +11,8 @@ const userSchema = z.object({
   email: z.string().email(),
   name: z.string().trim().min(2),
   role: z.enum(["admin", "manager", "operator", "viewer"]),
-  area: z.enum(["structure", "cutting", "sewing", "upholstery", "quality"]).optional(),
+  area: z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/).optional(),
   password: z.string().min(8).optional(),
-}).superRefine((input, context) => {
-  if (input.role === "operator" && !input.area) {
-    context.addIssue({ code: "custom", path: ["area"], message: "Selecciona el área de trabajo." });
-  }
 });
 
 export type UserActionResult = { ok: boolean; message: string };
@@ -63,7 +59,7 @@ export async function createUser(formData: FormData): Promise<UserActionResult> 
         user_id: data.user.id,
         full_name: parsed.data.name,
         role: parsed.data.role,
-        area: parsed.data.role === "operator" ? parsed.data.area : null,
+        area: parsed.data.role === "operator" ? parsed.data.area ?? null : null,
       });
       if (profileError) {
         await admin.auth.admin.deleteUser(data.user.id);

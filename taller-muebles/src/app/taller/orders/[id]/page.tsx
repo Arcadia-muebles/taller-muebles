@@ -8,12 +8,14 @@ import { requireSession } from "@/lib/auth";
 import { getOrder } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { deliveryLabel, formatDate } from "@/lib/utils";
+import { canWorkerSeeOrder } from "@/lib/workshop-access";
 
 export default async function WorkshopOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession(["operator"]);
   const { id } = await params;
   const [order, settings] = await Promise.all([getOrder(id), getSystemSettings()]);
   if (!order || ["completed", "cancelled"].includes(order.status)) notFound();
+  if (!canWorkerSeeOrder(user, order)) notFound();
 
   return (
     <AppShell active="taller" user={user}>

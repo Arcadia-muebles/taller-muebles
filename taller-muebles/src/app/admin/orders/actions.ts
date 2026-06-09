@@ -5,9 +5,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { cancelLocalOrder, closeLocalOrder, createLocalOrder, updateLocalOrder } from "@/lib/local-store";
+import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, updateLocalOrder } from "@/lib/local-store";
 import { createClient } from "@/lib/supabase/server";
-import { listOrders } from "@/lib/repositories/production";
+import { listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
 
@@ -17,13 +17,7 @@ export type CreateOrderState = {
   orderId?: string;
 };
 
-const stepSeed = [
-  { step: "structure", sort_order: 1 },
-  { step: "cutting", sort_order: 2 },
-  { step: "sewing", sort_order: 3 },
-  { step: "upholstery", sort_order: 4 },
-  { step: "quality", sort_order: 5 },
-] as const;
+const maxAttachmentSize = 10 * 1024 * 1024;
 
 export async function createOrder(
   _prevState: CreateOrderState,
@@ -61,14 +55,22 @@ export async function createOrder(
   if (!hasSupabaseConfig()) {
     const order = await createLocalOrder({
       ...parsed.data,
-      stepKeys: settings.production.steps.filter((step) => step.enabled).map((step) => step.key),
+      steps: settings.production.steps,
+    });
+    const attachmentResult = await saveInitialAttachment({
+      formData,
+      orderId: order.id,
+      profileId: null,
     });
     revalidatePath("/admin");
     revalidatePath("/taller");
+    revalidatePath(`/admin/orders/${order.id}`);
 
     return {
       status: "success",
-      message: "Orden creada en almacenamiento local.",
+      message: attachmentResult.message
+        ? `Orden creada en almacenamiento local. ${attachmentResult.message}`
+        : "Orden creada en almacenamiento local.",
       orderId: order.id,
     };
   }
@@ -125,19 +127,24 @@ export async function createOrder(
     };
   }
 
-  const enabledStepKeys = new Set(settings.production.steps.filter((step) => step.enabled).map((step) => step.key));
-  const enabledStepSeed = stepSeed.filter((step) => enabledStepKeys.has(step.step));
+  const enabledSteps = settings.production.steps.filter((step) => step.enabled);
+  const operatorByArea = new Map(
+    (await listUsers())
+      .filter((item) => item.active && item.role === "operator" && item.area)
+      .map((item) => [item.area, item.id]),
+  );
   const { error: stepsError } = await supabase.from("production_steps").insert(
-    enabledStepSeed.map((step, index) => ({
+    enabledSteps.map((step, index) => ({
       order_id: order.id,
-      step: step.step,
+      step: step.key,
+      step_label: step.label,
       sort_order: index + 1,
       status: index === 0 ? "active" : "pending",
       notes:
         index === 0
           ? `Responsable inicial sugerido: ${parsed.data.assignedTo}`
           : null,
-      assigned_to: index === 0 ? assignee?.id ?? null : null,
+      assigned_to: index === 0 ? assignee?.id ?? operatorByArea.get(step.key) ?? null : operatorByArea.get(step.key) ?? null,
     })),
   );
 
@@ -158,12 +165,22 @@ export async function createOrder(
     new_value: parsed.data.salesNoteNumber,
   });
 
+  const attachmentResult = await saveInitialAttachment({
+    formData,
+    orderId: order.id,
+    profileId,
+    supabase,
+  });
+
   revalidatePath("/admin");
   revalidatePath("/taller");
+  revalidatePath(`/admin/orders/${order.id}`);
 
   return {
     status: "success",
-    message: "Orden creada y etapas productivas generadas.",
+    message: attachmentResult.message
+      ? `Orden creada y etapas productivas generadas. ${attachmentResult.message}`
+      : "Orden creada y etapas productivas generadas.",
     orderId: order.id,
   };
 }
@@ -338,6 +355,56 @@ async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createCli
     .eq("active", true)
     .maybeSingle();
   return profile?.id ?? null;
+}
+
+async function saveInitialAttachment({
+  formData,
+  orderId,
+  profileId,
+  supabase,
+}: {
+  formData: FormData;
+  orderId: string;
+  profileId: string | null;
+  supabase?: Awaited<ReturnType<typeof createClient>>;
+}) {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { message: "" };
+  if (file.size > maxAttachmentSize) {
+    return { message: "El adjunto no se subio porque supera el maximo de 10 MB." };
+  }
+
+  try {
+    if (!supabase) {
+      await createLocalOrderAttachment(orderId, file);
+      return { message: "Adjunto inicial guardado." };
+    }
+
+    const storagePath = `${orderId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const { error: uploadError } = await supabase.storage.from("order-attachments").upload(storagePath, file, {
+      contentType: file.type || "application/octet-stream",
+    });
+    if (uploadError) {
+      return { message: "La orden quedo creada, pero no fue posible subir el adjunto." };
+    }
+
+    const { error: metadataError } = await supabase.from("order_attachments").insert({
+      order_id: orderId,
+      file_name: file.name,
+      file_type: file.type || "application/octet-stream",
+      file_size_bytes: file.size,
+      storage_path: storagePath,
+      uploaded_by: profileId,
+    });
+    if (metadataError) {
+      await supabase.storage.from("order-attachments").remove([storagePath]);
+      return { message: "La orden quedo creada, pero no se pudo registrar el adjunto." };
+    }
+
+    return { message: "Adjunto inicial guardado." };
+  } catch {
+    return { message: "La orden quedo creada, pero no fue posible subir el adjunto." };
+  }
 }
 
 async function validateOrderRules(

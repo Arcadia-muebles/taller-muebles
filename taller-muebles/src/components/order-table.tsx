@@ -11,8 +11,8 @@ import {
 import { ArrowUpDown, Eye, MoreHorizontal, Paperclip, Pencil, Search, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Order } from "@/lib/types";
 import { completionPercent } from "@/lib/metrics";
+import type { Order } from "@/lib/types";
 import { cn, deliveryLabel, formatDate } from "@/lib/utils";
 import { StatusBadge } from "./status-badge";
 
@@ -55,27 +55,17 @@ export function OrderTable({
       {
         accessorKey: "code",
         header: ({ column }) => (
-          <button
-            className="inline-flex items-center gap-1.5"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
+          <button className="inline-flex items-center gap-1" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
             Codigo
             <ArrowUpDown className="size-3.5" />
           </button>
         ),
         cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/admin/orders/${row.original.id}`}
-              className="font-mono text-sm font-semibold underline-offset-4 hover:underline"
-            >
+          <div className="flex min-w-0 items-center gap-2">
+            <Link href={`/admin/orders/${row.original.id}`} className="truncate font-mono text-sm font-semibold underline-offset-4 hover:underline">
               {row.original.code}
             </Link>
-            {row.original.isWarranty ? (
-              <span title="Garantia">
-                <ShieldCheck className="size-4 text-violet-600" />
-              </span>
-            ) : null}
+            {row.original.isWarranty ? <ShieldCheck className="size-4 shrink-0 text-violet-600" /> : null}
           </div>
         ),
       },
@@ -83,8 +73,8 @@ export function OrderTable({
         accessorKey: "client",
         header: "Cliente",
         cell: ({ row }) => (
-          <div className="min-w-44">
-            <p className="font-medium text-stone-950">{row.original.client}</p>
+          <div className="min-w-0">
+            <p className="truncate font-medium text-stone-950">{row.original.client}</p>
             <p className="text-xs text-stone-500">{row.original.store}</p>
           </div>
         ),
@@ -93,9 +83,9 @@ export function OrderTable({
         accessorKey: "product",
         header: "Producto",
         cell: ({ row }) => (
-          <div className="min-w-64">
-            <p className="font-medium">{row.original.product}</p>
-            <p className="text-xs text-stone-500">
+          <div className="min-w-0">
+            <p className="truncate font-medium">{row.original.product}</p>
+            <p className="truncate text-xs text-stone-500">
               {row.original.material} / {row.original.color}
             </p>
           </div>
@@ -108,20 +98,17 @@ export function OrderTable({
       },
       {
         accessorKey: "assignedTo",
-        header: "Responsable",
+        header: "Resp.",
         cell: ({ row }) => (
-          <span className="rounded-md border border-stone-200 bg-white px-2 py-1 text-xs font-medium">
-            {row.original.assignedTo}
+          <span className="inline-flex max-w-full rounded-md border border-stone-200 bg-white px-2 py-1 text-xs font-medium">
+            <span className="truncate">{row.original.assignedTo}</span>
           </span>
         ),
       },
       {
         accessorKey: "deliveryDate",
         header: ({ column }) => (
-          <button
-            className="inline-flex items-center gap-1.5"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
+          <button className="inline-flex items-center gap-1" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
             Entrega
             <ArrowUpDown className="size-3.5" />
           </button>
@@ -129,15 +116,11 @@ export function OrderTable({
         cell: ({ row }) => {
           const isCompleted = row.original.status === "completed";
           const label = deliveryLabel(row.original.deliveryDate, isCompleted);
-          const isRisk =
-            !isCompleted &&
-            (label.startsWith("Vencido") || label === "Hoy" || label === "Mañana");
+          const isRisk = !isCompleted && (label.startsWith("Vencido") || label === "Hoy" || label === "Manana");
           return (
-            <div>
-              <p className="text-sm font-medium">{formatDate(row.original.deliveryDate)}</p>
-              <p className={cn("text-xs font-semibold", isRisk ? "text-rose-600" : "text-stone-500")}>
-                {label}
-              </p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{formatDate(row.original.deliveryDate)}</p>
+              <p className={cn("truncate text-xs font-semibold", isRisk ? "text-rose-600" : "text-stone-500")}>{label}</p>
             </div>
           );
         },
@@ -148,12 +131,9 @@ export function OrderTable({
         cell: ({ row }) => {
           const value = completionPercent(row.original);
           return (
-            <div className="w-32">
+            <div className="min-w-0">
               <div className="h-2 overflow-hidden rounded-full bg-stone-200">
-                <div
-                  className="h-full rounded-full bg-emerald-500"
-                  style={{ width: `${value}%` }}
-                />
+                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${value}%` }} />
               </div>
               <p className="mt-1 text-xs font-medium text-stone-500">{value}%</p>
             </div>
@@ -164,7 +144,7 @@ export function OrderTable({
         accessorKey: "observations",
         header: "Notas",
         cell: ({ row }) => (
-          <div className="flex max-w-56 items-center gap-2 text-xs text-stone-600">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-stone-600">
             <Paperclip className="size-3.5 shrink-0 text-stone-400" />
             <span className="truncate">{row.original.observations}</span>
           </div>
@@ -186,18 +166,12 @@ export function OrderTable({
                 <MoreHorizontal className="size-4" />
               </summary>
               <div className="absolute right-0 top-10 z-20 w-44 overflow-hidden rounded-lg border border-stone-200 bg-white p-1 text-sm shadow-xl shadow-stone-950/10">
-                <Link
-                  href={`/admin/orders/${order.id}`}
-                  className="flex h-9 items-center gap-2 rounded-md px-2.5 font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950"
-                >
+                <Link href={`/admin/orders/${order.id}`} className="flex h-9 items-center gap-2 rounded-md px-2.5 font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
                   <Eye className="size-4 text-stone-400" />
                   Ver detalle
                 </Link>
                 {canEdit ? (
-                  <Link
-                    href={`/admin/orders/${order.id}/edit`}
-                    className="flex h-9 items-center gap-2 rounded-md px-2.5 font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950"
-                  >
+                  <Link href={`/admin/orders/${order.id}/edit`} className="flex h-9 items-center gap-2 rounded-md px-2.5 font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
                     <Pencil className="size-4 text-stone-400" />
                     Editar nota
                   </Link>
@@ -225,24 +199,24 @@ export function OrderTable({
     getFilteredRowModel: getFilteredRowModel(),
   });
 
+  const visibleRows = table.getRowModel().rows;
+
   return (
-    <section className="min-w-0 rounded-lg border border-stone-200 bg-white">
-      <div className="flex flex-col gap-3 border-b border-stone-200 p-4 md:flex-row md:items-center md:justify-between">
-        <div>
+    <section className="min-w-0 max-w-full rounded-lg border border-stone-200 bg-white">
+      <div className="flex min-w-0 flex-col gap-3 border-b border-stone-200 p-4 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
           <h2 className="text-base font-semibold">{title}</h2>
-          <p className="text-sm text-stone-500">
-            {description ?? `${table.getFilteredRowModel().rows.length} ordenes visibles.`}
-          </p>
+          <p className="text-sm text-stone-500">{description ?? `${table.getFilteredRowModel().rows.length} ordenes visibles.`}</p>
         </div>
-        <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row">
-          <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none">
+        <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:justify-end">
+          <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="h-10 min-w-0 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none">
             <option value="all">Todas las tiendas</option>
             <option value="LH">Leather House</option>
             <option value="LR">La Reina</option>
           </select>
-          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none">
+          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="h-10 min-w-0 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none">
             <option value="all">Toda prioridad</option>
-            <option value="critical">Crítica</option>
+            <option value="critical">Critica</option>
             <option value="high">Alta</option>
             <option value="normal">Normal</option>
           </select>
@@ -251,7 +225,7 @@ export function OrderTable({
             <input
               value={globalFilter}
               onChange={(event) => setGlobalFilter(event.target.value)}
-              placeholder="Buscar cliente, código o producto"
+              placeholder="Buscar cliente, codigo o producto"
               className="h-10 w-full rounded-md border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
             />
           </label>
@@ -272,35 +246,39 @@ export function OrderTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1120px] border-collapse">
+      <div className="grid gap-3 p-3 xl:hidden">
+        {visibleRows.map((row) => (
+          <OrderCard key={row.id} order={row.original} canEditOrders={canEditOrders} />
+        ))}
+        {!visibleRows.length ? (
+          <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 p-6 text-center text-sm text-stone-500">{emptyText}</div>
+        ) : null}
+      </div>
+
+      <div className="hidden min-w-0 xl:block">
+        <table className="w-full table-fixed border-collapse">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-stone-200 bg-stone-50">
                 {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-stone-500"
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  <th key={header.id} className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
+                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))}
               </tr>
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => (
+            {visibleRows.map((row) => (
               <tr key={row.id} className="border-b border-stone-100 last:border-0 hover:bg-stone-50/70">
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-4 py-3 align-middle text-sm">
+                  <td key={cell.id} className="min-w-0 px-3 py-3 align-middle text-sm">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
               </tr>
             ))}
-            {!table.getRowModel().rows.length ? (
+            {!visibleRows.length ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-10 text-center text-sm text-stone-500">
                   {emptyText}
@@ -320,5 +298,67 @@ export function OrderTable({
         ))}
       </div>
     </section>
+  );
+}
+
+function OrderCard({ order, canEditOrders }: { order: Order; canEditOrders: boolean }) {
+  const progress = completionPercent(order);
+  const canEdit = canEditOrders && !["completed", "cancelled"].includes(order.status);
+
+  return (
+    <article className="min-w-0 rounded-lg border border-stone-200 bg-stone-50 p-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Link href={`/admin/orders/${order.id}`} className="min-w-0 truncate font-mono text-sm font-semibold underline-offset-4 hover:underline">
+              {order.code}
+            </Link>
+            {order.isWarranty ? <ShieldCheck className="size-4 shrink-0 text-violet-600" /> : null}
+          </div>
+          <p className="mt-2 truncate text-sm font-semibold text-stone-950">{order.client}</p>
+          <p className="mt-1 line-clamp-2 text-sm text-stone-600">{order.product}</p>
+          <p className="mt-1 truncate text-xs text-stone-500">
+            {order.material} / {order.color}
+          </p>
+        </div>
+        <StatusBadge type="order" value={order.status} />
+      </div>
+
+      <div className="mt-3 grid gap-2 text-xs text-stone-600 sm:grid-cols-3">
+        <Info label="Responsable" value={order.assignedTo} />
+        <Info label="Entrega" value={`${formatDate(order.deliveryDate)} · ${deliveryLabel(order.deliveryDate, order.status === "completed")}`} />
+        <div className="min-w-0 rounded-md border border-stone-200 bg-white p-2">
+          <p className="font-medium uppercase tracking-[0.12em] text-stone-400">Avance</p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-200">
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
+          </div>
+          <p className="mt-1 font-semibold text-stone-700">{progress}%</p>
+        </div>
+      </div>
+
+      {order.observations ? <p className="mt-3 line-clamp-2 text-xs leading-5 text-stone-500">{order.observations}</p> : null}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Link href={`/admin/orders/${order.id}`} className="inline-flex h-9 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
+          <Eye className="size-4 text-stone-400" />
+          Ver detalle
+        </Link>
+        {canEdit ? (
+          <Link href={`/admin/orders/${order.id}/edit`} className="inline-flex h-9 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
+            <Pencil className="size-4 text-stone-400" />
+            Editar
+          </Link>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md border border-stone-200 bg-white p-2">
+      <p className="font-medium uppercase tracking-[0.12em] text-stone-400">{label}</p>
+      <p className="mt-1 truncate font-semibold text-stone-700">{value}</p>
+    </div>
   );
 }

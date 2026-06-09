@@ -325,7 +325,8 @@ export type Database = {
           sort_order: number
           started_at: string | null
           status: Database["public"]["Enums"]["step_status"]
-          step: Database["public"]["Enums"]["step_key"]
+          step: string
+          step_label: string
           updated_at: string
           updated_by: string | null
         }
@@ -340,7 +341,8 @@ export type Database = {
           sort_order: number
           started_at?: string | null
           status?: Database["public"]["Enums"]["step_status"]
-          step: Database["public"]["Enums"]["step_key"]
+          step: string
+          step_label: string
           updated_at?: string
           updated_by?: string | null
         }
@@ -355,7 +357,8 @@ export type Database = {
           sort_order?: number
           started_at?: string | null
           status?: Database["public"]["Enums"]["step_status"]
-          step?: Database["public"]["Enums"]["step_key"]
+          step?: string
+          step_label?: string
           updated_at?: string
           updated_by?: string | null
         }
@@ -386,7 +389,7 @@ export type Database = {
       profiles: {
         Row: {
           active: boolean
-          area: Database["public"]["Enums"]["step_key"] | null
+          area: string | null
           created_at: string
           full_name: string
           id: string
@@ -397,7 +400,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
-          area?: Database["public"]["Enums"]["step_key"] | null
+          area?: string | null
           created_at?: string
           full_name: string
           id?: string
@@ -408,7 +411,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
-          area?: Database["public"]["Enums"]["step_key"] | null
+          area?: string | null
           created_at?: string
           full_name?: string
           id?: string
@@ -566,7 +569,6 @@ export type Database = {
         | "completed"
         | "cancelled"
       priority_level: "normal" | "high" | "critical"
-      step_key: "structure" | "cutting" | "sewing" | "upholstery" | "quality"
       step_status: "pending" | "active" | "done" | "blocked"
       stock_movement_type: "in" | "out" | "adjustment" | "reserved" | "released"
       store_code: "LH" | "LR"
@@ -720,7 +722,6 @@ export const Constants = {
         "cancelled",
       ],
       priority_level: ["normal", "high", "critical"],
-      step_key: ["structure", "cutting", "sewing", "upholstery", "quality"],
       step_status: ["pending", "active", "done", "blocked"],
       stock_movement_type: ["in", "out", "adjustment", "reserved", "released"],
       store_code: ["LH", "LR"],
