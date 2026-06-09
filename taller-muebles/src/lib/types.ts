@@ -57,6 +57,7 @@ export type Order = {
   assignedTo: string;
   observations: string;
   steps: ProductionStep[];
+  commentCount?: number;
 };
 
 export type StockItem = {

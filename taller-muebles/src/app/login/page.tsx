@@ -3,23 +3,28 @@ import { hasSupabaseConfig } from "@/lib/env";
 
 export default function LoginPage() {
   return (
-    <main className="min-h-screen bg-stone-100 px-4 py-6 text-stone-950">
-      <div className="mx-auto grid min-h-[calc(100vh-48px)] w-full max-w-5xl items-center gap-8 lg:grid-cols-[1fr_420px]">
-        <section className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">
-            Sistema interno
+    <main className="min-h-screen w-full bg-[#FAF6F0] flex flex-col items-center justify-center p-6 text-stone-900 font-sans">
+      <div className="w-full max-w-[540px] flex flex-col">
+        {/* Brand header */}
+        <div className="text-center mb-8 select-none">
+          <p className="text-[11px] font-bold uppercase tracking-[0.35em] text-[#9E7A5A]">
+            Muebles en Cuero
           </p>
-          <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
-            Una sola plataforma para administracion y taller.
-          </h2>
-          <p className="mt-4 max-w-xl text-sm leading-6 text-stone-600">
-            Todos entran por esta pantalla. El rol de la cuenta decide si el usuario
-            abre el panel administrador o la cola del taller, y los trabajadores solo
-            ven las ordenes y etapas asignadas a su usuario.
+          <h1 className="mt-2 text-[38px] font-medium tracking-tight text-stone-900 font-serif leading-tight">
+            Control de Producción
+          </h1>
+          <p className="mt-1 text-sm text-stone-500">
+            Acceso al sistema interno
           </p>
-        </section>
+        </div>
 
+        {/* Login form and demo credentials */}
         <LoginForm supabaseEnabled={hasSupabaseConfig()} />
+
+        {/* Brand footer */}
+        <p className="mt-10 text-center text-[10px] text-stone-400 font-medium tracking-[0.15em] select-none">
+          Leather House &bull; La Reina
+        </p>
       </div>
     </main>
   );

@@ -84,6 +84,13 @@ const defaultLocalUsers: AppUser[] = [
     role: "operator",
     active: true,
   },
+  {
+    id: "local-worker-operario",
+    email: "operario@taller.local",
+    name: "Operario Taller",
+    role: "operator",
+    active: true,
+  },
 ];
 
 const stepDefinitions: Array<{ key: AreaKey; label: string; ownerFallback: string }> = [
@@ -130,7 +137,11 @@ async function writeData(data: LocalData) {
 }
 
 export async function listLocalOrders() {
-  return (await readData()).orders;
+  const data = await readData();
+  return data.orders.map((order) => ({
+    ...order,
+    commentCount: data.comments.filter((c) => c.orderId === order.id).length,
+  }));
 }
 
 export async function getLocalOrder(id: string) {
