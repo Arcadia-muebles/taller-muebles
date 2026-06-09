@@ -5,12 +5,12 @@ type ProductionTimelineProps = {
   orders: Order[];
 };
 
-const areaMeta: Record<string, { label: string; barColor: string; dotColor: string; statusText: string; fallbackPct: number; fallbackCount: number }> = {
-  structure: { label: "Diseño y planificación", barColor: "bg-[#8F9779]", dotColor: "bg-emerald-500", statusText: "Activo", fallbackPct: 40, fallbackCount: 2 },
-  cutting: { label: "Corte", barColor: "bg-[#C39F7D]", dotColor: "bg-amber-500", statusText: "En proceso", fallbackPct: 65, fallbackCount: 3 },
-  sewing: { label: "Costura", barColor: "bg-[#3B82F6]/75", dotColor: "bg-blue-500", statusText: "En proceso", fallbackPct: 75, fallbackCount: 4 },
-  upholstery: { label: "Tapizado", barColor: "bg-[#A855F7]/75", dotColor: "bg-violet-500", statusText: "En proceso", fallbackPct: 35, fallbackCount: 2 },
-  quality: { label: "Control calidad", barColor: "bg-[#8B5CF6]/75", dotColor: "bg-indigo-500", statusText: "En revisión", fallbackPct: 20, fallbackCount: 1 },
+const areaMeta: Record<string, { label: string; barColor: string; dotColor: string; statusText: string }> = {
+  structure: { label: "Diseño y planificación", barColor: "bg-[#8F9779]", dotColor: "bg-emerald-500", statusText: "Activo" },
+  cutting: { label: "Corte", barColor: "bg-[#C39F7D]", dotColor: "bg-amber-500", statusText: "En proceso" },
+  sewing: { label: "Costura", barColor: "bg-[#3B82F6]/75", dotColor: "bg-blue-500", statusText: "En proceso" },
+  upholstery: { label: "Tapizado", barColor: "bg-[#A855F7]/75", dotColor: "bg-violet-500", statusText: "En proceso" },
+  quality: { label: "Control calidad", barColor: "bg-[#8B5CF6]/75", dotColor: "bg-indigo-500", statusText: "En revisión" },
 };
 
 export function ProductionTimeline({ orders }: ProductionTimelineProps) {
@@ -42,10 +42,7 @@ export function ProductionTimeline({ orders }: ProductionTimelineProps) {
             // Buscar datos reales en la base de datos
             const realArea = activeAreas.find((a) => a.label.toLowerCase().includes(meta.label.slice(0, 4).toLowerCase()));
             const count = realArea ? realArea.active + realArea.blocked : 0;
-            
-            // Si el total es 0 (no hay órdenes en esta etapa), usamos los datos de la maqueta
-            const finalCount = count > 0 ? count : meta.fallbackCount;
-            const finalPct = count > 0 ? Math.min(Math.max(count * 25, 20), 90) : meta.fallbackPct;
+            const pct = count * 20;
 
             return (
               <div key={key} className="flex items-center justify-between gap-3">
@@ -53,13 +50,13 @@ export function ProductionTimeline({ orders }: ProductionTimelineProps) {
                 <div className="w-40 shrink-0">
                   <p className="text-xs font-bold text-stone-800">{meta.label}</p>
                   <p className="text-[10px] text-stone-400 font-semibold mt-0.5">
-                    {finalCount} {finalCount === 1 ? "orden" : "órdenes"}
+                    {count} {count === 1 ? "orden" : "órdenes"}
                   </p>
                 </div>
 
                 {/* Progress Bar */}
                 <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-stone-100 border border-stone-250/10">
-                  <div className={`h-full rounded-full ${meta.barColor} transition-all duration-300`} style={{ width: `${finalPct}%` }} />
+                  <div className={`h-full rounded-full ${meta.barColor} transition-all duration-300`} style={{ width: `${pct}%` }} />
                 </div>
 
                 {/* Estado */}

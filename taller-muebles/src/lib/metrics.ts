@@ -15,7 +15,10 @@ export function overdueOrders(orders: Order[]) {
 
 export function urgentOrders(orders: Order[]) {
   return activeOrders(orders).filter(
-    (order) => order.priority === "critical" || order.status === "urgent",
+    (order) =>
+      order.priority === "critical" ||
+      order.priority === "high" ||
+      order.status === "urgent",
   );
 }
 
@@ -28,9 +31,30 @@ export function blockedOrders(orders: Order[]) {
 }
 
 export function completionPercent(order: Order) {
-  if (!order.steps.length) return 0;
-  const done = order.steps.filter((step) => step.status === "done").length;
-  return Math.round((done / order.steps.length) * 100);
+  if (order.status === "completed") return 100;
+  if (order.status === "cancelled") return 0;
+
+  const steps = order.steps;
+  if (!steps.length) return 0;
+
+  const activeStep = steps.find((step) => step.status === "active");
+  const blockedStep = steps.find((step) => step.status === "blocked");
+  const targetStep = activeStep || blockedStep;
+
+  if (targetStep) {
+    if (targetStep.key === "structure") {
+      return targetStep.status === "blocked" ? 0 : 10;
+    }
+    if (targetStep.key === "cutting") return 30;
+    if (targetStep.key === "sewing") return 45;
+    if (targetStep.key === "upholstery") return 65;
+    if (targetStep.key === "quality") return 90;
+  }
+
+  const done = steps.filter((step) => step.status === "done").length;
+  if (done === steps.length) return 100;
+
+  return Math.round((done / steps.length) * 100);
 }
 
 export function statusCount(orders: Order[], status: StepStatus) {
@@ -51,3 +75,4 @@ export function areaLoad(orders: Order[]) {
   }
   return Array.from(areas.entries()).map(([label, values]) => ({ label, ...values }));
 }
+

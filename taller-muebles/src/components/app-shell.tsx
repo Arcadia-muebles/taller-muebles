@@ -26,12 +26,12 @@ export function AppShell({ active, user, children }: AppShellProps) {
         {/* Brand header */}
         <div className="flex items-center justify-between border-b border-stone-200/50 pb-5">
           <div className="flex items-center gap-3 select-none">
-            <div className="text-3xl font-serif font-bold text-stone-900 tracking-tighter">
+            <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#4E3F35] text-lg font-serif font-bold text-white shadow-sm">
               LH
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-stone-850 leading-none">Leather House</p>
-              <p className="text-[10px] text-stone-400 mt-1.5 leading-none">La Reina</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] text-[#2E2520] leading-none">Leather House</p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#9E7A5A] mt-1.5 leading-none">La Reina</p>
             </div>
           </div>
           <button className="text-stone-400 hover:text-stone-600 transition p-1">

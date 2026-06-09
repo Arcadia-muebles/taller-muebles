@@ -35,7 +35,7 @@ export function StatCard({
           <p className="text-xs font-semibold text-stone-500">
             {label}
           </p>
-          <div className={`grid size-8 place-items-center rounded-lg border ${toneStyles[tone]}`}>
+          <div className={`grid size-8 place-items-center rounded-full border ${toneStyles[tone]}`}>
             <Icon className="size-4" />
           </div>
         </div>

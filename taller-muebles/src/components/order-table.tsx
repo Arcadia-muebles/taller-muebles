@@ -8,7 +8,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Eye, MoreHorizontal, Pencil, Search, X, MessageSquare, ShieldCheck, Sofa, Armchair } from "lucide-react";
+import { ArrowUpDown, Eye, MoreHorizontal, Pencil, Search, X, MessageSquare, Sofa, Armchair } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { completionPercent } from "@/lib/metrics";
@@ -131,7 +131,7 @@ export function OrderTable({
       {
         accessorKey: "status",
         header: "Estado",
-        cell: ({ row }) => <StatusBadge type="order" value={row.original.status} />,
+        cell: ({ row }) => <StatusBadge type="order" value={row.original.status} order={row.original} />,
       },
       {
         accessorKey: "assignedTo",
@@ -385,7 +385,7 @@ function OrderCard({ order, canEditOrders }: { order: Order; canEditOrders: bool
             <p className="text-[10px] text-stone-400 font-semibold uppercase mt-0.5 leading-none">{order.store === "LH" ? "Leather House" : "La Reina"}</p>
           </div>
         </div>
-        <StatusBadge type="order" value={order.status} />
+        <StatusBadge type="order" value={order.status} order={order} />
       </div>
 
       <div className="mt-4 grid gap-2 text-xs text-stone-600 sm:grid-cols-3">

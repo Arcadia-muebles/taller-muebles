@@ -2,10 +2,8 @@ import {
   AlertTriangle,
   CalendarDays,
   ClipboardCheck,
-  Factory,
   Plus,
   Lock,
-  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
@@ -18,7 +16,7 @@ import { requireSession } from "@/lib/auth";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { activeOrders, blockedOrders, overdueOrders, urgentOrders } from "@/lib/metrics";
 import { listOrders, listStockItems } from "@/lib/repositories/production";
-import { formatDate } from "@/lib/utils";
+import { daysUntil } from "@/lib/utils";
 
 export default async function AdminPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
@@ -30,7 +28,8 @@ export default async function AdminPage() {
   const overdue = overdueOrders(orders);
   const blocked = blockedOrders(orders);
   
-  const nextDeliveries = [...active]
+  const nextDeliveries = active
+    .filter((order) => daysUntil(order.deliveryDate) >= 0)
     .sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate))
     .slice(0, 3);
 
@@ -125,11 +124,17 @@ export default async function AdminPage() {
               </div>
               
               <div className="mt-5 space-y-3">
-                {nextDeliveries.map((order, index) => {
-                  // Calcular días restantes para renderizar texto idéntico
-                  const daysLeft = index === 0 ? "2 días" : index === 1 ? "4 días" : "5 días";
+                {nextDeliveries.map((order) => {
+                  const days = daysUntil(order.deliveryDate);
+                  const daysLeft = days === 0 ? "Hoy" : days === 1 ? "1 día" : `${days} días`;
                   const dateText = order.deliveryDate.slice(8, 10);
-                  const monthText = "JUN";
+                  const monthText = new Intl.DateTimeFormat("es-CL", { month: "short" })
+                    .format(new Date(order.deliveryDate + "T00:00:00"))
+                    .slice(0, 3)
+                    .toUpperCase();
+
+                  // Determinar color de badge de días restantes
+                  const badgeColor = days <= 2 ? "text-rose-600" : "text-orange-600";
 
                   return (
                     <div
@@ -147,7 +152,7 @@ export default async function AdminPage() {
                         <p className="text-xs text-stone-400 font-semibold truncate mt-0.5">{order.client} &middot; {order.product}</p>
                       </div>
                       {/* Days left */}
-                      <span className="text-xs font-bold text-orange-600 shrink-0 self-start mt-0.5">
+                      <span className={`text-xs font-bold shrink-0 self-start mt-0.5 ${badgeColor}`}>
                         {daysLeft}
                       </span>
                     </div>

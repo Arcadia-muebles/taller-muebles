@@ -30,15 +30,7 @@ function MaterialPreview({ name }: { name: string }) {
 export function StockPanel({ items }: StockPanelProps) {
   // Filtrar ítems críticos
   const criticalItems = items.filter((item) => item.available <= item.minimum);
-
-  // Si no hay ítems reales en el local state, usamos los del mockup para garantizar el diseño impecable
-  const displayItems = criticalItems.length > 0 ? criticalItems.slice(0, 5) : [
-    { id: "1", name: "Cuero Premium Caramelo", available: 1.2, minimum: 10, unit: "m" },
-    { id: "2", name: "Espuma Densidad 35", available: 3, minimum: 15, unit: "un." },
-    { id: "3", name: "Hilo Nylon Beige", available: 2, minimum: 5, unit: "un." },
-    { id: "4", name: "Patas Madera Nogal", available: 4, minimum: 20, unit: "un." },
-    { id: "5", name: "Cierre YKK 60cm", available: 1, minimum: 20, unit: "un." },
-  ];
+  const displayItems = criticalItems.slice(0, 5);
 
   return (
     <section className="rounded-2xl border border-stone-200/60 bg-white p-5 shadow-sm shadow-stone-100/30 flex flex-col justify-between select-none h-full">
