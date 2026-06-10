@@ -69,7 +69,7 @@ export function MobileNavigation({
 
 const roleLabels: Record<Role, string> = {
   admin: "Administrador",
-  manager: "Encargado",
+  manager: "Supervisor",
   operator: "Trabajador",
   viewer: "Lectura",
 };

@@ -14,9 +14,9 @@ export default async function HistoryPage() {
   return (
     <AppShell active="admin" user={user}>
       <header className="border-b border-stone-200 pb-5">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">Historial</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Órdenes cerradas y canceladas</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+        <p className="page-kicker">Historial</p>
+        <h1 className="page-title">Órdenes cerradas y canceladas</h1>
+        <p className="page-description max-w-2xl">
           Registro permanente de órdenes que ya no forman parte de la producción activa.
         </p>
       </header>

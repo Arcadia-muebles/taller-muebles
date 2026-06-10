@@ -38,11 +38,26 @@ const defaultLocalUsers: AppUser[] = [
     active: true,
   },
   {
+    id: "local-supervisor",
+    email: "supervisor@taller.local",
+    name: "Supervisor Taller",
+    role: "manager",
+    active: true,
+  },
+  {
     id: "local-worker-structure",
     email: "estructura@taller.local",
     name: "Gustavo Rojas",
     role: "operator",
     area: "structure",
+    active: true,
+  },
+  {
+    id: "local-worker-en-blanco",
+    email: "enblanco@taller.local",
+    name: "Equipo En Blanco",
+    role: "operator",
+    area: "en_blanco",
     active: true,
   },
   {
@@ -78,6 +93,14 @@ const defaultLocalUsers: AppUser[] = [
     active: true,
   },
   {
+    id: "local-worker-dispatch",
+    email: "despacho@taller.local",
+    name: "Equipo Despacho",
+    role: "operator",
+    area: "dispatch",
+    active: true,
+  },
+  {
     id: "local-worker-taller",
     email: "taller@taller.local",
     name: "Equipo Taller",
@@ -88,10 +111,12 @@ const defaultLocalUsers: AppUser[] = [
 
 const stepDefinitions: Array<{ key: AreaKey; label: string; ownerFallback: string }> = [
   { key: "structure", label: "Estructura", ownerFallback: "Estructura" },
+  { key: "en_blanco", label: "En Blanco", ownerFallback: "En Blanco" },
   { key: "cutting", label: "Corte", ownerFallback: "Corte" },
   { key: "sewing", label: "Costura", ownerFallback: "Costura" },
-  { key: "upholstery", label: "Tapiceria", ownerFallback: "Tapiceria" },
-  { key: "quality", label: "Revision", ownerFallback: "Revision" },
+  { key: "upholstery", label: "Tapicería", ownerFallback: "Tapicería" },
+  { key: "quality", label: "Control Calidad", ownerFallback: "Control Calidad" },
+  { key: "dispatch", label: "Despacho", ownerFallback: "Despacho" },
 ];
 
 async function ensureDataFile() {
@@ -166,7 +191,7 @@ export async function createLocalOrder(input: {
     label: step.label,
     owner: index === 0 ? input.assignedTo : pickLocalStepOwner(data, step.key, step.label),
     status: index === 0 ? "active" : "pending",
-    startedAt: index === 0 ? today() : undefined,
+    startedAt: index === 0 ? nowIso() : undefined,
   }));
 
   const order: Order = {
@@ -250,7 +275,7 @@ export async function closeLocalOrder(id: string) {
   order.steps = order.steps.map((step) => ({
     ...step,
     status: "done",
-    completedAt: step.completedAt ?? today(),
+    completedAt: step.completedAt ?? nowIso(),
   }));
   addAudit(data, order.id, "close_order", "Orden cerrada y etapas marcadas como terminadas");
   await writeData(data);
@@ -269,15 +294,25 @@ export async function updateLocalProductionStep(input: {
   if (!order || !step) return false;
 
   step.status = input.status;
-  step.notes = input.status === "blocked" ? input.reason : undefined;
-  if (input.status === "active") step.startedAt = today();
-  if (input.status === "done") step.completedAt = today();
+  if (input.reason?.trim()) step.notes = input.reason.trim();
+  if (input.status === "blocked") step.notes = input.reason;
+  if (input.status === "active") step.startedAt = nowIso();
+  if (input.status === "done") {
+    step.completedAt = nowIso();
+    const nextStep = nextPendingStep(order, step.key);
+    if (nextStep) {
+      nextStep.status = "pending";
+      nextStep.notes = undefined;
+    }
+  }
 
   if (order.steps.some((item) => item.status === "blocked")) {
     order.status = "blocked";
   } else if (order.steps.every((item) => item.status === "done")) {
-    order.status = input.autoCompleteAfterQuality ? "completed" : "quality_control";
-    if (input.autoCompleteAfterQuality) order.condition = "Entregado";
+    order.status = "completed";
+    order.condition = "Entregado";
+  } else if (order.steps.find((item) => item.key === "quality")?.status === "active") {
+    order.status = "quality_control";
   } else {
     order.status = order.priority === "critical" ? "urgent" : "in_production";
   }
@@ -286,6 +321,58 @@ export async function updateLocalProductionStep(input: {
   await writeData(data);
   return true;
 }
+
+export async function moveLocalOrderToStep(input: {
+  orderId: string;
+  stepKey: AreaKey;
+  actorName: string;
+}) {
+  const data = await readData();
+  const order = data.orders.find((item) => item.id === input.orderId);
+  if (!order) return false;
+  const targetIndex = order.steps.findIndex((step) => step.key === input.stepKey);
+  if (targetIndex < 0) return false;
+
+  const now = nowIso();
+  order.steps = order.steps.map((step, index) => {
+    if (index < targetIndex) {
+      return {
+        ...step,
+        status: "done",
+        completedAt: step.completedAt ?? now,
+      };
+    }
+    if (index === targetIndex) {
+      return {
+        ...step,
+        status: "pending",
+        startedAt: undefined,
+        completedAt: undefined,
+        notes: undefined,
+      };
+    }
+    return {
+      ...step,
+      status: "pending",
+      startedAt: undefined,
+      completedAt: undefined,
+      notes: undefined,
+    };
+  });
+
+  order.status = input.stepKey === "quality"
+    ? "quality_control"
+    : order.priority === "critical"
+      ? "urgent"
+      : "in_production";
+  order.condition = input.stepKey === "quality" ? "Control de calidad" : order.condition;
+
+  const target = order.steps[targetIndex];
+  addAudit(data, order.id, "move_step", `${input.actorName} movio la orden a ${target.label}`);
+  await writeData(data);
+  return true;
+}
+
 
 export async function listLocalStockItems() {
   return (await readData()).stockItems.filter((item) => item.active !== false);
@@ -419,9 +506,10 @@ export async function upsertLocalUser(user: Omit<AppUser, "id" | "active">) {
     existing.name = user.name;
     existing.role = user.role;
     existing.area = user.area;
+    existing.areas = user.areas ?? parseAreas(user.area);
     existing.active = true;
   } else {
-    data.users.unshift({ ...user, id: crypto.randomUUID(), active: true });
+    data.users.unshift({ ...user, areas: user.areas ?? parseAreas(user.area), id: crypto.randomUUID(), active: true });
   }
 
   await writeData(data);
@@ -436,6 +524,26 @@ export async function deactivateLocalUser(id: string) {
   return true;
 }
 
+export async function updateLocalUser(input: {
+  id: string;
+  name: string;
+  role: AppUser["role"];
+  area?: AreaKey;
+  areas?: AreaKey[];
+  active: boolean;
+}) {
+  const data = await readData();
+  const user = data.users.find((item) => item.id === input.id);
+  if (!user) return false;
+  user.name = input.name;
+  user.role = input.role;
+  user.areas = input.role === "operator" ? input.areas ?? parseAreas(input.area) : undefined;
+  user.area = input.role === "operator" ? user.areas?.[0] : undefined;
+  user.active = input.active;
+  await writeData(data);
+  return true;
+}
+
 export async function getLocalSystemSettings() {
   return (await readData()).settings ?? defaultSystemSettings;
 }
@@ -446,8 +554,14 @@ export async function saveLocalSystemSettings(settings: SystemSettings) {
   await writeData(data);
 }
 
-function today() {
-  return new Date().toISOString().slice(0, 10);
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function nextPendingStep(order: Order, currentStepKey: AreaKey) {
+  const currentIndex = order.steps.findIndex((step) => step.key === currentStepKey);
+  if (currentIndex < 0) return undefined;
+  return order.steps.slice(currentIndex + 1).find((step) => step.status === "pending");
 }
 
 function addAudit(data: LocalData, orderId: string, action: string, summary: string) {
@@ -487,8 +601,19 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
 
 function pickLocalStepOwner(data: LocalData, area: AreaKey, fallback: string) {
   return (
-    data.users.find((user) => user.active && user.role === "operator" && user.area === area)?.name ??
-    data.users.find((user) => user.active && user.role === "operator" && !user.area)?.name ??
+    data.users.find((user) => user.active && user.role === "operator" && userAreas(user).includes(area))?.name ??
+    data.users.find((user) => user.active && user.role === "operator" && !userAreas(user).length)?.name ??
     fallback
   );
+}
+
+function parseAreas(value?: string | null) {
+  return (value ?? "")
+    .split(",")
+    .map((area) => area.trim())
+    .filter(Boolean);
+}
+
+function userAreas(user: AppUser) {
+  return user.areas?.length ? user.areas : parseAreas(user.area);
 }

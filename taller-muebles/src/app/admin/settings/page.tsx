@@ -10,11 +10,11 @@ export default async function SettingsPage() {
 
   return (
     <AppShell active="admin" user={user}>
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 pb-5">
+      <header className="page-header">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">Configuracion</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Reglas del sistema</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+          <p className="page-kicker">Configuracion</p>
+          <h1 className="page-title">Reglas del sistema</h1>
+          <p className="page-description max-w-2xl">
             Controla el funcionamiento diario, validaciones, alertas y permisos de la plataforma.
           </p>
         </div>

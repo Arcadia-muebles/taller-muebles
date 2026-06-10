@@ -7,7 +7,7 @@ import type { Order } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
 
 const initialState: WorkshopOrderState = { status: "idle", message: "" };
-const inputClass = "h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-950 outline-none transition focus:border-stone-400 focus:bg-white";
+const inputClass = "control";
 
 export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order["priority"] }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -18,14 +18,14 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
   }, initialState);
 
   return (
-    <form ref={formRef} action={action} className="rounded-lg border border-stone-200 bg-white p-4">
+    <form ref={formRef} action={action} className="panel-pad">
       <div className="flex items-start gap-3">
         <div className="grid size-10 shrink-0 place-items-center rounded-md bg-stone-950 text-white">
           <ClipboardPlus className="size-5" />
         </div>
         <div className="min-w-0">
-          <h2 className="text-base font-semibold">Ingresar producto</h2>
-          <p className="mt-1 text-sm leading-5 text-stone-500">
+          <h2 className="panel-title">Ingresar producto</h2>
+          <p className="panel-description leading-5">
             Crea un trabajo operativo y lo deja listo en la primera etapa configurada.
           </p>
         </div>
@@ -42,7 +42,7 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
           <select name="priority" defaultValue={defaultPriority} className={inputClass}>
             <option value="normal">Normal</option>
             <option value="high">Alta</option>
-            <option value="critical">Critica</option>
+            <option value="critical">Crítica</option>
           </select>
         </Field>
         <Field label="Producto" className="sm:col-span-2">
@@ -65,14 +65,14 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
             name="observations"
             maxLength={500}
             placeholder="Medidas, piezas, faltantes, instrucciones o cambios."
-            className="min-h-24 w-full resize-none rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-950 outline-none transition focus:border-stone-400 focus:bg-white"
+            className="textarea-control min-h-24"
           />
         </Field>
       </div>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ActionFeedback state={state} />
-        <SubmitButton pendingLabel="Ingresando..." className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60">
+        <SubmitButton pendingLabel="Ingresando..." className="btn btn-primary px-4">
           <ClipboardPlus className="size-4" />
           Ingresar a taller
         </SubmitButton>
@@ -91,7 +91,7 @@ function Field({ label, className, children }: { label: string; className?: stri
 }
 
 function ActionFeedback({ state }: { state: WorkshopOrderState }) {
-  if (!state.message) return <p className="text-xs text-stone-400">El codigo se genera automaticamente.</p>;
+  if (!state.message) return <p className="text-xs text-stone-400">El código se genera automáticamente.</p>;
   const ok = state.status === "success";
   const Icon = ok ? CheckCircle2 : XCircle;
   return (

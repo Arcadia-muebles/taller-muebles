@@ -338,11 +338,11 @@ on public.orders for select
 to authenticated
 using (app_private.current_profile_id() is not null);
 
-create policy "orders inserted by admins and managers"
+create policy "orders inserted by active users"
 on public.orders for insert
 to authenticated
 with check (
-  app_private.is_admin_or_manager()
+  app_private.current_profile_id() is not null
   and created_by = app_private.current_profile_id()
 );
 
@@ -357,25 +357,17 @@ on public.production_steps for select
 to authenticated
 using (app_private.current_profile_id() is not null);
 
-create policy "production steps inserted by admins and managers"
+create policy "production steps inserted by active users"
 on public.production_steps for insert
 to authenticated
-with check (app_private.is_admin_or_manager());
+with check (app_private.current_profile_id() is not null);
 
-create policy "production steps updated by area owner or managers"
+create policy "production steps updated by active users"
 on public.production_steps for update
 to authenticated
-using (
-  app_private.is_admin_or_manager()
-  or step = app_private.current_area()
-  or assigned_to = app_private.current_profile_id()
-)
+using (app_private.current_profile_id() is not null)
 with check (
-  (
-    app_private.is_admin_or_manager()
-    or step = app_private.current_area()
-    or assigned_to = app_private.current_profile_id()
-  )
+  app_private.current_profile_id() is not null
   and updated_by = app_private.current_profile_id()
 );
 
@@ -420,10 +412,10 @@ on public.stock_movements for insert
 to authenticated
 with check (app_private.is_admin_or_manager());
 
-create policy "audit logs readable by admins and managers"
+create policy "audit logs readable by active users"
 on public.audit_logs for select
 to authenticated
-using (app_private.is_admin_or_manager());
+using (app_private.current_profile_id() is not null);
 
 create policy "audit logs inserted by active users"
 on public.audit_logs for insert

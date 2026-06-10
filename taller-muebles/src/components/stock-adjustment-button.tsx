@@ -16,7 +16,7 @@ export function StockAdjustmentButton({ item }: { item: StockItem }) {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-stone-200 bg-white px-2.5 text-xs font-medium text-stone-700 transition hover:border-stone-300 hover:bg-stone-50">
+      <button type="button" onClick={() => setOpen(true)} className="btn btn-secondary h-8 px-2.5 text-xs">
         <SlidersHorizontal className="size-3.5" />
         Movimiento
       </button>
@@ -36,7 +36,7 @@ export function StockAdjustmentButton({ item }: { item: StockItem }) {
             </div>
             <label className="mt-5 block text-sm font-medium text-stone-700">
               Tipo de movimiento
-              <select name="type" defaultValue="in" className="mt-2 h-11 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm">
+              <select name="type" defaultValue="in" className="control-lg mt-2">
                 <option value="in">Entrada de material</option>
                 <option value="out">Salida o consumo</option>
                 <option value="adjustment">Ajuste de inventario</option>
@@ -44,16 +44,16 @@ export function StockAdjustmentButton({ item }: { item: StockItem }) {
             </label>
             <label className="mt-4 block text-sm font-medium text-stone-700">
               Cantidad
-              <input name="quantity" required type="number" min="0.01" step="0.01" className="mt-2 h-11 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm" />
+              <input name="quantity" required type="number" min="0.01" step="0.01" className="control-lg mt-2" />
             </label>
             <label className="mt-4 block text-sm font-medium text-stone-700">
               Motivo o referencia
-              <textarea name="notes" required minLength={3} placeholder="Ej. Compra proveedor / consumo orden LH-204" className="mt-2 min-h-24 w-full resize-none rounded-md border border-stone-200 bg-stone-50 p-3 text-sm" />
+              <textarea name="notes" required minLength={3} placeholder="Ej. Compra proveedor / consumo orden LH-204" className="textarea-control mt-2 min-h-24" />
             </label>
             {state.message && !state.ok ? <p role="alert" className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{state.message}</p> : null}
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setOpen(false)} className="h-10 rounded-md border border-stone-200 px-4 text-sm font-medium text-stone-700">Cancelar</button>
-              <SubmitButton pendingLabel="Registrando..." className="h-10 rounded-md bg-stone-950 px-4 text-sm font-medium text-white disabled:opacity-50">Registrar movimiento</SubmitButton>
+              <button type="button" onClick={() => setOpen(false)} className="btn btn-secondary px-4">Cancelar</button>
+              <SubmitButton pendingLabel="Registrando..." className="btn btn-primary px-4">Registrar movimiento</SubmitButton>
             </div>
           </form>
         </div>

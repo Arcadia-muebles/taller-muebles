@@ -8,10 +8,8 @@ import { useForm } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
 import { orderSchema, type OrderFormValues } from "@/lib/validation/order";
 
-const inputClass =
-  "h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition focus:border-stone-500";
-const labelClass =
-  "text-xs font-medium uppercase tracking-[0.14em] text-stone-500";
+const inputClass = "control-lg bg-white";
+const labelClass = "field-label";
 const initialState: CreateOrderState = {
   status: "idle",
   message: "",
@@ -69,12 +67,12 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
         </div>
       ) : null}
 
-      <section className="rounded-lg border border-stone-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-stone-200 p-4">
+      <section className="panel">
+        <div className="panel-header flex items-center gap-3">
           <FileText className="size-5 text-stone-500" />
           <div>
-            <h2 className="text-base font-semibold">Datos comerciales</h2>
-            <p className="text-sm text-stone-500">Informacion base de la nota de venta.</p>
+            <h2 className="panel-title">Datos comerciales</h2>
+            <p className="panel-description">Informacion base de la nota de venta.</p>
           </div>
         </div>
 
@@ -109,12 +107,12 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
         </div>
       </section>
 
-      <section className="rounded-lg border border-stone-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-stone-200 p-4">
+      <section className="panel">
+        <div className="panel-header flex items-center gap-3">
           <CalendarDays className="size-5 text-stone-500" />
           <div>
-            <h2 className="text-base font-semibold">Planificacion</h2>
-            <p className="text-sm text-stone-500">Fechas, prioridad y condiciones productivas.</p>
+            <h2 className="panel-title">Planificacion</h2>
+            <p className="panel-description">Fechas, prioridad y condiciones productivas.</p>
           </div>
         </div>
 
@@ -139,7 +137,7 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
           <Field label="Observaciones" error={errors.observations?.message} full>
             <textarea
               {...register("observations")}
-              className="min-h-28 w-full rounded-md border border-stone-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-stone-500"
+              className="textarea-control min-h-28 bg-white"
               placeholder="Condiciones especiales, medidas, acuerdos, material pendiente..."
             />
           </Field>
@@ -147,12 +145,12 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
       </section>
 
       {!orderId ? (
-        <section className="rounded-lg border border-stone-200 bg-white">
-          <div className="flex items-center gap-3 border-b border-stone-200 p-4">
+        <section className="panel">
+          <div className="panel-header flex items-center gap-3">
             <Paperclip className="size-5 text-stone-500" />
             <div>
-              <h2 className="text-base font-semibold">Archivo adjunto</h2>
-              <p className="text-sm text-stone-500">Plano, foto, PDF u otro documento de respaldo.</p>
+              <h2 className="panel-title">Archivo adjunto</h2>
+              <p className="panel-description">Plano, foto, PDF u otro documento de respaldo.</p>
             </div>
           </div>
 
@@ -173,7 +171,7 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
         <Link
           href="/admin"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-medium text-stone-700"
+          className="btn-lg btn-secondary"
         >
           <ArrowLeft className="size-4" />
           Volver
@@ -181,7 +179,7 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="btn-lg btn-primary"
         >
           <Save className="size-4" />
           {pending ? "Guardando..." : orderId ? "Guardar cambios" : "Guardar nota"}

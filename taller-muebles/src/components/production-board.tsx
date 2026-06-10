@@ -1,0 +1,364 @@
+"use client";
+
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  GripVertical,
+  Maximize2,
+  MessageSquareText,
+  PackageOpen,
+  UserRound,
+  X,
+} from "lucide-react";
+import Link from "next/link";
+import { useMemo, useState, useTransition } from "react";
+import { moveOrderStage } from "@/app/admin/orders/actions";
+import type { AreaKey, Order, ProductionStep, SystemSettings } from "@/lib/types";
+import { cn, daysUntil, deliveryLabel, durationLabel, formatDate } from "@/lib/utils";
+import { StatusBadge } from "./status-badge";
+
+type ProductionBoardProps = {
+  orders: Order[];
+  steps: SystemSettings["production"]["steps"];
+  canMove: boolean;
+};
+
+type Feedback = {
+  tone: "success" | "error";
+  message: string;
+};
+
+export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps) {
+  const enabledSteps = steps.filter((step) => step.enabled);
+  const [selectedId, setSelectedId] = useState<string | null>(orders[0]?.id ?? null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [hoverStep, setHoverStep] = useState<AreaKey | null>(null);
+  const [stageOverrides, setStageOverrides] = useState<Record<string, AreaKey>>({});
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [, startTransition] = useTransition();
+
+  const boardOrders = useMemo(
+    () =>
+      orders.map((order) => {
+        const override = stageOverrides[order.id];
+        return override ? orderWithStage(order, override) : order;
+      }),
+    [orders, stageOverrides],
+  );
+
+  const grouped = useMemo(() => {
+    const map = new Map<AreaKey, Order[]>();
+    for (const step of enabledSteps) map.set(step.key, []);
+    for (const order of boardOrders) {
+      const current = currentStep(order);
+      if (!current) continue;
+      const list = map.get(current.key);
+      if (list) list.push(order);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
+    }
+    return map;
+  }, [boardOrders, enabledSteps]);
+
+  const selected = boardOrders.find((order) => order.id === selectedId) ?? boardOrders[0];
+
+  function move(orderId: string, stepKey: AreaKey) {
+    const order = boardOrders.find((item) => item.id === orderId);
+    const current = order ? currentStep(order) : undefined;
+    if (!order || current?.key === stepKey || !canMove) return;
+
+    setStageOverrides((currentOverrides) => ({ ...currentOverrides, [orderId]: stepKey }));
+    setFeedback(null);
+    startTransition(async () => {
+      const result = await moveOrderStage({ orderId, stepKey });
+      if (!result.ok) {
+        setStageOverrides((currentOverrides) => {
+          const next = { ...currentOverrides };
+          delete next[orderId];
+          return next;
+        });
+        setFeedback({ tone: "error", message: result.message });
+        return;
+      }
+      setFeedback({ tone: "success", message: "Orden movida." });
+    });
+  }
+
+  return (
+    <section className="mt-5 grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_390px]">
+      <div className="panel min-w-0 overflow-hidden">
+        <div className="panel-header flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="panel-title">Tablero productivo</h2>
+            <p className="panel-description">
+              {canMove
+                ? "Arrastra una tarjeta para moverla entre etapas."
+                : "Vista de seguimiento por etapa productiva."}
+            </p>
+          </div>
+          {feedback ? (
+            <div className={cn(
+              "flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm font-medium",
+              feedback.tone === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-rose-200 bg-rose-50 text-rose-800",
+            )}>
+              <span>{feedback.message}</span>
+              <button type="button" onClick={() => setFeedback(null)} aria-label="Ocultar mensaje" className="grid size-6 place-items-center rounded hover:bg-white/60">
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="overflow-x-auto p-4">
+          <div className="grid min-w-[1180px] grid-cols-7 gap-3">
+            {enabledSteps.map((step) => {
+              const columnOrders = grouped.get(step.key) ?? [];
+              const isHover = hoverStep === step.key;
+              return (
+                <section
+                  key={step.key}
+                  onDragOver={(event) => {
+                    if (!canMove) return;
+                    event.preventDefault();
+                    setHoverStep(step.key);
+                  }}
+                  onDragLeave={() => setHoverStep(null)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const orderId = event.dataTransfer.getData("text/plain");
+                    setHoverStep(null);
+                    setDraggingId(null);
+                    if (orderId) move(orderId, step.key);
+                  }}
+                  className={cn(
+                    "flex min-h-[620px] flex-col rounded-lg border bg-stone-50",
+                    isHover ? "border-stone-950 bg-white" : "border-stone-200",
+                  )}
+                >
+                  <header className="border-b border-stone-200 px-3 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="truncate text-sm font-semibold text-stone-950">{step.label}</h3>
+                      <span className="rounded-full border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600">
+                        {columnOrders.length}
+                      </span>
+                    </div>
+                  </header>
+                  <div className="flex flex-1 flex-col gap-3 p-3">
+                    {columnOrders.map((order) => {
+                      const current = currentStep(order);
+                      return (
+                        <ProductCard
+                          key={order.id}
+                          order={order}
+                          step={current}
+                          selected={selected?.id === order.id}
+                          dragging={draggingId === order.id}
+                          draggable={canMove}
+                          onSelect={() => setSelectedId(order.id)}
+                          onDragStart={(event) => {
+                            if (!canMove) return;
+                            setDraggingId(order.id);
+                            event.dataTransfer.setData("text/plain", order.id);
+                            event.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragEnd={() => {
+                            setDraggingId(null);
+                            setHoverStep(null);
+                          }}
+                        />
+                      );
+                    })}
+                    {!columnOrders.length ? (
+                      <div className="grid min-h-28 place-items-center rounded-md border border-dashed border-stone-200 bg-white p-3 text-center text-xs text-stone-400">
+                        Sin productos en esta etapa.
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <OrderDetailDrawer order={selected} />
+    </section>
+  );
+}
+
+function ProductCard({
+  order,
+  step,
+  selected,
+  dragging,
+  draggable,
+  onSelect,
+  onDragStart,
+  onDragEnd,
+}: {
+  order: Order;
+  step?: ProductionStep;
+  selected: boolean;
+  dragging: boolean;
+  draggable: boolean;
+  onSelect: () => void;
+  onDragStart: React.DragEventHandler<HTMLElement>;
+  onDragEnd: React.DragEventHandler<HTMLElement>;
+}) {
+  const days = daysUntil(order.deliveryDate);
+  const isLate = days < 0;
+  const isToday = days === 0;
+  const isBlocked = step?.status === "blocked" || order.status === "blocked";
+
+  return (
+    <article
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onClick={onSelect}
+      className={cn(
+        "cursor-pointer rounded-lg border bg-white p-3 transition",
+        selected ? "border-stone-950 shadow-sm" : "border-stone-200 hover:border-stone-400",
+        dragging ? "opacity-50" : "",
+        isBlocked ? "border-rose-200 bg-rose-50" : "",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-mono text-xs font-semibold text-stone-500">{order.code}</p>
+          <h4 className="mt-2 line-clamp-2 text-sm font-semibold text-stone-950">{order.product}</h4>
+        </div>
+        {draggable ? <GripVertical className="size-4 shrink-0 text-stone-300" /> : null}
+      </div>
+      <p className="mt-2 truncate text-xs font-medium text-stone-700">{order.client}</p>
+      <p className="mt-1 line-clamp-2 text-xs text-stone-500">{order.material} / {order.color}</p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {step ? <StatusBadge type="step" value={step.status} className="h-6" /> : null}
+        {isLate || isToday ? (
+          <span className={cn(
+            "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold",
+            isLate ? "border-rose-200 bg-rose-50 text-rose-700" : "border-amber-200 bg-amber-50 text-amber-800",
+          )}>
+            <AlertTriangle className="size-3" />
+            {deliveryLabel(order.deliveryDate, false)}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3 border-t border-stone-100 pt-3">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone-400">Entrega</p>
+        <p className="mt-1 text-xs font-semibold text-stone-900">{formatDate(order.deliveryDate)}</p>
+      </div>
+    </article>
+  );
+}
+
+function OrderDetailDrawer({ order }: { order?: Order }) {
+  if (!order) {
+    return (
+      <aside className="panel-pad hidden self-start 2xl:block">
+        <p className="text-sm text-stone-500">Selecciona una tarjeta para ver sus datos.</p>
+      </aside>
+    );
+  }
+
+  const step = currentStep(order);
+
+  return (
+    <aside className="panel self-start overflow-hidden 2xl:sticky 2xl:top-5">
+      <div className="border-b border-stone-200 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="page-kicker">Detalle</p>
+            <h2 className="mt-2 text-xl font-semibold text-stone-950">{order.code}</h2>
+            <p className="mt-1 text-sm text-stone-500">{order.product}</p>
+          </div>
+          <Link href={`/admin/orders/${order.id}`} className="btn btn-secondary h-9 px-2.5" aria-label="Abrir detalle completo">
+            <Maximize2 className="size-4" />
+          </Link>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <StatusBadge type="order" value={order.status} />
+          {step ? <StatusBadge type="step" value={step.status} /> : null}
+        </div>
+      </div>
+
+      <div className="space-y-4 p-4">
+        <DetailBlock icon={UserRound} label="Cliente" value={order.client} />
+        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
+          <DetailBlock icon={PackageOpen} label="Material" value={`${order.material} / ${order.color}`} />
+          <DetailBlock icon={CalendarDays} label="Entrega" value={`${formatDate(order.deliveryDate)} · ${deliveryLabel(order.deliveryDate, false)}`} />
+        </div>
+        <DetailBlock icon={Clock} label="Etapa actual" value={step ? `${step.label} · ${step.owner}` : "Sin etapa activa"} />
+
+        <section className="rounded-lg border border-stone-200 bg-white p-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="size-4 text-stone-500" />
+            <h3 className="text-sm font-semibold text-stone-950">Tiempos por etapa</h3>
+          </div>
+          <div className="mt-3 space-y-2">
+            {order.steps.map((item) => (
+              <div key={item.key} className="flex items-center justify-between gap-3 text-xs">
+                <span className="truncate text-stone-600">{item.label}</span>
+                <span className="shrink-0 font-medium text-stone-950">{durationLabel(item.startedAt, item.completedAt)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-stone-200 bg-white p-3">
+          <div className="flex items-center gap-2">
+            <MessageSquareText className="size-4 text-stone-500" />
+            <h3 className="text-sm font-semibold text-stone-950">Observaciones</h3>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-stone-600">{order.observations}</p>
+        </section>
+
+        <Link href={`/admin/orders/${order.id}`} className="btn btn-primary w-full">
+          Ver todos los datos
+          <ChevronRight className="size-4" />
+        </Link>
+      </div>
+    </aside>
+  );
+}
+
+function DetailBlock({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-stone-500">
+        <Icon className="size-3.5" />
+        {label}
+      </div>
+      <p className="mt-2 text-sm font-semibold text-stone-950">{value}</p>
+    </div>
+  );
+}
+
+function currentStep(order: Order) {
+  return (
+    order.steps.find((step) => step.status === "active") ??
+    order.steps.find((step) => step.status === "blocked") ??
+    order.steps.find((step) => step.status === "pending")
+  );
+}
+
+function orderWithStage(order: Order, stepKey: AreaKey): Order {
+  const targetIndex = order.steps.findIndex((step) => step.key === stepKey);
+  if (targetIndex < 0) return order;
+  return {
+    ...order,
+    steps: order.steps.map((step, index) => {
+      if (index < targetIndex) return { ...step, status: "done" };
+      if (index === targetIndex) return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
+      return { ...step, status: "pending" };
+    }),
+  };
+}

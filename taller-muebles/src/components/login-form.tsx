@@ -14,7 +14,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
   const [panel, setPanel] = useState<"admin" | "taller">("admin");
 
   return (
-    <form action={formAction} className="min-w-0 rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+    <form action={formAction} className="panel-pad min-w-0 p-5 shadow-sm">
       <div className="flex items-center gap-3">
         <div className="grid size-10 place-items-center rounded-lg bg-stone-950 text-white">
           <ShieldCheck className="size-5" />
@@ -36,7 +36,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
             type="email"
             autoComplete="email"
             placeholder={panel === "admin" ? "admin@taller.local" : "taller@taller.local"}
-            className="h-11 w-full rounded-md border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none transition focus:border-stone-500 focus:bg-white"
+            className="control-lg pl-9"
           />
         </div>
       </label>
@@ -52,7 +52,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
             type="password"
             autoComplete="current-password"
             placeholder={supabaseEnabled ? "Tu clave de acceso" : "Cualquier clave"}
-            className="h-11 w-full rounded-md border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none transition focus:border-stone-500 focus:bg-white"
+            className="control-lg pl-9"
           />
         </div>
       </label>
@@ -106,7 +106,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
       <button
         type="submit"
         disabled={pending}
-        className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-md bg-stone-950 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+        className="btn-lg btn-primary mt-5 w-full"
       >
         {pending ? "Entrando..." : "Entrar"}
       </button>

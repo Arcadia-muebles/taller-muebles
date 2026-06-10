@@ -67,7 +67,7 @@ export function SystemSettingsForm({
 
   return (
     <div className="mt-5 grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="self-start rounded-xl border border-stone-200 bg-white p-2 xl:sticky xl:top-5">
+      <aside className="panel self-start p-2 xl:sticky xl:top-5">
         <div className="border-b border-stone-100 px-3 py-3">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-stone-400">Categorias</p>
           <p className="mt-1 text-sm text-stone-600">Define como opera la plataforma.</p>
@@ -108,7 +108,7 @@ export function SystemSettingsForm({
           </div>
         ) : null}
 
-        <section className="rounded-xl border border-stone-200 bg-white">
+        <section className="panel">
           <SectionHeader section={active} />
           <div className="p-5 sm:p-6">
             {active === "general" ? <GeneralSection settings={settings} setSettings={setSettings} disabled={!canEdit} /> : null}
@@ -126,11 +126,11 @@ export function SystemSettingsForm({
               <p className="mt-0.5 text-xs text-stone-500">{feedback || "Los cambios se aplican despues de guardar."}</p>
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={restoreDefaults} className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 px-3 text-sm font-medium text-stone-700 hover:bg-stone-50">
+              <button type="button" onClick={restoreDefaults} className="btn btn-secondary">
                 <RotateCcw className="size-4" />
                 Restaurar
               </button>
-              <button type="button" onClick={save} disabled={!dirty || isPending} className="inline-flex h-10 items-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white disabled:opacity-40">
+              <button type="button" onClick={save} disabled={!dirty || isPending} className="btn btn-primary px-4">
                 {dirty ? <Save className="size-4" /> : <Check className="size-4" />}
                 {isPending ? "Guardando..." : "Guardar cambios"}
               </button>
@@ -161,7 +161,7 @@ const sectionCopy: Record<SectionKey, string> = {
   production: "Ajusta nombres, disponibilidad y tiempos esperados de cada etapa.",
   orders: "Controla la calidad minima de los datos y el tratamiento de ordenes terminadas.",
   alerts: "Define cuando una situacion requiere atencion del equipo.",
-  permissions: "Limita las acciones sensibles de encargados y trabajadores.",
+  permissions: "Limita las acciones sensibles de supervisores y trabajadores.",
 };
 
 function GeneralSection({ settings, setSettings, disabled }: SectionProps) {
@@ -308,9 +308,9 @@ function AlertsSection({ settings, setSettings, disabled }: SectionProps) {
 function PermissionsSection({ settings, setSettings, disabled }: SectionProps) {
   const update = (patch: Partial<SystemSettings["permissions"]>) => setSettings({ ...settings, permissions: { ...settings.permissions, ...patch } });
   return <div className="space-y-6">
-    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">Los administradores conservan acceso total. Estas reglas controlan las acciones disponibles para encargados y trabajadores.</div>
+    <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm leading-6 text-stone-700">Los administradores conservan acceso total. Estas reglas controlan las acciones disponibles para supervisores y trabajadores.</div>
     <div>
-      <GroupLabel title="Encargados" />
+      <GroupLabel title="Supervisores" />
       <div className="mt-3 grid gap-3">
         <RuleRow title="Editar notas de venta" description="Pueden modificar datos comerciales y productivos." checked={settings.permissions.managersCanEditOrders} disabled={disabled} onChange={(value) => update({ managersCanEditOrders: value })} />
         <RuleRow title="Gestionar stock" description="Pueden crear materiales y registrar movimientos." checked={settings.permissions.managersCanManageStock} disabled={disabled} onChange={(value) => update({ managersCanManageStock: value })} />
@@ -329,7 +329,7 @@ function PermissionsSection({ settings, setSettings, disabled }: SectionProps) {
 }
 
 type SectionProps = { settings: SystemSettings; setSettings: (settings: SystemSettings) => void; disabled: boolean };
-const inputClass = "h-11 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-800 disabled:cursor-not-allowed disabled:opacity-60";
+const inputClass = "control-lg text-stone-800 disabled:cursor-not-allowed disabled:opacity-60";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return <label className="block"><span className="text-sm font-medium text-stone-800">{label}</span>{hint ? <span className="mt-1 block text-xs text-stone-500">{hint}</span> : null}<span className="mt-2 block">{children}</span></label>;

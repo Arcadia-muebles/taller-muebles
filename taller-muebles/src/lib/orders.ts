@@ -4,10 +4,10 @@ export function orderStatusLabel(status: OrderStatus) {
   const labels: Record<OrderStatus, string> = {
     draft: "Borrador",
     scheduled: "Programada",
-    in_production: "En produccion",
+    in_production: "En producción",
     blocked: "Bloqueada",
     urgent: "Urgente",
-    quality_control: "Revision",
+    quality_control: "Control calidad",
     completed: "Terminada",
     cancelled: "Cancelada",
   };

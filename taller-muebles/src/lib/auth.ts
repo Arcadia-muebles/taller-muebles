@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const sessionCookie = "tm_session";
 
-export type SessionUser = Pick<AppUser, "id" | "email" | "name" | "role" | "area">;
+export type SessionUser = Pick<AppUser, "id" | "email" | "name" | "role" | "area" | "areas">;
 
 export async function getSessionUser(): Promise<SessionUser | null> {
   if (hasSupabaseConfig()) {
@@ -37,7 +37,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       email: user.email ?? "",
       name: profile.full_name,
       role: profile.role,
-      area: (profile.area as AppUser["area"]) ?? undefined,
+      area: parseAreas(profile.area)[0],
+      areas: parseAreas(profile.area),
     };
   }
 
@@ -55,6 +56,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       name: localUser.name,
       role: localUser.role,
       area: localUser.area,
+      areas: localUser.areas ?? parseAreas(localUser.area),
     };
   } catch {
     return null;
@@ -97,7 +99,7 @@ export async function requireSession(allowedRoles?: Role[]) {
 export function roleLabel(role: Role) {
   const labels: Record<Role, string> = {
     admin: "Administrador",
-    manager: "Encargado",
+    manager: "Supervisor",
     operator: "Trabajador",
     viewer: "Lectura",
   };
@@ -106,4 +108,11 @@ export function roleLabel(role: Role) {
 
 function encodeSession(user: SessionUser) {
   return Buffer.from(JSON.stringify(user), "utf8").toString("base64url");
+}
+
+function parseAreas(value?: string | null) {
+  return (value ?? "")
+    .split(",")
+    .map((area) => area.trim())
+    .filter(Boolean);
 }

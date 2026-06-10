@@ -8,17 +8,17 @@ const orderConfig: Record<
 > = {
   draft: {
     label: "Borrador",
-    className: "border-stone-200 bg-stone-50 text-stone-600",
+    className: "border-stone-200 bg-white text-stone-600",
     icon: Circle,
   },
   scheduled: {
     label: "Programada",
-    className: "border-sky-200 bg-sky-50 text-sky-700",
+    className: "border-stone-200 bg-white text-stone-600",
     icon: Clock,
   },
   in_production: {
     label: "En produccion",
-    className: "border-blue-200 bg-blue-50 text-blue-700",
+    className: "border-stone-300 bg-stone-50 text-stone-800",
     icon: Clock,
   },
   blocked: {
@@ -32,8 +32,8 @@ const orderConfig: Record<
     icon: AlertTriangle,
   },
   quality_control: {
-    label: "Revision",
-    className: "border-violet-200 bg-violet-50 text-violet-700",
+    label: "Calidad",
+    className: "border-amber-200 bg-amber-50 text-amber-800",
     icon: CheckCircle2,
   },
   completed: {
@@ -59,7 +59,7 @@ const stepConfig: Record<
   },
   active: {
     label: "Activo",
-    className: "border-blue-200 bg-blue-50 text-blue-700",
+    className: "border-stone-300 bg-stone-50 text-stone-800",
     icon: Clock,
   },
   done: {

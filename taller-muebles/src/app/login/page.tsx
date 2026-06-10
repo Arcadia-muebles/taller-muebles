@@ -6,13 +6,13 @@ export default function LoginPage() {
     <main className="min-h-screen bg-stone-100 px-4 py-6 text-stone-950">
       <div className="mx-auto grid min-h-[calc(100vh-48px)] w-full max-w-5xl items-center gap-8 lg:grid-cols-[1fr_420px]">
         <section className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">
+          <p className="page-kicker">
             Sistema interno
           </p>
-          <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+          <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl">
             Una sola plataforma para administracion y taller.
           </h2>
-          <p className="mt-4 max-w-xl text-sm leading-6 text-stone-600">
+          <p className="page-description mt-4 max-w-xl">
             Todos entran por esta pantalla. El rol de la cuenta decide si el usuario
             abre el panel administrador o la cola del taller, y los trabajadores solo
             ven las ordenes y etapas asignadas a su usuario.

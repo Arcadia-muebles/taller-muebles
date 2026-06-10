@@ -12,12 +12,13 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { OrderActions } from "@/components/order-actions";
 import { OrderCollaboration } from "@/components/order-collaboration";
+import { ProductionStepControls } from "@/components/production-step-controls";
 import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getOrder, listOrderAttachments, listOrderAudit, listOrderComments } from "@/lib/repositories/production";
-import { deliveryLabel, formatDate } from "@/lib/utils";
+import { deliveryLabel, durationLabel, formatDate, formatDateTime } from "@/lib/utils";
 
 type OrderDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -40,7 +41,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 
   const progress = completionPercent(order);
   const canEditOrder = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
-  const canClose = !settings.production.requireQualityApproval || order.steps.find((step) => step.key === "quality")?.status === "done";
+  const canClose = order.steps.every((step) => step.status === "done");
 
   return (
     <AppShell active="admin" user={user}>
@@ -59,7 +60,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             </h1>
             <StatusBadge type="order" value={order.status} />
             {order.isWarranty ? (
-              <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 text-xs font-medium text-violet-700">
+              <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-2.5 text-xs font-medium text-stone-700">
                 <ShieldCheck className="size-3.5" />
                 Garantia
               </span>
@@ -125,8 +126,11 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                       <div>
                         <p className="font-semibold">{step.label}</p>
                         <p className="mt-1 text-sm text-stone-500">{step.owner}</p>
+                        <p className="mt-1 text-xs text-stone-500">
+                          Inicio: {formatDateTime(step.startedAt)} · Termino: {formatDateTime(step.completedAt)}
+                        </p>
                         {step.notes ? (
-                          <p className="mt-2 max-w-xl rounded-md border border-rose-200 bg-rose-50 px-2.5 py-2 text-xs font-medium text-rose-700">
+                          <p className="mt-2 max-w-xl rounded-md border border-stone-200 bg-white px-2.5 py-2 text-xs font-medium text-stone-700">
                             {step.notes}
                           </p>
                         ) : null}
@@ -135,12 +139,11 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                     <div className="flex flex-wrap items-center gap-3">
                       <StatusBadge type="step" value={step.status} />
                       <p className="text-xs text-stone-500">
-                        {step.completedAt
-                          ? `Termino ${formatDate(step.completedAt)}`
-                          : step.startedAt
-                            ? `Inicio ${formatDate(step.startedAt)}`
-                            : "Sin movimiento"}
+                        {durationLabel(step.startedAt, step.completedAt)}
                       </p>
+                      {canEditOrder ? (
+                        <ProductionStepControls orderId={order.id} stepKey={step.key} status={step.status} />
+                      ) : null}
                     </div>
                   </div>
                 ))}

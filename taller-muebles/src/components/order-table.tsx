@@ -116,7 +116,7 @@ export function OrderTable({
         cell: ({ row }) => {
           const isCompleted = row.original.status === "completed";
           const label = deliveryLabel(row.original.deliveryDate, isCompleted);
-          const isRisk = !isCompleted && (label.startsWith("Vencido") || label === "Hoy" || label === "Manana");
+          const isRisk = !isCompleted && (label.startsWith("Vencido") || label === "Hoy" || label === "Mañana");
           return (
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{formatDate(row.original.deliveryDate)}</p>
@@ -202,19 +202,19 @@ export function OrderTable({
   const visibleRows = table.getRowModel().rows;
 
   return (
-    <section className="min-w-0 max-w-full rounded-lg border border-stone-200 bg-white">
-      <div className="flex min-w-0 flex-col gap-3 border-b border-stone-200 p-4 md:flex-row md:items-center md:justify-between">
+    <section className="panel max-w-full">
+      <div className="panel-header flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold">{title}</h2>
-          <p className="text-sm text-stone-500">{description ?? `${table.getFilteredRowModel().rows.length} ordenes visibles.`}</p>
+          <h2 className="panel-title">{title}</h2>
+          <p className="panel-description">{description ?? `${table.getFilteredRowModel().rows.length} ordenes visibles.`}</p>
         </div>
         <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:justify-end">
-          <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="h-10 min-w-0 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none">
+          <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="control min-w-0 bg-white text-stone-700">
             <option value="all">Todas las tiendas</option>
             <option value="LH">Leather House</option>
             <option value="LR">La Reina</option>
           </select>
-          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="h-10 min-w-0 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none">
+          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="control min-w-0 bg-white text-stone-700">
             <option value="all">Toda prioridad</option>
             <option value="critical">Critica</option>
             <option value="high">Alta</option>
@@ -226,7 +226,7 @@ export function OrderTable({
               value={globalFilter}
               onChange={(event) => setGlobalFilter(event.target.value)}
               placeholder="Buscar cliente, codigo o producto"
-              className="h-10 w-full rounded-md border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+              className="control pl-9"
             />
           </label>
           {globalFilter || storeFilter !== "all" || priorityFilter !== "all" ? (
@@ -237,7 +237,7 @@ export function OrderTable({
                 setStoreFilter("all");
                 setPriorityFilter("all");
               }}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-600 hover:bg-stone-50"
+              className="btn btn-secondary"
             >
               <X className="size-4" />
               Limpiar
@@ -251,7 +251,7 @@ export function OrderTable({
           <OrderCard key={row.id} order={row.original} canEditOrders={canEditOrders} />
         ))}
         {!visibleRows.length ? (
-          <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 p-6 text-center text-sm text-stone-500">{emptyText}</div>
+          <div className="empty-state">{emptyText}</div>
         ) : null}
       </div>
 
@@ -339,12 +339,12 @@ function OrderCard({ order, canEditOrders }: { order: Order; canEditOrders: bool
       {order.observations ? <p className="mt-3 line-clamp-2 text-xs leading-5 text-stone-500">{order.observations}</p> : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <Link href={`/admin/orders/${order.id}`} className="inline-flex h-9 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
+        <Link href={`/admin/orders/${order.id}`} className="btn btn-secondary h-9">
           <Eye className="size-4 text-stone-400" />
           Ver detalle
         </Link>
         {canEdit ? (
-          <Link href={`/admin/orders/${order.id}/edit`} className="inline-flex h-9 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
+          <Link href={`/admin/orders/${order.id}/edit`} className="btn btn-secondary h-9">
             <Pencil className="size-4 text-stone-400" />
             Editar
           </Link>
@@ -356,8 +356,8 @@ function OrderCard({ order, canEditOrders }: { order: Order; canEditOrders: bool
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-md border border-stone-200 bg-white p-2">
-      <p className="font-medium uppercase tracking-[0.12em] text-stone-400">{label}</p>
+    <div className="meta-card">
+      <p className="meta-label">{label}</p>
       <p className="mt-1 truncate font-semibold text-stone-700">{value}</p>
     </div>
   );

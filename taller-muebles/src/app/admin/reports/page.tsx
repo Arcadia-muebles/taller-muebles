@@ -23,12 +23,14 @@ export default async function ReportsPage() {
 
   return (
     <AppShell active="admin" user={user}>
-      <header className="border-b border-stone-200 pb-5">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">Reportes</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Indicadores del taller</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+      <header className="page-header">
+        <div>
+          <p className="page-kicker">Reportes</p>
+          <h1 className="page-title">Indicadores del taller</h1>
+          <p className="page-description max-w-2xl">
           Reportes iniciales para operar. La IA se conectara sobre esta base para explicar atrasos y sugerir prioridades.
-        </p>
+          </p>
+        </div>
       </header>
 
       <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -39,10 +41,10 @@ export default async function ReportsPage() {
       </section>
 
       <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)]">
-        <div className="min-w-0 rounded-lg border border-stone-200 bg-white">
-          <div className="border-b border-stone-200 p-4">
-            <h2 className="text-base font-semibold">Carga por area</h2>
-            <p className="text-sm text-stone-500">Etapas activas y bloqueadas.</p>
+        <div className="panel">
+          <div className="panel-header">
+            <h2 className="panel-title">Carga por area</h2>
+            <p className="panel-description">Etapas activas y bloqueadas.</p>
           </div>
           <div className="divide-y divide-stone-100">
             {load.map((area) => (
@@ -62,10 +64,10 @@ export default async function ReportsPage() {
           </div>
         </div>
 
-        <div className="min-w-0 rounded-lg border border-stone-200 bg-white">
-          <div className="border-b border-stone-200 p-4">
-            <h2 className="text-base font-semibold">Ordenes en riesgo</h2>
-            <p className="text-sm text-stone-500">Entregas cercanas, bloqueadas o con avance insuficiente.</p>
+        <div className="panel">
+          <div className="panel-header">
+            <h2 className="panel-title">Ordenes en riesgo</h2>
+            <p className="panel-description">Entregas cercanas, bloqueadas o con avance insuficiente.</p>
           </div>
 
           <div className="grid gap-3 p-3 lg:hidden">
@@ -75,7 +77,7 @@ export default async function ReportsPage() {
 
           <div className="hidden lg:block">
             <table className="w-full table-fixed">
-              <thead className="bg-stone-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
+              <thead className="table-head">
                 <tr>
                   <th className="px-3 py-3">Orden</th>
                   <th className="px-3 py-3">Cliente</th>
@@ -128,5 +130,5 @@ function RiskCard({ order }: { order: Order }) {
 }
 
 function EmptyState() {
-  return <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 p-6 text-center text-sm text-stone-500">No hay ordenes en riesgo.</div>;
+  return <div className="empty-state">No hay ordenes en riesgo.</div>;
 }

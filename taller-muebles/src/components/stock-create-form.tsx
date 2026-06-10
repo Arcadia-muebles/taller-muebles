@@ -6,7 +6,7 @@ import { createStockItem, type StockActionResult } from "@/app/admin/stock/actio
 import { SubmitButton } from "./submit-button";
 
 const initialState: StockActionResult = { ok: false, message: "" };
-const inputClass = "h-10 rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-950 outline-none transition focus:border-stone-400 focus:bg-white";
+const inputClass = "control";
 
 export function StockCreateForm() {
   const formRef = useRef<HTMLFormElement>(null);
@@ -17,9 +17,9 @@ export function StockCreateForm() {
   }, initialState);
 
   return (
-    <form ref={formRef} id="nuevo-material" action={action} className="mt-5 rounded-lg border border-stone-200 bg-white p-4">
-      <h2 className="text-base font-semibold">Registrar material</h2>
-      <p className="mt-1 text-sm text-stone-500">
+    <form ref={formRef} id="nuevo-material" action={action} className="panel-pad mt-5">
+      <h2 className="panel-title">Registrar material</h2>
+      <p className="panel-description">
         Las cantidades disponible y minima se registran usando la misma unidad de medida.
       </p>
       <div className="mt-4 grid gap-3 md:grid-cols-6">
@@ -57,7 +57,7 @@ export function StockCreateForm() {
           <ActionFeedback state={state} />
         </div>
         <div className="flex items-end">
-          <SubmitButton pendingLabel="Agregando..." className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">
+          <SubmitButton pendingLabel="Agregando..." className="btn btn-primary w-full">
             <Plus className="size-4" />
             Agregar
           </SubmitButton>

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, updateLocalOrder } from "@/lib/local-store";
+import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, updateLocalOrder } from "@/lib/local-store";
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -15,6 +15,11 @@ export type CreateOrderState = {
   status: "idle" | "success" | "error";
   message: string;
   orderId?: string;
+};
+
+export type MoveOrderStageResult = {
+  ok: boolean;
+  message: string;
 };
 
 const maxAttachmentSize = 10 * 1024 * 1024;
@@ -107,7 +112,7 @@ export async function createOrder(
       product_name: parsed.data.productName,
       material: parsed.data.material,
       color: parsed.data.color,
-      status: "scheduled",
+      status: "in_production",
       condition: "none",
       priority: parsed.data.priority,
       is_warranty: parsed.data.isWarranty,
@@ -128,11 +133,7 @@ export async function createOrder(
   }
 
   const enabledSteps = settings.production.steps.filter((step) => step.enabled);
-  const operatorByArea = new Map(
-    (await listUsers())
-      .filter((item) => item.active && item.role === "operator" && item.area)
-      .map((item) => [item.area, item.id]),
-  );
+  const operatorByArea = operatorMapByArea(await listUsers());
   const { error: stepsError } = await supabase.from("production_steps").insert(
     enabledSteps.map((step, index) => ({
       order_id: order.id,
@@ -140,6 +141,7 @@ export async function createOrder(
       step_label: step.label,
       sort_order: index + 1,
       status: index === 0 ? "active" : "pending",
+      started_at: index === 0 ? new Date().toISOString() : null,
       notes:
         index === 0
           ? `Responsable inicial sugerido: ${parsed.data.assignedTo}`
@@ -298,25 +300,19 @@ export async function closeOrder(formData: FormData) {
   if (!id) return;
 
   if (!hasSupabaseConfig()) {
-    if (settings.production.requireQualityApproval) {
-      const { getLocalOrder } = await import("@/lib/local-store");
-      const order = await getLocalOrder(id);
-      if (order?.steps.find((step) => step.key === "quality")?.status !== "done") return;
-    }
+    const { getLocalOrder } = await import("@/lib/local-store");
+    const order = await getLocalOrder(id);
+    if (!order?.steps.every((step) => step.status === "done")) return;
     await closeLocalOrder(id);
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
     if (!profileId) return;
-    if (settings.production.requireQualityApproval) {
-      const { data: quality } = await supabase
-        .from("production_steps")
-        .select("status")
-        .eq("order_id", id)
-        .eq("step", "quality")
-        .maybeSingle();
-      if (quality?.status !== "done") return;
-    }
+    const { data: steps } = await supabase
+      .from("production_steps")
+      .select("status")
+      .eq("order_id", id);
+    if (!steps?.length || steps.some((step) => step.status !== "done")) return;
     await supabase
       .from("orders")
       .update({ status: "completed", condition: "delivered" })
@@ -339,6 +335,104 @@ export async function closeOrder(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${id}`);
+}
+
+const moveOrderStageSchema = z.object({
+  orderId: z.string().min(1),
+  stepKey: z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/),
+});
+
+export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>): Promise<MoveOrderStageResult> {
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
+    return { ok: false, message: "Tu perfil no tiene permiso para mover ordenes." };
+  }
+
+  const parsed = moveOrderStageSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Movimiento invalido." };
+
+  const order = (await listOrders()).find((item) => item.id === parsed.data.orderId);
+  if (!order) return { ok: false, message: "No se encontro la orden." };
+  const targetIndex = order.steps.findIndex((step) => step.key === parsed.data.stepKey);
+  if (targetIndex < 0) return { ok: false, message: "La etapa destino no existe en esta orden." };
+
+  if (!hasSupabaseConfig()) {
+    const moved = await moveLocalOrderToStep({
+      orderId: parsed.data.orderId,
+      stepKey: parsed.data.stepKey,
+      actorName: user.name,
+    });
+    if (!moved) return { ok: false, message: "No fue posible mover la orden." };
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) return { ok: false, message: "No se pudo identificar tu perfil." };
+    const now = new Date().toISOString();
+
+    for (const [index, step] of order.steps.entries()) {
+      const patch =
+        index < targetIndex
+          ? {
+              status: "done" as const,
+              completed_at: step.completedAt ?? now,
+              updated_by: profileId,
+            }
+          : index === targetIndex
+            ? {
+                status: "pending" as const,
+                started_at: null,
+                completed_at: null,
+                blocked_reason: null,
+                notes: null,
+                updated_by: profileId,
+              }
+            : {
+                status: "pending" as const,
+                started_at: null,
+                completed_at: null,
+                blocked_reason: null,
+                notes: null,
+                updated_by: profileId,
+              };
+
+      const { error } = await supabase
+        .from("production_steps")
+        .update(patch)
+        .eq("order_id", parsed.data.orderId)
+        .eq("step", step.key);
+      if (error) return { ok: false, message: error.message };
+    }
+
+    const nextStatus =
+      parsed.data.stepKey === "quality"
+        ? "quality_control"
+        : order.priority === "critical"
+          ? "urgent"
+          : "in_production";
+    await supabase
+      .from("orders")
+      .update({
+        status: nextStatus,
+        condition: parsed.data.stepKey === "quality" ? "quality_control" : undefined,
+      })
+      .eq("id", parsed.data.orderId);
+
+    await supabase.from("audit_logs").insert({
+      order_id: parsed.data.orderId,
+      action: "move_step",
+      entity: "production_steps",
+      entity_id: parsed.data.orderId,
+      profile_id: profileId,
+      field_name: "step",
+      new_value: parsed.data.stepKey,
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/taller");
+  revalidatePath(`/admin/orders/${parsed.data.orderId}`);
+  return { ok: true, message: "Orden movida." };
 }
 
 function formatZodError(error: z.ZodError) {
@@ -371,7 +465,7 @@ async function saveInitialAttachment({
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { message: "" };
   if (file.size > maxAttachmentSize) {
-    return { message: "El adjunto no se subio porque supera el maximo de 10 MB." };
+    return { message: "El adjunto no se subió porque supera el máximo de 10 MB." };
   }
 
   try {
@@ -425,4 +519,16 @@ async function validateOrderRules(
     if (duplicate) return "Ya existe una orden con esta nota de venta en la tienda seleccionada.";
   }
   return null;
+}
+
+function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
+  const map = new Map<string, string>();
+  for (const user of users) {
+    if (!user.active || user.role !== "operator") continue;
+    const areas = user.areas?.length ? user.areas : user.area ? [user.area] : [];
+    for (const area of areas) {
+      if (!map.has(area)) map.set(area, user.id);
+    }
+  }
+  return map;
 }

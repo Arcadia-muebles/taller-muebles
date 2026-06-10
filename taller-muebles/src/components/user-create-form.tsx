@@ -3,14 +3,24 @@
 import { CheckCircle2, Plus, XCircle } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
 import { createUser, type UserActionResult } from "@/app/admin/users/actions";
+import type { SystemSettings } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
 
 const initialState: UserActionResult = { ok: false, message: "" };
-const inputClass = "h-10 w-full rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-950 outline-none transition focus:border-stone-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-50";
+const inputClass = "control disabled:cursor-not-allowed disabled:opacity-50";
 
-export function UserCreateForm({ supabaseEnabled, disabled }: { supabaseEnabled: boolean; disabled: boolean }) {
+export function UserCreateForm({
+  supabaseEnabled,
+  disabled,
+  steps,
+}: {
+  supabaseEnabled: boolean;
+  disabled: boolean;
+  steps: SystemSettings["production"]["steps"];
+}) {
   const [role, setRole] = useState("operator");
   const formRef = useRef<HTMLFormElement>(null);
+  const enabledSteps = steps.filter((step) => step.enabled);
   const [state, action] = useActionState(async (_state: UserActionResult, formData: FormData) => {
     const result = await createUser(formData);
     if (result.ok) {
@@ -21,9 +31,9 @@ export function UserCreateForm({ supabaseEnabled, disabled }: { supabaseEnabled:
   }, initialState);
 
   return (
-    <form ref={formRef} action={action} className="mt-5 rounded-lg border border-stone-200 bg-white p-4">
-      <h2 className="text-base font-semibold">Registrar usuario</h2>
-      <p className="mt-1 text-sm text-stone-500">
+    <form ref={formRef} action={action} className="panel-pad mt-5">
+      <h2 className="panel-title">Registrar usuario</h2>
+      <p className="panel-description">
         {supabaseEnabled ? "Crea una cuenta protegida y asigna su acceso inicial." : "Crea un perfil para probar roles en modo local."}
       </p>
       {disabled ? (
@@ -41,31 +51,34 @@ export function UserCreateForm({ supabaseEnabled, disabled }: { supabaseEnabled:
         <Field label="Rol">
           <select disabled={disabled} name="role" value={role} onChange={(event) => setRole(event.target.value)} className={inputClass}>
             <option value="admin">Administrador</option>
-            <option value="manager">Encargado</option>
+            <option value="manager">Supervisor</option>
             <option value="operator">Trabajador</option>
             <option value="viewer">Lectura</option>
           </select>
         </Field>
-        <Field label="Área">
-          <select disabled={disabled || role !== "operator"} name="area" defaultValue="" className={inputClass}>
-            <option value="">Todas las etapas</option>
-            <option value="structure">Estructura</option>
-            <option value="cutting">Corte</option>
-            <option value="sewing">Costura</option>
-            <option value="upholstery">Tapicería</option>
-            <option value="quality">Revisión</option>
-          </select>
-        </Field>
+        {role === "operator" ? (
+          <fieldset className="xl:col-span-2">
+            <legend className="text-xs font-medium text-stone-600">Procesos</legend>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {enabledSteps.map((step) => (
+                <label key={step.key} className="inline-flex h-9 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
+                  <input disabled={disabled} type="checkbox" name="areas" value={step.key} className="size-4 accent-stone-950" />
+                  {step.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : null}
         {supabaseEnabled ? (
           <Field label="Clave temporal" className="xl:col-span-2">
-            <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" className={inputClass} />
+            <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Minimo 8 caracteres" className={inputClass} />
           </Field>
         ) : null}
         <div className={supabaseEnabled ? "flex flex-col justify-end gap-2 xl:col-span-4" : "flex flex-col justify-end gap-2 xl:col-span-5"}>
           <ActionFeedback state={state} supabaseEnabled={supabaseEnabled} disabled={disabled} />
         </div>
         <div className="flex items-end">
-          <SubmitButton disabled={disabled} pendingLabel="Creando..." className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">
+          <SubmitButton disabled={disabled} pendingLabel="Creando..." className="btn btn-primary w-full">
             <Plus className="size-4" />
             Crear usuario
           </SubmitButton>
@@ -99,7 +112,7 @@ function ActionFeedback({
   }
 
   if (disabled) {
-    return <p className="text-xs text-amber-700">La administración de cuentas requiere la clave de servicio.</p>;
+    return <p className="text-xs text-amber-700">La administracion de cuentas requiere la clave de servicio.</p>;
   }
 
   return (

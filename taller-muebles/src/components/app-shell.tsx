@@ -44,10 +44,7 @@ export function AppShell({ active, user, children }: AppShellProps) {
             <p className="truncate text-sm font-semibold">{user?.name ?? "Sin sesion"}</p>
             <p className="mt-1 text-xs text-stone-500">{user ? roleLabel(user.role) : "Sin acceso"}</p>
             <form action={logout}>
-              <button
-                type="submit"
-              className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-stone-200 bg-white text-sm font-medium text-stone-700"
-              >
+              <button type="submit" className="btn btn-secondary mt-3 h-9 w-full">
                 <LogIn className="size-4" />
                 Salir
               </button>

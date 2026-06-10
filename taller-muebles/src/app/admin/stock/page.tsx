@@ -16,16 +16,16 @@ export default async function StockPage() {
 
   return (
     <AppShell active="admin" user={user}>
-      <header className="flex min-w-0 flex-col gap-4 border-b border-stone-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
+      <header className="page-header">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">Stock</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Materiales y alertas</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+          <p className="page-kicker">Stock</p>
+          <h1 className="page-title">Materiales y alertas</h1>
+          <p className="page-description max-w-2xl">
             Control inicial de cuero, madera, espuma y materiales que pueden frenar produccion.
           </p>
         </div>
         {canEdit ? (
-          <a href="#nuevo-material" className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white">
+          <a href="#nuevo-material" className="btn btn-primary">
             <Plus className="size-4" />
             Nuevo material
           </a>
@@ -35,7 +35,7 @@ export default async function StockPage() {
       {canEdit ? <StockCreateForm /> : null}
 
       <section className="mt-5 grid gap-3 md:grid-cols-3">
-        <div className="rounded-lg border border-stone-200 bg-white p-4">
+        <div className="panel-pad">
           <Boxes className="size-5 text-stone-500" />
           <p className="mt-3 text-3xl font-semibold">{items.length}</p>
           <p className="mt-1 text-sm text-stone-500">Materiales activos</p>
@@ -47,10 +47,10 @@ export default async function StockPage() {
         </div>
       </section>
 
-      <section className="mt-5 min-w-0 rounded-lg border border-stone-200 bg-white">
-        <div className="border-b border-stone-200 p-4">
-          <h2 className="text-base font-semibold">Inventario base</h2>
-          <p className="text-sm text-stone-500">Primera vista para validar reglas antes de automatizar consumos.</p>
+      <section className="panel mt-5">
+        <div className="panel-header">
+          <h2 className="panel-title">Inventario base</h2>
+          <p className="panel-description">Primera vista para validar reglas antes de automatizar consumos.</p>
         </div>
 
         <div className="grid gap-3 p-3 xl:hidden">
@@ -60,7 +60,7 @@ export default async function StockPage() {
 
         <div className="hidden xl:block">
           <table className="w-full table-fixed">
-            <thead className="bg-stone-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">
+            <thead className="table-head">
               <tr>
                 <th className="px-3 py-3">Material</th>
                 <th className="px-3 py-3">Categoria</th>
@@ -100,10 +100,10 @@ export default async function StockPage() {
         </div>
       </section>
 
-      <section className="mt-5 rounded-lg border border-stone-200 bg-white">
-        <div className="border-b border-stone-200 p-4">
-          <h2 className="text-base font-semibold">Ultimos movimientos</h2>
-          <p className="text-sm text-stone-500">Entradas, consumos y ajustes registrados.</p>
+      <section className="panel mt-5">
+        <div className="panel-header">
+          <h2 className="panel-title">Ultimos movimientos</h2>
+          <p className="panel-description">Entradas, consumos y ajustes registrados.</p>
         </div>
         <div className="divide-y divide-stone-100">
           {movements.slice(0, 12).map((movement) => <MovementRow key={movement.id} movement={movement} />)}
@@ -168,5 +168,5 @@ function Info({ label, value }: { label: string; value: string }) {
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 p-6 text-center text-sm text-stone-500">{text}</div>;
+  return <div className="empty-state">{text}</div>;
 }

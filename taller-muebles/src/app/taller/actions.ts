@@ -105,7 +105,7 @@ export async function createWorkshopOrder(
       product_name: input.productName,
       material: input.material,
       color: input.color,
-      status: "scheduled",
+      status: "in_production",
       condition: "none",
       priority: input.priority,
       is_warranty: input.isWarranty,
@@ -120,11 +120,7 @@ export async function createWorkshopOrder(
   if (orderError || !order) return { status: "error", message: orderError?.message ?? "No se pudo ingresar el producto." };
 
   const enabledSteps = settings.production.steps.filter((step) => step.enabled);
-  const operatorByArea = new Map(
-    (await listUsers())
-      .filter((item) => item.active && item.role === "operator" && item.area)
-      .map((item) => [item.area, item.id]),
-  );
+  const operatorByArea = operatorMapByArea(await listUsers());
   const { error: stepsError } = await supabase.from("production_steps").insert(
     enabledSteps.map((step, index) => ({
       order_id: order.id,
@@ -132,6 +128,7 @@ export async function createWorkshopOrder(
       step_label: step.label,
       sort_order: index + 1,
       status: index === 0 ? "active" : "pending",
+      started_at: index === 0 ? new Date().toISOString() : null,
       notes: index === 0 ? `Ingresado por ${user.name}` : null,
       assigned_to: index === 0 ? profileId : operatorByArea.get(step.key) ?? profileId,
     })),
@@ -164,13 +161,13 @@ export async function updateProductionStep(
   if (!parsed.success) {
     return {
       status: "error",
-      message: "Accion de produccion invalida.",
+      message: "Acción de producción inválida.",
     };
   }
 
   const currentOrder = await getOrder(parsed.data.orderId);
   const currentStep = currentOrder?.steps.find((step) => step.key === parsed.data.stepKey);
-  if (!currentStep) return { status: "error", message: "No se encontro la etapa seleccionada." };
+  if (!currentOrder || !currentStep) return { status: "error", message: "No se encontro la etapa seleccionada." };
   if (!isAllowedTransition(currentStep.status, parsed.data.status)) {
     return { status: "error", message: "La etapa cambio de estado. Actualiza la vista e intenta nuevamente." };
   }
@@ -190,10 +187,8 @@ export async function updateProductionStep(
       (parsed.data.status === "active" && permissions.operatorsCanStartSteps) ||
       (parsed.data.status === "done" && permissions.operatorsCanCompleteSteps) ||
       (parsed.data.status === "blocked" && permissions.operatorsCanBlockSteps);
-    if (!allowed) return { status: "error", message: "Esta accion esta deshabilitada para operarios." };
-    if (!canWorkerUseStep(user, currentStep)) {
-      return { status: "error", message: "Esta etapa no esta asignada a tu usuario." };
-    }
+    if (!allowed) return { status: "error", message: "Esta acción está deshabilitada para operarios." };
+    if (!canWorkerUseStep(user, currentStep)) return { status: "error", message: "No puedes operar esta etapa." };
   }
 
   if (!hasSupabaseConfig()) {
@@ -231,21 +226,18 @@ export async function updateProductionStep(
 
   const patch = {
     status: parsed.data.status,
-    notes: parsed.data.status === "blocked" ? parsed.data.reason : null,
+    blocked_reason: parsed.data.status === "blocked" ? parsed.data.reason : null,
+    notes: parsed.data.reason?.trim() || (parsed.data.status === "blocked" ? parsed.data.reason : null),
     started_at: parsed.data.status === "active" ? now : undefined,
     completed_at: parsed.data.status === "done" ? now : undefined,
     updated_by: profile.id,
   };
 
-  let updateQuery = supabase
+  const updateQuery = supabase
     .from("production_steps")
     .update(patch)
     .eq("order_id", parsed.data.orderId)
     .eq("step", parsed.data.stepKey);
-
-  if (user.role === "operator" && user.area) {
-    updateQuery = updateQuery.eq("assigned_to", profile.id);
-  }
 
   const { data: updated, error } = await updateQuery.select("id");
 
@@ -256,9 +248,51 @@ export async function updateProductionStep(
     };
   }
 
+  const nextStep = parsed.data.status === "done"
+    ? nextPendingStep(currentOrder, parsed.data.stepKey)
+    : undefined;
+
+  if (nextStep) {
+    const { error: nextError } = await supabase
+      .from("production_steps")
+      .update({
+        status: "pending",
+        started_at: null,
+        blocked_reason: null,
+        notes: null,
+        updated_by: profile.id,
+      })
+      .eq("order_id", parsed.data.orderId)
+      .eq("step", nextStep.key);
+    if (nextError) {
+      return { status: "error", message: `La etapa se completó, pero no se pudo iniciar la siguiente: ${nextError.message}` };
+    }
+  }
+
+  const nextOrderStatus =
+    parsed.data.status === "blocked"
+      ? "blocked"
+      : parsed.data.status === "done" && !nextStep
+        ? "completed"
+        : nextStep?.key === "quality"
+          ? "quality_control"
+          : currentOrder.priority === "critical"
+            ? "urgent"
+            : "in_production";
+
+  await supabase
+    .from("orders")
+    .update({
+      status: nextOrderStatus,
+      condition: nextOrderStatus === "completed" ? "delivered" : undefined,
+      completed_at: nextOrderStatus === "completed" ? now : undefined,
+    })
+    .eq("id", parsed.data.orderId);
+
   if (
     parsed.data.stepKey === "quality" &&
     parsed.data.status === "done" &&
+    !nextStep &&
     settings.production.autoCompleteAfterQuality
   ) {
     if (!hasSupabaseAdminConfig()) {
@@ -301,6 +335,12 @@ function isAllowedTransition(current: UpdateStepInput["status"], next: UpdateSte
   return false;
 }
 
+function nextPendingStep(order: NonNullable<Awaited<ReturnType<typeof getOrder>>>, currentStepKey: string) {
+  const currentIndex = order.steps.findIndex((step) => step.key === currentStepKey);
+  if (currentIndex < 0) return undefined;
+  return order.steps.slice(currentIndex + 1).find((step) => step.status === "pending");
+}
+
 async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return null;
@@ -311,4 +351,16 @@ async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createCli
     .eq("active", true)
     .maybeSingle();
   return profile?.id ?? null;
+}
+
+function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
+  const map = new Map<string, string>();
+  for (const user of users) {
+    if (!user.active || user.role !== "operator") continue;
+    const areas = user.areas?.length ? user.areas : user.area ? [user.area] : [];
+    for (const area of areas) {
+      if (!map.has(area)) map.set(area, user.id);
+    }
+  }
+  return map;
 }

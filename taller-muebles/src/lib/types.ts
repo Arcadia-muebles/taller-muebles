@@ -32,6 +32,7 @@ export type AppUser = {
   name: string;
   role: Role;
   area?: AreaKey;
+  areas?: AreaKey[];
   active: boolean;
 };
 

@@ -4,14 +4,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { deactivateLocalUser, upsertLocalUser } from "@/lib/local-store";
+import { deactivateLocalUser, updateLocalUser, upsertLocalUser } from "@/lib/local-store";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const userSchema = z.object({
   email: z.string().email(),
   name: z.string().trim().min(2),
   role: z.enum(["admin", "manager", "operator", "viewer"]),
-  area: z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/).optional(),
+  areas: z.array(z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/)).optional(),
   password: z.string().min(8).optional(),
 });
 
@@ -23,7 +23,7 @@ export async function createUser(formData: FormData): Promise<UserActionResult> 
     email: formData.get("email"),
     name: formData.get("name"),
     role: formData.get("role"),
-    area: formData.get("area") || undefined,
+    areas: formData.getAll("areas").map(String).filter(Boolean),
     password: formData.get("password") || undefined,
   });
 
@@ -40,7 +40,8 @@ export async function createUser(formData: FormData): Promise<UserActionResult> 
         email: parsed.data.email,
         name: parsed.data.name,
         role: parsed.data.role,
-        area: parsed.data.role === "operator" ? parsed.data.area : undefined,
+        area: parsed.data.role === "operator" ? parsed.data.areas?.[0] : undefined,
+        areas: parsed.data.role === "operator" ? parsed.data.areas : undefined,
       });
     } else {
       if (!hasSupabaseAdminConfig()) {
@@ -59,7 +60,7 @@ export async function createUser(formData: FormData): Promise<UserActionResult> 
         user_id: data.user.id,
         full_name: parsed.data.name,
         role: parsed.data.role,
-        area: parsed.data.role === "operator" ? parsed.data.area ?? null : null,
+        area: parsed.data.role === "operator" ? (parsed.data.areas ?? []).join(",") || null : null,
       });
       if (profileError) {
         await admin.auth.admin.deleteUser(data.user.id);
@@ -87,4 +88,63 @@ export async function removeUser(formData: FormData) {
     await admin.from("profiles").update({ active: false }).eq("id", id);
   }
   revalidatePath("/admin/users");
+}
+
+const updateUserSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(2),
+  role: z.enum(["admin", "manager", "operator", "viewer"]),
+  areas: z.array(z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/)).optional(),
+  active: z.enum(["true", "false"]).transform((value) => value === "true"),
+});
+
+export async function updateUser(formData: FormData): Promise<UserActionResult> {
+  await requireSession(["admin"]);
+  const parsed = updateUserSchema.safeParse({
+    id: formData.get("userId"),
+    name: formData.get("name"),
+    role: formData.get("role"),
+    areas: formData.getAll("areas").map(String).filter(Boolean),
+    active: formData.get("active") ?? "false",
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa los datos del usuario." };
+  }
+
+  try {
+    if (!hasSupabaseConfig()) {
+      const updated = await updateLocalUser({
+        id: parsed.data.id,
+        name: parsed.data.name,
+        role: parsed.data.role,
+        area: parsed.data.role === "operator" ? parsed.data.areas?.[0] : undefined,
+        areas: parsed.data.role === "operator" ? parsed.data.areas : undefined,
+        active: parsed.data.active,
+      });
+      if (!updated) return { ok: false, message: "No se encontro el usuario." };
+    } else {
+      if (!hasSupabaseAdminConfig()) {
+        return { ok: false, message: "Falta configurar la clave de servicio para administrar cuentas." };
+      }
+      const { error } = await getSupabaseAdmin()
+        .from("profiles")
+        .update({
+          full_name: parsed.data.name,
+          role: parsed.data.role,
+          area: parsed.data.role === "operator" ? (parsed.data.areas ?? []).join(",") || null : null,
+          active: parsed.data.active,
+        })
+        .eq("id", parsed.data.id);
+      if (error) return { ok: false, message: error.message };
+    }
+  } catch (error) {
+    console.error("User update failed:", error);
+    return { ok: false, message: "No fue posible actualizar el usuario." };
+  }
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin");
+  revalidatePath("/taller");
+  return { ok: true, message: "Usuario actualizado." };
 }

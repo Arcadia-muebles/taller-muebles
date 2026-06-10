@@ -205,7 +205,8 @@ export async function listUsers(): Promise<AppUser[]> {
     email: emails.get(profile.user_id) || profile.user_id,
     name: profile.full_name,
     role: profile.role,
-    area: (profile.area as AppUser["area"]) ?? undefined,
+    area: parseAreas(profile.area)[0],
+    areas: parseAreas(profile.area),
     active: profile.active,
   }));
 }
@@ -294,9 +295,9 @@ function mapStepRecord(record: StepRecord): ProductionStep {
     label: record.step_label || labelFromStepKey(record.step),
     owner: record.assigned_profile?.full_name ?? "Sin asignar",
     status: record.status as StepStatus,
-    notes: record.notes ?? undefined,
-    startedAt: record.started_at?.slice(0, 10),
-    completedAt: record.completed_at?.slice(0, 10),
+    notes: record.notes ?? record.blocked_reason ?? undefined,
+    startedAt: record.started_at ?? undefined,
+    completedAt: record.completed_at ?? undefined,
   };
 }
 
@@ -306,4 +307,11 @@ function labelFromStepKey(step: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ") || "Etapa";
+}
+
+function parseAreas(value?: string | null) {
+  return (value ?? "")
+    .split(",")
+    .map((area) => area.trim())
+    .filter(Boolean);
 }
