@@ -26,10 +26,13 @@ export function UserEditForm({
   const selectedAreas = user.areas?.length ? user.areas : user.area ? [user.area] : [];
 
   return (
-    <form action={action} className="grid gap-3 border-t border-stone-100 p-4 md:grid-cols-[minmax(0,1.2fr)_160px_120px_auto] md:items-end">
+    <form action={action} className="grid gap-3 border-t border-stone-100 p-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_160px_120px_auto] md:items-end">
       <input type="hidden" name="userId" value={user.id} />
       <Field label="Nombre">
         <input name="name" defaultValue={user.name} disabled={disabled} required className={inputClass} />
+      </Field>
+      <Field label="Correo">
+        <input name="email" type="email" defaultValue={user.email.includes("@") ? user.email : ""} disabled={disabled} required className={inputClass} />
       </Field>
       <Field label="Rol">
         <select name="role" value={role} disabled={disabled} onChange={(event) => setRole(event.target.value as AppUser["role"])} className={inputClass}>
@@ -53,7 +56,7 @@ export function UserEditForm({
         <ActionFeedback state={state} />
       </div>
       {role === "operator" ? (
-        <fieldset className="md:col-span-4">
+        <fieldset className="md:col-span-5">
           <legend className="text-xs font-medium text-stone-600">Procesos habilitados</legend>
           <div className="mt-2 flex flex-wrap gap-2">
             {enabledSteps.map((step) => (

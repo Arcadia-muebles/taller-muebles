@@ -13,6 +13,7 @@ type LocalData = {
   comments: OrderComment[];
   attachments: Array<Omit<OrderAttachment, "url"> & { storagePath: string }>;
   users: AppUser[];
+  deletedUserKeys?: string[];
   settings?: SystemSettings;
 };
 
@@ -27,6 +28,7 @@ const emptyData: LocalData = {
   comments: [],
   attachments: [],
   users: [],
+  deletedUserKeys: [],
 };
 
 const defaultLocalUsers: AppUser[] = [
@@ -142,6 +144,7 @@ async function readData(): Promise<LocalData> {
     comments: parsed.comments ?? [],
     attachments: parsed.attachments ?? [],
     users: parsed.users ?? [],
+    deletedUserKeys: parsed.deletedUserKeys ?? [],
     settings: parsed.settings,
   };
   const normalized = normalizeLocalData(data);
@@ -162,6 +165,57 @@ export async function getLocalOrder(id: string) {
   return (await readData()).orders.find((order) => order.id === id);
 }
 
+async function deductStockForOrder(orderId: string, orderCode: string, input: {
+  material: string;
+  width: number;
+  depth: number;
+  height: number;
+}) {
+  const { material, width, depth, height } = input;
+  const leatherQty = Math.round(((width * depth * 3 + width * height * 2 + depth * height * 2) / 10000) * 10) / 10;
+  const woodQty = Math.max(2, Math.round((width * 2 + depth * 4 + height * 4) / 100));
+  const foamQty = Math.max(1, Math.round((width * depth * 2) / 10000));
+
+  const items = await listLocalStockItems();
+  
+  // 1. Deduct Leather
+  const leatherItem = items.find((item) => 
+    item.category.toLowerCase() === "cuero" && 
+    (item.name.toLowerCase().includes(material.toLowerCase()) || material.toLowerCase().includes(item.name.toLowerCase()))
+  ) || items.find((item) => item.category.toLowerCase() === "cuero");
+
+  if (leatherItem) {
+    await createLocalStockMovement({
+      materialId: leatherItem.id,
+      type: "out",
+      quantity: leatherQty,
+      notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
+    });
+  }
+
+  // 2. Deduct Wood
+  const woodItem = items.find((item) => item.category.toLowerCase() === "estructura") || items.find((item) => item.name.toLowerCase().includes("madera"));
+  if (woodItem) {
+    await createLocalStockMovement({
+      materialId: woodItem.id,
+      type: "out",
+      quantity: woodQty,
+      notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
+    });
+  }
+
+  // 3. Deduct Foam
+  const foamItem = items.find((item) => item.category.toLowerCase() === "relleno") || items.find((item) => item.name.toLowerCase().includes("espuma"));
+  if (foamItem) {
+    await createLocalStockMovement({
+      materialId: foamItem.id,
+      type: "out",
+      quantity: foamQty,
+      notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
+    });
+  }
+}
+
 export async function createLocalOrder(input: {
   store: Order["store"];
   salesNoteNumber: string;
@@ -170,9 +224,11 @@ export async function createLocalOrder(input: {
   material: string;
   color: string;
   entryDate: string;
-  deliveryDate: string;
+  deliveryDate?: string;
   priority: Order["priority"];
-  assignedTo: string;
+  width: number;
+  depth: number;
+  height: number;
   observations?: string;
   isWarranty: boolean;
   steps?: SystemSettings["production"]["steps"];
@@ -189,7 +245,7 @@ export async function createLocalOrder(input: {
   const steps: ProductionStep[] = enabledSteps.map((step, index) => ({
     key: step.key,
     label: step.label,
-    owner: index === 0 ? input.assignedTo : pickLocalStepOwner(data, step.key, step.label),
+    owner: pickLocalStepOwner(data, step.key, step.label),
     status: index === 0 ? "active" : "pending",
     startedAt: index === 0 ? nowIso() : undefined,
   }));
@@ -208,14 +264,30 @@ export async function createLocalOrder(input: {
     isWarranty: input.isWarranty,
     entryDate: input.entryDate,
     deliveryDate: input.deliveryDate,
-    assignedTo: input.assignedTo,
+    assignedTo: "Sin asignar",
     observations: input.observations?.trim() || "Sin observaciones.",
     steps,
+    width: input.width,
+    depth: input.depth,
+    height: input.height,
   };
 
   data.orders.unshift(order);
-  addAudit(data, order.id, "create_order", `Orden ${order.code} creada`);
+  addAudit(data, order.id, "create_order", `Orden ${order.code} creada con dimensiones ${input.width}x${input.depth}x${input.height}`);
   await writeData(data);
+
+  // Auto-deduct stock
+  try {
+    await deductStockForOrder(id, order.code, {
+      material: input.material,
+      width: input.width,
+      depth: input.depth,
+      height: input.height,
+    });
+  } catch (err) {
+    console.error("Failed to automatically deduct stock:", err);
+  }
+
   return order;
 }
 
@@ -227,9 +299,11 @@ export async function updateLocalOrder(id: string, input: {
   material: string;
   color: string;
   entryDate: string;
-  deliveryDate: string;
+  deliveryDate?: string;
   priority: Order["priority"];
-  assignedTo: string;
+  width: number;
+  depth: number;
+  height: number;
   observations?: string;
   isWarranty: boolean;
 }) {
@@ -246,7 +320,9 @@ export async function updateLocalOrder(id: string, input: {
   order.entryDate = input.entryDate;
   order.deliveryDate = input.deliveryDate;
   order.priority = input.priority;
-  order.assignedTo = input.assignedTo;
+  order.width = input.width;
+  order.depth = input.depth;
+  order.height = input.height;
   order.observations = input.observations?.trim() || "Sin observaciones.";
   order.isWarranty = input.isWarranty;
   addAudit(data, order.id, "update_order", "Datos comerciales y planificación actualizados");
@@ -489,6 +565,30 @@ export async function createLocalStockMovement(input: {
   return true;
 }
 
+export async function setLocalStockQuantity(input: {
+  materialId: string;
+  quantity: number;
+  notes: string;
+}) {
+  const data = await readData();
+  const item = data.stockItems.find((stockItem) => stockItem.id === input.materialId);
+  if (!item) return false;
+  const previousQuantity = item.available;
+
+  item.available = input.quantity;
+  data.stockMovements.unshift({
+    id: crypto.randomUUID(),
+    materialId: item.id,
+    materialName: item.name,
+    type: "adjustment",
+    quantity: input.quantity,
+    notes: `${previousQuantity} -> ${input.quantity}${input.notes ? ` · ${input.notes}` : ""}`,
+    createdAt: new Date().toISOString(),
+  });
+  await writeData(data);
+  return true;
+}
+
 export async function listLocalUsers() {
   return (await readData()).users;
 }
@@ -524,8 +624,22 @@ export async function deactivateLocalUser(id: string) {
   return true;
 }
 
+export async function deleteLocalUser(id: string) {
+  const data = await readData();
+  const user = data.users.find((item) => item.id === id);
+  const nextUsers = data.users.filter((item) => item.id !== id);
+  if (nextUsers.length === data.users.length) return false;
+  data.users = nextUsers;
+  if (user) {
+    data.deletedUserKeys = Array.from(new Set([...(data.deletedUserKeys ?? []), user.id, user.email.toLowerCase()]));
+  }
+  await writeData(data);
+  return true;
+}
+
 export async function updateLocalUser(input: {
   id: string;
+  email: string;
   name: string;
   role: AppUser["role"];
   area?: AreaKey;
@@ -535,6 +649,7 @@ export async function updateLocalUser(input: {
   const data = await readData();
   const user = data.users.find((item) => item.id === input.id);
   if (!user) return false;
+  user.email = input.email;
   user.name = input.name;
   user.role = input.role;
   user.areas = input.role === "operator" ? input.areas ?? parseAreas(input.area) : undefined;
@@ -577,11 +692,22 @@ function addAudit(data: LocalData, orderId: string, action: string, summary: str
 function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolean } {
   let changed = false;
   const usersByEmail = new Set(data.users.map((user) => user.email.toLowerCase()));
+  const deletedUserKeys = new Set((data.deletedUserKeys ?? []).map((key) => key.toLowerCase()));
   for (const user of defaultLocalUsers) {
-    if (!usersByEmail.has(user.email.toLowerCase())) {
+    if (!usersByEmail.has(user.email.toLowerCase()) && !deletedUserKeys.has(user.id.toLowerCase()) && !deletedUserKeys.has(user.email.toLowerCase())) {
       data.users.push(user);
       changed = true;
     }
+  }
+
+  if (!data.stockItems || !data.stockItems.length) {
+    data.stockItems = [
+      { id: "mat-cuero-honey", name: "Cuero Riga Honey", category: "Cuero", unit: "m2", available: 50, minimum: 15, store: "LH", active: true },
+      { id: "mat-cuero-camel", name: "Cuero Waxy Camel", category: "Cuero", unit: "m2", available: 30, minimum: 15, store: "LR", active: true },
+      { id: "mat-madera", name: "Madera nogal", category: "Estructura", unit: "tablas", available: 100, minimum: 20, store: "general", active: true },
+      { id: "mat-espuma", name: "Espuma alta densidad", category: "Relleno", unit: "planchas", available: 40, minimum: 10, store: "general", active: true }
+    ];
+    changed = true;
   }
 
   for (const order of data.orders) {

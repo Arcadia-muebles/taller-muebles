@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, CalendarDays, CheckCircle2, FileText, Paperclip, Save, XCircle } from "lucide-react";
+import { ArrowLeft, Boxes, CalendarDays, CheckCircle2, FileText, Paperclip, Save, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useTransition } from "react";
 import { useForm } from "react-hook-form";
@@ -15,7 +15,7 @@ const initialState: CreateOrderState = {
   message: "",
 };
 
-export function OrderForm({ orderId, initialValues, assignees }: { orderId?: string; initialValues?: OrderFormValues; assignees: string[] }) {
+export function OrderForm({ orderId, initialValues }: { orderId?: string; initialValues?: OrderFormValues }) {
   const action = orderId ? updateOrder.bind(null, orderId) : createOrder;
   const [state, formAction, actionPending] = useActionState(action, initialState);
   const [formPending, startTransition] = useTransition();
@@ -23,8 +23,9 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
     register,
     handleSubmit,
     formState: { errors },
+    watch,
   } = useForm<OrderFormValues>({
-    resolver: zodResolver(orderSchema),
+    resolver: zodResolver(orderSchema) as any,
     defaultValues: initialValues ?? {
       store: "LH",
       priority: "normal",
@@ -32,6 +33,17 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
       entryDate: new Date().toISOString().slice(0, 10),
     },
   });
+
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const [width, depth, height, material] = watch(["width", "depth", "height", "material"]);
+  const w = Number(width) || 0;
+  const d = Number(depth) || 0;
+  const h = Number(height) || 0;
+  const matName = material || "";
+
+  const leatherQty = w && d && h ? Math.round(((w * d * 3 + w * h * 2 + d * h * 2) / 10000) * 10) / 10 : 0;
+  const woodQty = w && d && h ? Math.max(2, Math.round((w * 2 + d * 4 + h * 4) / 100)) : 0;
+  const foamQty = w && d && h ? Math.max(1, Math.round((w * d * 2) / 10000)) : 0;
   const pending = actionPending || formPending;
   const submit = handleSubmit((_values, event) => {
     if (!(event?.target instanceof HTMLFormElement)) return;
@@ -76,8 +88,8 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
           </div>
         </div>
 
-        <div className="grid gap-4 p-4 md:grid-cols-2">
-          <Field label="Tienda" error={errors.store?.message}>
+                <div className="grid gap-4 p-4 md:grid-cols-2">
+          <Field label="Empresa Cliente" error={errors.store?.message}>
             <select {...register("store")} className={inputClass}>
               <option value="LH">Leather House</option>
               <option value="LR">La Reina</option>
@@ -85,15 +97,6 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
           </Field>
           <Field label="Nota de venta" error={errors.salesNoteNumber?.message}>
             <input {...register("salesNoteNumber")} className={inputClass} placeholder="NV-2026-001" />
-          </Field>
-          <Field label="Cliente" error={errors.clientName?.message}>
-            <input {...register("clientName")} className={inputClass} placeholder="Nombre cliente" />
-          </Field>
-          <Field label="Responsable inicial" error={errors.assignedTo?.message}>
-            <select {...register("assignedTo")} className={inputClass}>
-              <option value="">Seleccionar</option>
-              {assignees.map((assignee) => <option key={assignee} value={assignee}>{assignee}</option>)}
-            </select>
           </Field>
           <Field label="Producto / modelo" error={errors.productName?.message} full>
             <input {...register("productName")} className={inputClass} placeholder="Sofa Modena 240x95..." />
@@ -103,6 +106,15 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
           </Field>
           <Field label="Color" error={errors.color?.message}>
             <input {...register("color")} className={inputClass} placeholder="Riga Honey" />
+          </Field>
+          <Field label="Ancho (cm)" error={errors.width?.message}>
+            <input type="number" {...register("width")} className={inputClass} placeholder="200" />
+          </Field>
+          <Field label="Profundidad (cm)" error={errors.depth?.message}>
+            <input type="number" {...register("depth")} className={inputClass} placeholder="90" />
+          </Field>
+          <Field label="Alto (cm)" error={errors.height?.message}>
+            <input type="number" {...register("height")} className={inputClass} placeholder="80" />
           </Field>
         </div>
       </section>
@@ -120,7 +132,7 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
           <Field label="Fecha ingreso" error={errors.entryDate?.message}>
             <input {...register("entryDate")} type="date" className={inputClass} />
           </Field>
-          <Field label="Fecha entrega" error={errors.deliveryDate?.message}>
+          <Field label="Fecha entrega estimada (opcional)" error={errors.deliveryDate?.message}>
             <input {...register("deliveryDate")} type="date" className={inputClass} />
           </Field>
           <Field label="Prioridad" error={errors.priority?.message}>
@@ -168,12 +180,45 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
         </section>
       ) : null}
 
+            {w > 0 && d > 0 && h > 0 ? (
+        <section className="panel border-amber-200 bg-amber-50/30">
+          <div className="panel-header flex items-center gap-3">
+            <Boxes className="size-5 text-amber-700" />
+            <div>
+              <h2 className="panel-title text-amber-950">Consumo Estimado de Materiales</h2>
+              <p className="panel-description text-amber-800">Cálculo en tiempo real según las dimensiones ingresadas.</p>
+            </div>
+          </div>
+          <div className="grid gap-3 p-4 sm:grid-cols-3">
+            <div className="rounded-md border border-amber-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Cuero (${matName || "Riga Honey"})</p>
+              <p className="mt-2 text-2xl font-bold text-stone-900">${leatherQty} <span className="text-sm font-normal text-stone-500">m²</span></p>
+              <p className="mt-1 text-xs text-stone-500">Fórmula: (Ancho×Prof×3 + Ancho×Alto×2 + Prof×Alto×2) / 10,000</p>
+            </div>
+            <div className="rounded-md border border-amber-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Madera estructura</p>
+              <p className="mt-2 text-2xl font-bold text-stone-900">${woodQty} <span className="text-sm font-normal text-stone-500">tablas</span></p>
+              <p className="mt-1 text-xs text-stone-500">Fórmula: (Ancho×2 + Prof×4 + Alto×4) / 100</p>
+            </div>
+            <div className="rounded-md border border-amber-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Espuma relleno</p>
+              <p className="mt-2 text-2xl font-bold text-stone-900">${foamQty} <span className="text-sm font-normal text-stone-500">planchas</span></p>
+              <p className="mt-1 text-xs text-stone-500">Fórmula: (Ancho×Prof×2) / 10,000</p>
+            </div>
+          </div>
+          <div className="px-4 pb-4">
+            <p className="text-xs leading-5 text-amber-800 font-medium">
+              * Nota: Al guardar esta orden de producción, el stock disponible de estos materiales se descontará automáticamente.
+            </p>
+          </div>
+        </section>
+      ) : null}
+
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
         <Link
           href="/admin"
           className="btn-lg btn-secondary"
-        >
-          <ArrowLeft className="size-4" />
+        >     <ArrowLeft className="size-4" />
           Volver
         </Link>
         <button

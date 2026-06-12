@@ -33,22 +33,21 @@ export async function createOrder(
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
     return { status: "error", message: "Tu perfil no tiene permiso para crear órdenes." };
   }
-  const parsed = orderSchema.safeParse({
+    const parsed = orderSchema.safeParse({
     store: formData.get("store"),
     salesNoteNumber: formData.get("salesNoteNumber"),
-    clientName: formData.get("clientName"),
     productName: formData.get("productName"),
     material: formData.get("material"),
     color: formData.get("color"),
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
     priority: formData.get("priority"),
-    assignedTo: formData.get("assignedTo"),
+    width: formData.get("width"),
+    depth: formData.get("depth"),
+    height: formData.get("height"),
     observations: formData.get("observations")?.toString() ?? "",
     isWarranty: parseBooleanFormValue(formData.get("isWarranty")),
-  });
-
-  if (!parsed.success) {
+  });  if (!parsed.success) {
     return {
       status: "error",
       message: formatZodError(parsed.error),
@@ -60,6 +59,7 @@ export async function createOrder(
   if (!hasSupabaseConfig()) {
     const order = await createLocalOrder({
       ...parsed.data,
+      clientName: clientNameFromStore(parsed.data.store),
       steps: settings.production.steps,
     });
     const attachmentResult = await saveInitialAttachment({
@@ -83,13 +83,7 @@ export async function createOrder(
   const supabase = await createClient();
   const profileId = await getCurrentProfileId(supabase);
   if (!profileId) return { status: "error", message: "No se pudo identificar tu perfil." };
-  const { data: assignee } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("full_name", parsed.data.assignedTo)
-    .eq("active", true)
-    .maybeSingle();
-  const { data: store, error: storeError } = await supabase
+    const { data: store, error: storeError } = await supabase
     .from("stores")
     .select("id")
     .eq("code", parsed.data.store)
@@ -98,7 +92,7 @@ export async function createOrder(
   if (storeError || !store) {
     return {
       status: "error",
-      message: storeError?.message ?? "No se encontro la tienda seleccionada.",
+      message: storeError?.message ?? "No se encontró la empresa cliente seleccionada.",
     };
   }
 
@@ -108,7 +102,7 @@ export async function createOrder(
       store_id: store.id,
       internal_code: parsed.data.salesNoteNumber,
       sales_note_number: parsed.data.salesNoteNumber,
-      client_name: parsed.data.clientName,
+      client_name: clientNameFromStore(parsed.data.store),
       product_name: parsed.data.productName,
       material: parsed.data.material,
       color: parsed.data.color,
@@ -117,22 +111,23 @@ export async function createOrder(
       priority: parsed.data.priority,
       is_warranty: parsed.data.isWarranty,
       entry_date: parsed.data.entryDate,
-      delivery_date: parsed.data.deliveryDate,
+      delivery_date: parsed.data.deliveryDate ?? null,
       observations: parsed.data.observations,
-      assigned_to: assignee?.id ?? null,
+      assigned_to: null,
       created_by: profileId,
+      width: parsed.data.width,
+      depth: parsed.data.depth,
+      height: parsed.data.height,
     })
     .select("id")
-    .single();
-
-  if (orderError || !order) {
+    .single();  if (orderError || !order) {
     return {
       status: "error",
       message: orderError?.message ?? "No se pudo crear la orden.",
     };
   }
 
-  const enabledSteps = settings.production.steps.filter((step) => step.enabled);
+    const enabledSteps = settings.production.steps.filter((step) => step.enabled);
   const operatorByArea = operatorMapByArea(await listUsers());
   const { error: stepsError } = await supabase.from("production_steps").insert(
     enabledSteps.map((step, index) => ({
@@ -142,15 +137,10 @@ export async function createOrder(
       sort_order: index + 1,
       status: index === 0 ? "active" : "pending",
       started_at: index === 0 ? new Date().toISOString() : null,
-      notes:
-        index === 0
-          ? `Responsable inicial sugerido: ${parsed.data.assignedTo}`
-          : null,
-      assigned_to: index === 0 ? assignee?.id ?? operatorByArea.get(step.key) ?? null : operatorByArea.get(step.key) ?? null,
+      notes: null,
+      assigned_to: operatorByArea.get(step.key) ?? null,
     })),
-  );
-
-  if (stepsError) {
+  );  if (stepsError) {
     await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id);
     return {
       status: "error",
@@ -173,6 +163,18 @@ export async function createOrder(
     profileId,
     supabase,
   });
+
+    // Auto-deduct stock
+  try {
+    await deductSupabaseStockForOrder(supabase, order.id, parsed.data.salesNoteNumber, {
+      material: parsed.data.material,
+      width: parsed.data.width,
+      depth: parsed.data.depth,
+      height: parsed.data.height,
+    });
+  } catch (err) {
+    console.error("Failed to automatically deduct stock in Supabase:", err);
+  }
 
   revalidatePath("/admin");
   revalidatePath("/taller");
@@ -197,55 +199,53 @@ export async function updateOrder(
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
     return { status: "error", message: "Tu perfil no tiene permiso para editar órdenes." };
   }
-  const parsed = orderSchema.safeParse({
+    const parsed = orderSchema.safeParse({
     store: formData.get("store"),
     salesNoteNumber: formData.get("salesNoteNumber"),
-    clientName: formData.get("clientName"),
     productName: formData.get("productName"),
     material: formData.get("material"),
     color: formData.get("color"),
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
     priority: formData.get("priority"),
-    assignedTo: formData.get("assignedTo"),
+    width: formData.get("width"),
+    depth: formData.get("depth"),
+    height: formData.get("height"),
     observations: formData.get("observations")?.toString() ?? "",
     isWarranty: parseBooleanFormValue(formData.get("isWarranty")),
-  });
-  if (!parsed.success) return { status: "error", message: formatZodError(parsed.error) };
+  }); if (!parsed.success) return { status: "error", message: formatZodError(parsed.error) };
   const ruleError = await validateOrderRules(parsed.data, settings, orderId);
   if (ruleError) return { status: "error", message: ruleError };
 
   if (!hasSupabaseConfig()) {
-    const updated = await updateLocalOrder(orderId, parsed.data);
+    const updated = await updateLocalOrder(orderId, {
+      ...parsed.data,
+      clientName: clientNameFromStore(parsed.data.store),
+    });
     if (!updated) return { status: "error", message: "No se encontró la orden." };
   } else {
-    const supabase = await createClient();
+        const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
     if (!profileId) return { status: "error", message: "No se pudo identificar tu perfil." };
-    const { data: assignee } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("full_name", parsed.data.assignedTo)
-      .eq("active", true)
-      .maybeSingle();
     const { data: store } = await supabase.from("stores").select("id").eq("code", parsed.data.store).maybeSingle();
-    if (!store) return { status: "error", message: "No se encontró la tienda." };
+    if (!store) return { status: "error", message: "No se encontró la empresa cliente." };
     const { error } = await supabase.from("orders").update({
       store_id: store.id,
       internal_code: parsed.data.salesNoteNumber,
       sales_note_number: parsed.data.salesNoteNumber,
-      client_name: parsed.data.clientName,
+      client_name: clientNameFromStore(parsed.data.store),
       product_name: parsed.data.productName,
       material: parsed.data.material,
       color: parsed.data.color,
       priority: parsed.data.priority,
       is_warranty: parsed.data.isWarranty,
       entry_date: parsed.data.entryDate,
-      delivery_date: parsed.data.deliveryDate,
+      delivery_date: parsed.data.deliveryDate ?? null,
       observations: parsed.data.observations,
-      assigned_to: assignee?.id ?? null,
-    }).eq("id", orderId);
-    if (error) return { status: "error", message: error.message };
+      width: parsed.data.width,
+      depth: parsed.data.depth,
+      height: parsed.data.height,
+    }).eq("id", orderId); if (error) return { status: "error", message: error.message };
     await supabase.from("audit_logs").insert({
       order_id: orderId,
       action: "update_order",
@@ -439,6 +439,10 @@ function formatZodError(error: z.ZodError) {
   return error.issues.map((issue) => issue.message).join(" ");
 }
 
+function clientNameFromStore(store: z.infer<typeof orderSchema>["store"]) {
+  return store === "LH" ? "Leather House" : "La Reina";
+}
+
 async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return null;
@@ -506,7 +510,7 @@ async function validateOrderRules(
   settings: Awaited<ReturnType<typeof getSystemSettings>>,
   currentOrderId?: string,
 ) {
-  if (!settings.orders.allowPastDeliveryDates && input.deliveryDate < new Date().toISOString().slice(0, 10)) {
+  if (input.deliveryDate && !settings.orders.allowPastDeliveryDates && input.deliveryDate < new Date().toISOString().slice(0, 10)) {
     return "La fecha de entrega no puede estar en el pasado.";
   }
   if (settings.orders.requireObservationsForWarranty && input.isWarranty && !input.observations?.trim()) {
@@ -516,7 +520,7 @@ async function validateOrderRules(
     const duplicate = (await listOrders()).some(
       (order) => order.id !== currentOrderId && order.store === input.store && order.code === input.salesNoteNumber,
     );
-    if (duplicate) return "Ya existe una orden con esta nota de venta en la tienda seleccionada.";
+    if (duplicate) return "Ya existe una orden con esta nota de venta para la empresa seleccionada.";
   }
   return null;
 }
@@ -531,4 +535,65 @@ function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
     }
   }
   return map;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+async function deductSupabaseStockForOrder(
+  supabase: any,
+  orderId: string,
+  orderCode: string,
+  input: {
+    material: string;
+    width: number;
+    depth: number;
+    height: number;
+  }
+) {
+  const { material, width, depth, height } = input;
+  const leatherQty = Math.round(((width * depth * 3 + width * height * 2 + depth * height * 2) / 10000) * 10) / 10;
+  const woodQty = Math.max(2, Math.round((width * 2 + depth * 4 + height * 4) / 100));
+  const foamQty = Math.max(1, Math.round((width * depth * 2) / 10000));
+
+  const { data: materials } = await supabase.from("materials").select("*").eq("active", true);
+  if (!materials) return;
+
+  // 1. Deduct Leather
+  const leatherItem = materials.find((item: any) => 
+    item.category.toLowerCase() === "cuero" && 
+    (item.name.toLowerCase().includes(material.toLowerCase()) || material.toLowerCase().includes(item.name.toLowerCase()))
+  ) || materials.find((item: any) => item.category.toLowerCase() === "cuero");
+
+  if (leatherItem) {
+    await supabase.rpc("record_stock_movement", {
+      p_material_id: leatherItem.id,
+      p_movement_type: "out",
+      p_quantity: leatherQty,
+      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
+      p_order_id: orderId,
+    });
+  }
+
+  // 2. Deduct Wood
+  const woodItem = materials.find((item: any) => item.category.toLowerCase() === "estructura") || materials.find((item: any) => item.name.toLowerCase().includes("madera"));
+  if (woodItem) {
+    await supabase.rpc("record_stock_movement", {
+      p_material_id: woodItem.id,
+      p_movement_type: "out",
+      p_quantity: woodQty,
+      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
+      p_order_id: orderId,
+    });
+  }
+
+  // 3. Deduct Foam
+  const foamItem = materials.find((item: any) => item.category.toLowerCase() === "relleno") || materials.find((item: any) => item.name.toLowerCase().includes("espuma"));
+  if (foamItem) {
+    await supabase.rpc("record_stock_movement", {
+      p_material_id: foamItem.id,
+      p_movement_type: "out",
+      p_quantity: foamQty,
+      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
+      p_order_id: orderId,
+    });
+  }
 }

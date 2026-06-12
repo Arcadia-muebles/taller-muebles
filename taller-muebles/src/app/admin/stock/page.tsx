@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowUp, Boxes, Plus, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowUp, Boxes, Pencil, Plus, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DeactivateStockButton } from "@/components/deactivate-stock-button";
 import { StockAdjustmentButton } from "@/components/stock-adjustment-button";
 import { StockCreateForm } from "@/components/stock-create-form";
+import { StockQuantityEditButton } from "@/components/stock-quantity-edit-button";
 import { requireSession } from "@/lib/auth";
 import { listStockItems, listStockMovements } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -50,7 +51,7 @@ export default async function StockPage() {
       <section className="panel mt-5">
         <div className="panel-header">
           <h2 className="panel-title">Inventario base</h2>
-          <p className="panel-description">Primera vista para validar reglas antes de automatizar consumos.</p>
+          <p className="panel-description">Usa entrada/salida para movimientos. Edita la cantidad disponible cuando necesites corregir el conteo exacto.</p>
         </div>
 
         <div className="grid gap-3 p-3 xl:hidden">
@@ -67,7 +68,7 @@ export default async function StockPage() {
                 <th className="px-3 py-3">Disponible</th>
                 <th className="px-3 py-3">Minimo</th>
                 <th className="px-3 py-3">Unidad</th>
-                <th className="px-3 py-3">Ubicacion</th>
+                <th className="px-3 py-3">Destinado a</th>
                 {canEdit ? <th className="px-3 py-3">Accion</th> : null}
               </tr>
             </thead>
@@ -76,10 +77,15 @@ export default async function StockPage() {
                 <tr key={item.id} className="border-t border-stone-100">
                   <td className="px-3 py-3 text-sm font-medium"><span className="block truncate">{item.name}</span></td>
                   <td className="px-3 py-3 text-sm text-stone-600"><span className="block truncate">{item.category}</span></td>
-                  <td className="px-3 py-3 text-sm font-semibold">{item.available}</td>
+                  <td className="px-3 py-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold">{item.available}</span>
+                      {canEdit ? <StockQuantityEditButton item={item} /> : null}
+                    </div>
+                  </td>
                   <td className="px-3 py-3 text-sm text-stone-600">{item.minimum}</td>
                   <td className="px-3 py-3 text-sm text-stone-600"><span className="block truncate">{item.unit}</span></td>
-                  <td className="px-3 py-3 text-sm text-stone-600">{item.store}</td>
+                  <td className="px-3 py-3 text-sm text-stone-600">{item.store === "general" ? "General" : item.store === "LH" ? "Leather House" : "La Reina"}</td>
                   {canEdit ? (
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -103,7 +109,7 @@ export default async function StockPage() {
       <section className="panel mt-5">
         <div className="panel-header">
           <h2 className="panel-title">Ultimos movimientos</h2>
-          <p className="panel-description">Entradas, consumos y ajustes registrados.</p>
+          <p className="panel-description">Entradas, salidas y correcciones de cantidad registradas.</p>
         </div>
         <div className="divide-y divide-stone-100">
           {movements.slice(0, 12).map((movement) => <MovementRow key={movement.id} movement={movement} />)}
@@ -120,16 +126,17 @@ function StockCard({ item, canEdit }: { item: StockItem; canEdit: boolean }) {
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-stone-950">{item.name}</p>
-          <p className="mt-1 truncate text-xs text-stone-500">{item.category} · {item.store}</p>
+          <p className="mt-1 truncate text-xs text-stone-500">{item.category} · {item.store === "general" ? "General" : item.store === "LH" ? "Leather House" : "La Reina"}</p>
         </div>
         <p className="text-sm font-semibold">{item.available} <span className="text-xs font-medium text-stone-500">{item.unit}</span></p>
       </div>
       <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
         <Info label="Alerta bajo" value={String(item.minimum)} />
-        <Info label="Ubicacion" value={item.store} />
+        <Info label="Destinado a" value={item.store === "general" ? "General" : item.store === "LH" ? "Leather House" : "La Reina"} />
       </div>
       {canEdit ? (
         <div className="mt-3 flex flex-wrap gap-2">
+          <StockQuantityEditButton item={item} />
           <StockAdjustmentButton item={item} />
           <DeactivateStockButton itemId={item.id} itemName={item.name} />
         </div>
@@ -139,19 +146,30 @@ function StockCard({ item, canEdit }: { item: StockItem; canEdit: boolean }) {
 }
 
 function MovementRow({ movement }: { movement: StockMovement }) {
+  const isCorrection = movement.type === "adjustment";
+  const iconClass = isCorrection
+    ? "grid size-9 shrink-0 place-items-center rounded-md bg-stone-100 text-stone-600"
+    : movement.type === "out"
+      ? "grid size-9 shrink-0 place-items-center rounded-md bg-rose-50 text-rose-700"
+      : "grid size-9 shrink-0 place-items-center rounded-md bg-emerald-50 text-emerald-700";
+
   return (
     <div className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
-        <span className={movement.type === "out" ? "grid size-9 shrink-0 place-items-center rounded-md bg-rose-50 text-rose-700" : "grid size-9 shrink-0 place-items-center rounded-md bg-emerald-50 text-emerald-700"}>
-          {movement.type === "out" ? <ArrowDown className="size-4" /> : <ArrowUp className="size-4" />}
+        <span className={iconClass}>
+          {isCorrection ? <Pencil className="size-4" /> : movement.type === "out" ? <ArrowDown className="size-4" /> : <ArrowUp className="size-4" />}
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{movement.materialName}</p>
-          <p className="mt-0.5 line-clamp-2 text-xs text-stone-500">{movement.notes}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-stone-500">
+            {isCorrection ? `Correccion de cantidad · ${movement.notes}` : movement.notes}
+          </p>
         </div>
       </div>
       <div className="shrink-0 text-left sm:text-right">
-        <p className="text-sm font-semibold">{movement.type === "out" ? "-" : movement.type === "in" ? "+" : "="}{movement.quantity}</p>
+        <p className="text-sm font-semibold">
+          {isCorrection ? `Stock final ${movement.quantity}` : `${movement.type === "out" ? "-" : "+"}${movement.quantity}`}
+        </p>
         <p className="text-xs text-stone-500">{new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(movement.createdAt))}</p>
       </div>
     </div>

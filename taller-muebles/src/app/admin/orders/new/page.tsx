@@ -3,14 +3,11 @@ import { OrderForm } from "@/components/order-form";
 import { requireSession } from "@/lib/auth";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { redirect } from "next/navigation";
-import { listUsers } from "@/lib/repositories/production";
 
 export default async function NewOrderPage() {
   const user = await requireSession(["admin", "manager"]);
   const settings = await getSystemSettings();
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) redirect("/admin");
-  const users = await listUsers();
-  const assignees = users.filter((item) => item.active && item.role === "operator").map((item) => item.name);
 
   return (
     <AppShell active="admin" user={user}>
@@ -23,12 +20,12 @@ export default async function NewOrderPage() {
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
           Esta pantalla concentra los datos que antes quedaban repartidos entre
-          hojas: venta, cliente, producto, fechas, prioridad y primera asignacion.
+          hojas: venta, cliente, producto, fechas y prioridad.
         </p>
       </header>
 
       <div className="mt-5 max-w-5xl">
-        <OrderForm assignees={assignees} />
+        <OrderForm />
       </div>
     </AppShell>
   );

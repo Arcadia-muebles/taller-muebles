@@ -18,7 +18,7 @@ export default async function ReportsPage() {
   const load = areaLoad(active);
   const riskOrders = [...active]
     .filter((order) => completionPercent(order) < 80 || blocked.includes(order) || overdue.includes(order))
-    .sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate))
+    .sort((a, b) => (a.deliveryDate ?? "9999-12-31").localeCompare(b.deliveryDate ?? "9999-12-31"))
     .slice(0, 10);
 
   return (

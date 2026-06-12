@@ -21,7 +21,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
         </div>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Acceso interno</h1>
-          <p className="text-sm text-stone-500">Leather House / La Reina</p>
+          <p className="text-sm text-stone-500">Clientes B2B: Leather House / La Reina</p>
         </div>
       </div>
 

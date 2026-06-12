@@ -2,14 +2,14 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { OrderForm } from "@/components/order-form";
 import { requireSession } from "@/lib/auth";
-import { getOrder, listUsers } from "@/lib/repositories/production";
+import { getOrder } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { redirect } from "next/navigation";
 
 export default async function EditOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession(["admin", "manager"]);
   const { id } = await params;
-  const [order, settings, users] = await Promise.all([getOrder(id), getSystemSettings(), listUsers()]);
+  const [order, settings] = await Promise.all([getOrder(id), getSystemSettings()]);
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) redirect(`/admin/orders/${id}`);
   if (!order) notFound();
 
@@ -25,20 +25,20 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
       <div className="mt-5 max-w-5xl">
         <OrderForm
           orderId={order.id}
-          assignees={Array.from(new Set([order.assignedTo, ...users.filter((item) => item.active && item.role === "operator").map((item) => item.name)]))}
           initialValues={{
             store: order.store,
             salesNoteNumber: order.code,
-            clientName: order.client,
             productName: order.product,
             material: order.material,
             color: order.color,
             entryDate: order.entryDate,
             deliveryDate: order.deliveryDate,
             priority: order.priority,
-            assignedTo: order.assignedTo,
             observations: order.observations,
             isWarranty: order.isWarranty,
+            width: order.width ?? 0,
+            depth: order.depth ?? 0,
+            height: order.height ?? 0,
           }}
         />
       </div>

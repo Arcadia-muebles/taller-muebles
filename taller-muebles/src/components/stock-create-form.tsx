@@ -46,11 +46,11 @@ export function StockCreateForm() {
         <Field label="Alerta bajo">
           <input name="minimum" required type="number" min="0" step="1" placeholder="0" className={inputClass} />
         </Field>
-        <Field label="Ubicacion">
+        <Field label="Destinado a">
           <select name="store" defaultValue="general" className={inputClass}>
-            <option value="general">General</option>
-            <option value="LH">LH</option>
-            <option value="LR">LR</option>
+            <option value="general">Inventario General</option>
+            <option value="LH">Leather House (LH)</option>
+            <option value="LR">La Reina (LR)</option>
           </select>
         </Field>
         <div className="flex flex-col justify-end gap-2 md:col-span-5">

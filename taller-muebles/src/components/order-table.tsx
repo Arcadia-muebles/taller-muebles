@@ -71,7 +71,7 @@ export function OrderTable({
       },
       {
         accessorKey: "client",
-        header: "Cliente",
+        header: "Cliente / Empresa",
         cell: ({ row }) => (
           <div className="min-w-0">
             <p className="truncate font-medium text-stone-950">{row.original.client}</p>
@@ -210,7 +210,7 @@ export function OrderTable({
         </div>
         <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:justify-end">
           <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="control min-w-0 bg-white text-stone-700">
-            <option value="all">Todas las tiendas</option>
+            <option value="all">Todas las empresas</option>
             <option value="LH">Leather House</option>
             <option value="LR">La Reina</option>
           </select>

@@ -184,13 +184,14 @@ export async function listOrderAudit(orderId: string): Promise<AuditEntry[]> {
 export async function listUsers(): Promise<AppUser[]> {
   if (!hasSupabaseConfig()) {
     const { listLocalUsers } = await import("@/lib/local-store");
-    return listLocalUsers();
+    return (await listLocalUsers()).filter((user) => user.active);
   }
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
     .select("id, user_id, full_name, role, area, active")
+    .eq("active", true)
     .order("full_name");
   if (error || !data) return [];
 
@@ -269,6 +270,9 @@ function mapOrderRecord(record: OrderRecord): Order {
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(mapStepRecord);
 
+  const activeStep = steps.find((step) => step.status === "active") || steps.find((step) => step.status === "blocked");
+  const currentAssignee = activeStep?.owner ?? record.assigned_profile?.full_name ?? "Sin asignar";
+
   return {
     id: record.id,
     code: record.internal_code,
@@ -282,10 +286,13 @@ function mapOrderRecord(record: OrderRecord): Order {
     priority: record.priority as Order["priority"],
     isWarranty: record.is_warranty,
     entryDate: record.entry_date,
-    deliveryDate: record.delivery_date ?? record.entry_date,
-    assignedTo: record.assigned_profile?.full_name ?? "Sin asignar",
+    deliveryDate: record.delivery_date ?? undefined,
+    assignedTo: currentAssignee,
     observations: record.observations ?? "Sin observaciones.",
     steps,
+    width: record.width ?? undefined,
+    depth: record.depth ?? undefined,
+    height: record.height ?? undefined,
   };
 }
 

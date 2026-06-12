@@ -1,6 +1,6 @@
 "use client";
 
-import { SlidersHorizontal, X } from "lucide-react";
+import { ArrowLeftRight, X } from "lucide-react";
 import { useActionState, useState } from "react";
 import { adjustStockItem, type StockActionResult } from "@/app/admin/stock/actions";
 import type { StockItem } from "@/lib/types";
@@ -17,7 +17,7 @@ export function StockAdjustmentButton({ item }: { item: StockItem }) {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="btn btn-secondary h-8 px-2.5 text-xs">
-        <SlidersHorizontal className="size-3.5" />
+        <ArrowLeftRight className="size-3.5" />
         Movimiento
       </button>
       {open ? (
@@ -26,7 +26,7 @@ export function StockAdjustmentButton({ item }: { item: StockItem }) {
             <input type="hidden" name="materialId" value={item.id} />
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">Movimiento de stock</p>
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">Entrada/salida de stock</p>
                 <h3 id={`stock-movement-${item.id}`} className="mt-2 text-xl font-semibold">{item.name}</h3>
                 <p className="mt-1 text-sm text-stone-500">Disponible: {item.available} {item.unit}</p>
               </div>
@@ -39,7 +39,6 @@ export function StockAdjustmentButton({ item }: { item: StockItem }) {
               <select name="type" defaultValue="in" className="control-lg mt-2">
                 <option value="in">Entrada de material</option>
                 <option value="out">Salida o consumo</option>
-                <option value="adjustment">Ajuste de inventario</option>
               </select>
             </label>
             <label className="mt-4 block text-sm font-medium text-stone-700">

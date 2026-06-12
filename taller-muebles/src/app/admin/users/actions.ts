@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { deactivateLocalUser, updateLocalUser, upsertLocalUser } from "@/lib/local-store";
+import { deleteLocalUser, getLocalUserByEmail, updateLocalUser, upsertLocalUser } from "@/lib/local-store";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const userSchema = z.object({
@@ -81,17 +81,25 @@ export async function removeUser(formData: FormData) {
   if (!id) return;
 
   if (!hasSupabaseConfig()) {
-    await deactivateLocalUser(id);
+    await deleteLocalUser(id);
   } else {
     if (!hasSupabaseAdminConfig()) return;
     const admin = getSupabaseAdmin();
-    await admin.from("profiles").update({ active: false }).eq("id", id);
+    const { data: profile } = await admin.from("profiles").select("user_id").eq("id", id).maybeSingle();
+    if (profile?.user_id) {
+      await admin.auth.admin.deleteUser(profile.user_id);
+    } else {
+      await admin.from("profiles").delete().eq("id", id);
+    }
   }
   revalidatePath("/admin/users");
+  revalidatePath("/admin");
+  revalidatePath("/taller");
 }
 
 const updateUserSchema = z.object({
   id: z.string().min(1),
+  email: z.string().email(),
   name: z.string().trim().min(2),
   role: z.enum(["admin", "manager", "operator", "viewer"]),
   areas: z.array(z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/)).optional(),
@@ -102,6 +110,7 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
   await requireSession(["admin"]);
   const parsed = updateUserSchema.safeParse({
     id: formData.get("userId"),
+    email: formData.get("email"),
     name: formData.get("name"),
     role: formData.get("role"),
     areas: formData.getAll("areas").map(String).filter(Boolean),
@@ -114,8 +123,13 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
 
   try {
     if (!hasSupabaseConfig()) {
+      const existingUser = await getLocalUserByEmail(parsed.data.email);
+      if (existingUser && existingUser.id !== parsed.data.id) {
+        return { ok: false, message: "Ya existe otro usuario con ese correo." };
+      }
       const updated = await updateLocalUser({
         id: parsed.data.id,
+        email: parsed.data.email,
         name: parsed.data.name,
         role: parsed.data.role,
         area: parsed.data.role === "operator" ? parsed.data.areas?.[0] : undefined,
@@ -127,7 +141,22 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
       if (!hasSupabaseAdminConfig()) {
         return { ok: false, message: "Falta configurar la clave de servicio para administrar cuentas." };
       }
-      const { error } = await getSupabaseAdmin()
+      const admin = getSupabaseAdmin();
+      const { data: profile, error: profileLookupError } = await admin
+        .from("profiles")
+        .select("user_id")
+        .eq("id", parsed.data.id)
+        .maybeSingle();
+      if (profileLookupError || !profile) {
+        return { ok: false, message: profileLookupError?.message ?? "No se encontro el usuario." };
+      }
+
+      const { error: authError } = await admin.auth.admin.updateUserById(profile.user_id, {
+        email: parsed.data.email,
+      });
+      if (authError) return { ok: false, message: authError.message };
+
+      const { error } = await admin
         .from("profiles")
         .update({
           full_name: parsed.data.name,

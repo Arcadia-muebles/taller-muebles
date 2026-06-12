@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Plus, ShieldCheck, UserRound } from "lucide-react";
+import { ChevronDown, Pencil, Plus, ShieldCheck, UserRound } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
 import { createUser, type UserActionResult } from "@/app/admin/users/actions";
 import type { AppUser, Role, SystemSettings } from "@/lib/types";
@@ -30,6 +30,7 @@ export function RoleUserGroups({
     operator: false,
     viewer: false,
   });
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const enabledSteps = steps.filter((step) => step.enabled);
 
   return (
@@ -90,10 +91,30 @@ export function RoleUserGroups({
                             <ShieldCheck className="size-3.5" />
                             {roleLabel(user.role)}
                           </span>
-                          {user.active ? <DeactivateUserButton userId={user.id} disabled={disabled} /> : null}
+                          <button
+                            type="button"
+                            title="Editar usuario"
+                            disabled={disabled}
+                            onClick={() => setEditingUserId((current) => current === user.id ? null : user.id)}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-stone-200 bg-white px-2.5 text-xs font-medium text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <Pencil className="size-3.5" />
+                            {editingUserId === user.id ? "Cerrar" : "Editar"}
+                          </button>
                         </div>
                       </div>
-                      <UserEditForm user={user} steps={steps} disabled={disabled} />
+                      {editingUserId === user.id ? (
+                        <div className="border-t border-stone-100 bg-stone-50/60">
+                          <div className="flex flex-col gap-3 px-4 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-stone-950">Editar perfil</p>
+                              <p className="text-xs text-stone-500">Modifica sus datos, permisos o elimina su acceso.</p>
+                            </div>
+                            <DeactivateUserButton userId={user.id} disabled={disabled} />
+                          </div>
+                          <UserEditForm user={user} steps={steps} disabled={disabled} />
+                        </div>
+                      ) : null}
                     </article>
                   ))}
                   {!roleUsers.length ? (

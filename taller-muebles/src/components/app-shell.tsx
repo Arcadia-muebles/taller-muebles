@@ -19,20 +19,23 @@ export function AppShell({ active, user, children }: AppShellProps) {
   const canUseAdmin = user?.role !== "operator";
   const canEditAdmin = user?.role === "admin";
   const localMode = !hasSupabaseConfig();
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-stone-100 text-stone-950">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-stone-200 bg-white px-4 py-5 lg:block">
-        <div className="flex items-center gap-3 border-b border-stone-200 pb-5">
-          <div className="grid size-10 place-items-center rounded-lg bg-stone-950 text-sm font-semibold text-white">
-            LH
+      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-stone-200 bg-[#fbfaf8] px-4 py-5 lg:block">
+        <div className="border-b border-stone-300 pb-5">
+          <div className="flex items-center gap-2">
+            <span className="h-px w-7 bg-stone-950" />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-500">Arcadia</p>
           </div>
-          <div>
-            <p className="text-sm font-semibold">Control Produccion</p>
-            <p className="text-xs text-stone-500">Leather House / La Reina</p>
+          <div className="mt-3">
+            <p className="text-[15px] font-semibold leading-tight text-stone-950">Produccion taller</p>
+            <p className="mt-1 text-xs leading-5 text-stone-500">Leather House / La Reina</p>
           </div>
         </div>
+
         {localMode ? (
-          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          <div className="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
             Modo local de desarrollo
           </div>
         ) : null}
@@ -40,11 +43,11 @@ export function AppShell({ active, user, children }: AppShellProps) {
         <SidebarNavigation active={active} canUseAdmin={canUseAdmin} canEditAdmin={canEditAdmin} />
 
         <div className="absolute inset-x-4 bottom-5">
-          <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+          <div className="border-t border-stone-300 pt-4">
             <p className="truncate text-sm font-semibold">{user?.name ?? "Sin sesion"}</p>
             <p className="mt-1 text-xs text-stone-500">{user ? roleLabel(user.role) : "Sin acceso"}</p>
             <form action={logout}>
-              <button type="submit" className="btn btn-secondary mt-3 h-9 w-full">
+              <button type="submit" className="btn btn-secondary mt-3 h-9 w-full bg-[#fbfaf8]">
                 <LogIn className="size-4" />
                 Salir
               </button>

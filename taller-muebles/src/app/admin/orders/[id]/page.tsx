@@ -88,8 +88,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               </div>
             </div>
             <div className="grid gap-4 p-4 md:grid-cols-2">
-              <Info label="Cliente" value={order.client} />
-              <Info label="Tienda" value={order.store} />
+              <Info label="Cliente Final" value={order.client} />
+              <Info label="Empresa Cliente" value={order.store} />
               <Info label="Producto" value={order.product} />
               <Info label="Material" value={order.material} />
               <Info label="Color" value={order.color} />

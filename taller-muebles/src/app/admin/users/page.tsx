@@ -17,7 +17,7 @@ export default async function UsersPage() {
         <p className="page-kicker">Usuarios</p>
         <h1 className="page-title">Roles y responsables</h1>
         <p className="page-description max-w-2xl">
-          Abre cada rol para agregar correos y asignar personas. Los trabajadores se asignan a una etapa del proceso productivo.
+          Abre cada rol para agregar, editar o eliminar trabajadores. El correo activo permite iniciar sesion en el taller.
         </p>
       </header>
 

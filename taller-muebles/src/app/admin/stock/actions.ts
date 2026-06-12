@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { createLocalStockItem, createLocalStockMovement, deactivateLocalStockItem } from "@/lib/local-store";
+import { createLocalStockItem, createLocalStockMovement, deactivateLocalStockItem, setLocalStockQuantity } from "@/lib/local-store";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,9 +19,15 @@ const stockSchema = z.object({
 
 const movementSchema = z.object({
   materialId: z.string().min(1),
-  type: z.enum(["in", "out", "adjustment"]),
+  type: z.enum(["in", "out"]),
   quantity: z.coerce.number().positive(),
   notes: z.string().trim().min(3).max(300),
+});
+
+const stockQuantitySchema = z.object({
+  materialId: z.string().min(1),
+  quantity: z.coerce.number().min(0),
+  notes: z.string().trim().max(300).optional(),
 });
 
 export type StockActionResult = { ok: boolean; message: string };
@@ -124,4 +130,56 @@ export async function adjustStockItem(formData: FormData): Promise<StockActionRe
   revalidatePath("/admin");
   revalidatePath("/admin/stock");
   return { ok: true, message: "Movimiento registrado correctamente." };
+}
+
+export async function updateStockQuantity(formData: FormData): Promise<StockActionResult> {
+  const user = await requireSession(["admin", "manager"]);
+  if (user.role === "manager" && !(await getSystemSettings()).permissions.managersCanManageStock) {
+    return { ok: false, message: "Tu perfil no puede editar cantidades de stock." };
+  }
+  const parsed = stockQuantitySchema.safeParse({
+    materialId: formData.get("materialId"),
+    quantity: formData.get("quantity"),
+    notes: formData.get("notes")?.toString() || undefined,
+  });
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "Revisa la cantidad ingresada." };
+  }
+
+  try {
+    if (!hasSupabaseConfig()) {
+      const updated = await setLocalStockQuantity({
+        materialId: parsed.data.materialId,
+        quantity: parsed.data.quantity,
+        notes: parsed.data.notes || "Conteo fisico actualizado.",
+      });
+      if (!updated) return { ok: false, message: "No se encontro el material." };
+    } else {
+      const supabase = await createClient();
+      const { data: material } = await supabase
+        .from("materials")
+        .select("current_quantity")
+        .eq("id", parsed.data.materialId)
+        .maybeSingle();
+      const previousQuantity = material?.current_quantity;
+      const notes = [
+        typeof previousQuantity === "number" ? `${previousQuantity} -> ${parsed.data.quantity}` : `Stock exacto ${parsed.data.quantity}`,
+        parsed.data.notes,
+      ].filter(Boolean).join(" · ");
+      const { error } = await supabase.rpc("record_stock_movement", {
+        p_material_id: parsed.data.materialId,
+        p_movement_type: "adjustment",
+        p_quantity: parsed.data.quantity,
+        p_notes: notes,
+      });
+      if (error) return { ok: false, message: `No fue posible editar la cantidad: ${error.message}` };
+    }
+  } catch (error) {
+    console.error("Stock quantity update failed:", error);
+    return { ok: false, message: "No fue posible editar la cantidad. Intenta nuevamente." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/stock");
+  return { ok: true, message: "Cantidad actualizada correctamente." };
 }

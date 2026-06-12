@@ -74,7 +74,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
       <section className="mt-5 grid gap-3 md:grid-cols-4">
         <Info icon={CalendarDays} label="Entrega" value={`${formatDate(order.deliveryDate)} · ${deliveryLabel(order.deliveryDate, false)}`} />
         <Info label="Prioridad" value={priorityLabel(order.priority)} />
-        <Info label="Cliente" value={order.client} />
+        <Info label="Cliente Final" value={order.client} />
         <Info label="Responsable" value={order.assignedTo} />
       </section>
 
@@ -90,7 +90,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
           <Info label="Producto" value={order.product} />
           <Info label="Material" value={order.material} />
           <Info label="Color" value={order.color} />
-          <Info label="Tienda" value={order.store} />
+          <Info label="Empresa Cliente" value={order.store} />
           <Info label="Ingreso" value={formatDate(order.entryDate)} />
           <Info label="Condición" value={order.condition} />
         </div>

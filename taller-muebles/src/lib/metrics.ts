@@ -10,7 +10,7 @@ export function completedOrders(orders: Order[]) {
 }
 
 export function overdueOrders(orders: Order[]) {
-  return activeOrders(orders).filter((order) => daysUntil(order.deliveryDate) < 0);
+  return activeOrders(orders).filter((order) => order.deliveryDate && daysUntil(order.deliveryDate) < 0);
 }
 
 export function urgentOrders(orders: Order[]) {

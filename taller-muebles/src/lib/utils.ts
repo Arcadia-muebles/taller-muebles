@@ -5,7 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(value: string) {
+export function formatDate(value?: string | null) {
+  if (!value) return "Sin fecha estimada";
   const normalized = value.includes("T") ? value : `${value}T00:00:00`;
   return new Intl.DateTimeFormat("es-CL", {
     day: "2-digit",
@@ -37,15 +38,17 @@ export function durationLabel(start?: string, end?: string) {
   return restHours ? `${days}d ${restHours}h` : `${days}d`;
 }
 
-export function daysUntil(value: string) {
+export function daysUntil(value?: string | null) {
+  if (!value) return Number.POSITIVE_INFINITY;
   const target = new Date(`${value}T00:00:00`);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return Math.round((target.getTime() - today.getTime()) / 86400000);
 }
 
-export function deliveryLabel(value: string, completed: boolean) {
+export function deliveryLabel(value: string | undefined | null, completed: boolean) {
   if (completed) return "Listo";
+  if (!value) return "Sin fecha";
   const days = daysUntil(value);
   if (days < 0) return `Vencido ${Math.abs(days)}d`;
   if (days === 0) return "Hoy";

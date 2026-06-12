@@ -1,7 +1,7 @@
 "use client";
 
-import { CheckCircle2, ClipboardPlus, XCircle } from "lucide-react";
-import { useActionState, useRef } from "react";
+import { CheckCircle2, ClipboardPlus, Boxes, XCircle } from "lucide-react";
+import { useActionState, useRef, useState } from "react";
 import { createWorkshopOrder, type WorkshopOrderState } from "@/app/taller/actions";
 import type { Order } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
@@ -11,9 +11,29 @@ const inputClass = "control";
 
 export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order["priority"] }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [width, setWidth] = useState(0);
+  const [depth, setDepth] = useState(0);
+  const [height, setHeight] = useState(0);
+  const [material, setMaterial] = useState("");
+
+  const w = Number(width) || 0;
+  const d = Number(depth) || 0;
+  const h = Number(height) || 0;
+  const matName = material || "";
+
+  const leatherQty = w && d && h ? Math.round(((w * d * 3 + w * h * 2 + d * h * 2) / 10000) * 10) / 10 : 0;
+  const woodQty = w && d && h ? Math.max(2, Math.round((w * 2 + d * 4 + h * 4) / 100)) : 0;
+  const foamQty = w && d && h ? Math.max(1, Math.round((w * d * 2) / 10000)) : 0;
+
   const [state, action] = useActionState(async (_state: WorkshopOrderState, formData: FormData) => {
     const result = await createWorkshopOrder(_state, formData);
-    if (result.status === "success") formRef.current?.reset();
+    if (result.status === "success") {
+      formRef.current?.reset();
+      setWidth(0);
+      setDepth(0);
+      setHeight(0);
+      setMaterial("");
+    }
     return result;
   }, initialState);
 
@@ -32,7 +52,7 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Field label="Tienda">
+        <Field label="Empresa Cliente">
           <select name="store" defaultValue="LH" className={inputClass}>
             <option value="LH">Leather House</option>
             <option value="LR">La Reina</option>
@@ -48,17 +68,26 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
         <Field label="Producto" className="sm:col-span-2">
           <input name="productName" required placeholder="Ej. Sofa 3 cuerpos, respaldo alto" className={inputClass} />
         </Field>
-        <Field label="Cliente">
+        <Field label="Cliente Final">
           <input name="clientName" placeholder="Trabajo interno si queda vacio" className={inputClass} />
         </Field>
         <Field label="Entrega">
           <input name="deliveryDate" required type="date" className={inputClass} />
         </Field>
         <Field label="Material">
-          <input name="material" placeholder="Por definir" className={inputClass} />
+          <input name="material" placeholder="Por definir" className={inputClass} onChange={(e) => setMaterial(e.target.value)} />
         </Field>
         <Field label="Color">
           <input name="color" placeholder="Por definir" className={inputClass} />
+        </Field>
+        <Field label="Ancho (cm)">
+          <input name="width" required type="number" placeholder="200" className={inputClass} onChange={(e) => setWidth(Number(e.target.value))} />
+        </Field>
+        <Field label="Profundidad (cm)">
+          <input name="depth" required type="number" placeholder="90" className={inputClass} onChange={(e) => setDepth(Number(e.target.value))} />
+        </Field>
+        <Field label="Alto (cm)">
+          <input name="height" required type="number" placeholder="80" className={inputClass} onChange={(e) => setHeight(Number(e.target.value))} />
         </Field>
         <Field label="Observaciones" className="sm:col-span-2">
           <textarea
@@ -69,6 +98,29 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
           />
         </Field>
       </div>
+
+      {w > 0 && d > 0 && h > 0 ? (
+        <section className="mt-4 rounded-md border border-amber-200 bg-amber-50/30 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Boxes className="size-4 text-amber-700" />
+            <p className="text-xs font-semibold text-amber-950">Consumo Estimado de Stock</p>
+          </div>
+          <div className="grid gap-2 grid-cols-3 text-[11px] leading-4 text-stone-600 bg-white p-2 rounded border border-amber-200">
+            <div>
+              <span className="font-medium">Cuero ({matName || "Riga Honey"}):</span>
+              <p className="text-stone-900 font-bold">{leatherQty} m²</p>
+            </div>
+            <div>
+              <span className="font-medium">Madera:</span>
+              <p className="text-stone-900 font-bold">{woodQty} tablas</p>
+            </div>
+            <div>
+              <span className="font-medium">Espuma:</span>
+              <p className="text-stone-900 font-bold">{foamQty} planchas</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ActionFeedback state={state} />

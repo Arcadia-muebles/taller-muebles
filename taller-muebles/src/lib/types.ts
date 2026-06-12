@@ -54,10 +54,13 @@ export type Order = {
   priority: "normal" | "high" | "critical";
   isWarranty: boolean;
   entryDate: string;
-  deliveryDate: string;
+  deliveryDate?: string;
   assignedTo: string;
   observations: string;
   steps: ProductionStep[];
+  width?: number;
+  depth?: number;
+  height?: number;
 };
 
 export type StockItem = {

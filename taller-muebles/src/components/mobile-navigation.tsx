@@ -20,17 +20,17 @@ export function MobileNavigation({
   const canEditAdmin = user?.role === "admin";
 
   return (
-    <div className="sticky top-0 z-40 -mx-4 mb-4 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
+    <div className="sticky top-0 z-40 -mx-4 mb-4 border-b border-stone-200 bg-[#fbfaf8]/95 px-4 py-3 backdrop-blur lg:hidden">
       <div className="flex items-center justify-between">
-        <Link href={active === "admin" ? "/admin" : "/taller"} className="flex items-center gap-2">
-          <span className="grid size-8 place-items-center rounded-md bg-stone-950 text-xs font-semibold text-white">LH</span>
-          <span className="text-sm font-semibold">Control Producción</span>
+        <Link href={active === "admin" ? "/admin" : "/taller"} className="min-w-0">
+          <span className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-stone-500">Arcadia</span>
+          <span className="block truncate text-sm font-semibold text-stone-950">Produccion taller</span>
         </Link>
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
-          aria-label={open ? "Cerrar menú" : "Abrir menú"}
+          aria-label={open ? "Cerrar menu" : "Abrir menu"}
           className="grid size-10 place-items-center rounded-md border border-stone-200 bg-white text-stone-700"
         >
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -46,12 +46,12 @@ export function MobileNavigation({
               <NavLink href="/admin/reports" icon={BarChart3} label="Reportes" active={pathname.startsWith("/admin/reports")} />
               <NavLink href="/admin/history" icon={Archive} label="Historial" active={pathname.startsWith("/admin/history")} />
               {canEditAdmin ? <NavLink href="/admin/users" icon={Users} label="Usuarios" active={pathname.startsWith("/admin/users")} /> : null}
-              <NavLink href="/admin/settings" icon={Settings} label="Configuración" active={pathname.startsWith("/admin/settings")} />
+              <NavLink href="/admin/settings" icon={Settings} label="Configuracion" active={pathname.startsWith("/admin/settings")} />
             </>
           ) : null}
           <div className="mt-2 flex items-center justify-between gap-3 border-t border-stone-200 px-2 pt-3">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{user?.name ?? "Sin sesión"}</p>
+              <p className="truncate text-sm font-semibold">{user?.name ?? "Sin sesion"}</p>
               <p className="text-xs text-stone-500">{user ? roleLabels[user.role] : "Sin acceso"}</p>
             </div>
             <form action={logout}>

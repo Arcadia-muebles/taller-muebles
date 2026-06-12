@@ -31,6 +31,9 @@ const workshopOrderSchema = z.object({
   color: z.string().trim().max(60).optional(),
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ingresa una fecha valida."),
   priority: z.enum(["normal", "high", "critical"]),
+  width: z.coerce.number({ message: "Ingresa el ancho." }).int().positive("Debe ser mayor que 0."),
+  depth: z.coerce.number({ message: "Ingresa la profundidad." }).int().positive("Debe ser mayor que 0."),
+  height: z.coerce.number({ message: "Ingresa el alto." }).int().positive("Debe ser mayor que 0."),
   observations: z.string().trim().max(500).optional(),
 });
 
@@ -40,7 +43,7 @@ export async function createWorkshopOrder(
 ): Promise<WorkshopOrderState> {
   const user = await requireSession(["operator"]);
   const settings = await getSystemSettings();
-  const parsed = workshopOrderSchema.safeParse({
+    const parsed = workshopOrderSchema.safeParse({
     store: formData.get("store"),
     clientName: formData.get("clientName")?.toString() || undefined,
     productName: formData.get("productName"),
@@ -48,16 +51,17 @@ export async function createWorkshopOrder(
     color: formData.get("color")?.toString() || undefined,
     deliveryDate: formData.get("deliveryDate"),
     priority: formData.get("priority"),
+    width: formData.get("width"),
+    depth: formData.get("depth"),
+    height: formData.get("height"),
     observations: formData.get("observations")?.toString() || undefined,
-  });
-
-  if (!parsed.success) {
+  });  if (!parsed.success) {
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Revisa los datos del producto." };
   }
 
   const salesNoteNumber = `TALLER-${Date.now().toString(36).toUpperCase()}`;
   const entryDate = new Date().toISOString().slice(0, 10);
-  const input = {
+    const input = {
     store: parsed.data.store,
     salesNoteNumber,
     clientName: parsed.data.clientName || "Trabajo interno",
@@ -67,12 +71,12 @@ export async function createWorkshopOrder(
     entryDate,
     deliveryDate: parsed.data.deliveryDate,
     priority: parsed.data.priority,
-    assignedTo: user.name,
+    width: parsed.data.width,
+    depth: parsed.data.depth,
+    height: parsed.data.height,
     observations: parsed.data.observations || "Ingresado desde panel de taller.",
     isWarranty: false,
-  };
-
-  if (!hasSupabaseConfig()) {
+  };  if (!hasSupabaseConfig()) {
     const order = await createLocalOrder({
       ...input,
       steps: settings.production.steps,
@@ -92,10 +96,10 @@ export async function createWorkshopOrder(
     .eq("code", input.store)
     .single();
   if (storeError || !store) {
-    return { status: "error", message: storeError?.message ?? "No se encontro la tienda seleccionada." };
+    return { status: "error", message: storeError?.message ?? "No se encontró la empresa cliente seleccionada." };
   }
 
-  const { data: order, error: orderError } = await supabase
+    const { data: order, error: orderError } = await supabase
     .from("orders")
     .insert({
       store_id: store.id,
@@ -112,12 +116,14 @@ export async function createWorkshopOrder(
       entry_date: input.entryDate,
       delivery_date: input.deliveryDate,
       observations: input.observations,
-      assigned_to: profileId,
+      assigned_to: null,
       created_by: profileId,
+      width: input.width,
+      depth: input.depth,
+      height: input.height,
     })
     .select("id")
-    .single();
-  if (orderError || !order) return { status: "error", message: orderError?.message ?? "No se pudo ingresar el producto." };
+    .single(); if (orderError || !order) return { status: "error", message: orderError?.message ?? "No se pudo ingresar el producto." };
 
   const enabledSteps = settings.production.steps.filter((step) => step.enabled);
   const operatorByArea = operatorMapByArea(await listUsers());
@@ -146,6 +152,18 @@ export async function createWorkshopOrder(
     profile_id: profileId,
     new_value: input.salesNoteNumber,
   });
+
+    // Auto-deduct stock
+  try {
+    await deductSupabaseStockForOrder(supabase, order.id, input.salesNoteNumber, {
+      material: input.material,
+      width: input.width,
+      depth: input.depth,
+      height: input.height,
+    });
+  } catch (err) {
+    console.error("Failed to automatically deduct stock in Supabase:", err);
+  }
 
   revalidatePath("/admin");
   revalidatePath("/taller");
@@ -363,4 +381,65 @@ function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
     }
   }
   return map;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+async function deductSupabaseStockForOrder(
+  supabase: any,
+  orderId: string,
+  orderCode: string,
+  input: {
+    material: string;
+    width: number;
+    depth: number;
+    height: number;
+  }
+) {
+  const { material, width, depth, height } = input;
+  const leatherQty = Math.round(((width * depth * 3 + width * height * 2 + depth * height * 2) / 10000) * 10) / 10;
+  const woodQty = Math.max(2, Math.round((width * 2 + depth * 4 + height * 4) / 100));
+  const foamQty = Math.max(1, Math.round((width * depth * 2) / 10000));
+
+  const { data: materials } = await supabase.from("materials").select("*").eq("active", true);
+  if (!materials) return;
+
+  // 1. Deduct Leather
+  const leatherItem = materials.find((item: any) => 
+    item.category.toLowerCase() === "cuero" && 
+    (item.name.toLowerCase().includes(material.toLowerCase()) || material.toLowerCase().includes(item.name.toLowerCase()))
+  ) || materials.find((item: any) => item.category.toLowerCase() === "cuero");
+
+  if (leatherItem) {
+    await supabase.rpc("record_stock_movement", {
+      p_material_id: leatherItem.id,
+      p_movement_type: "out",
+      p_quantity: leatherQty,
+      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
+      p_order_id: orderId,
+    });
+  }
+
+  // 2. Deduct Wood
+  const woodItem = materials.find((item: any) => item.category.toLowerCase() === "estructura") || materials.find((item: any) => item.name.toLowerCase().includes("madera"));
+  if (woodItem) {
+    await supabase.rpc("record_stock_movement", {
+      p_material_id: woodItem.id,
+      p_movement_type: "out",
+      p_quantity: woodQty,
+      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
+      p_order_id: orderId,
+    });
+  }
+
+  // 3. Deduct Foam
+  const foamItem = materials.find((item: any) => item.category.toLowerCase() === "relleno") || materials.find((item: any) => item.name.toLowerCase().includes("espuma"));
+  if (foamItem) {
+    await supabase.rpc("record_stock_movement", {
+      p_material_id: foamItem.id,
+      p_movement_type: "out",
+      p_quantity: foamQty,
+      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
+      p_order_id: orderId,
+    });
+  }
 }

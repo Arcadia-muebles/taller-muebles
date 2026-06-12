@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -244,6 +244,9 @@ export type Database = {
           status: Database["public"]["Enums"]["order_status"]
           store_id: string
           updated_at: string
+          width: number | null
+          depth: number | null
+          height: number | null
         }
         Insert: {
           assigned_to?: string | null
@@ -266,6 +269,9 @@ export type Database = {
           status?: Database["public"]["Enums"]["order_status"]
           store_id: string
           updated_at?: string
+          width?: number | null
+          depth?: number | null
+          height?: number | null
         }
         Update: {
           assigned_to?: string | null
@@ -288,6 +294,9 @@ export type Database = {
           status?: Database["public"]["Enums"]["order_status"]
           store_id?: string
           updated_at?: string
+          width?: number | null
+          depth?: number | null
+          height?: number | null
         }
         Relationships: [
           {
