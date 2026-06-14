@@ -1,12 +1,13 @@
 import { AppShell } from "@/components/app-shell";
 import { OrderForm } from "@/components/order-form";
 import { requireSession } from "@/lib/auth";
+import { listStockItems } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { redirect } from "next/navigation";
 
 export default async function NewOrderPage() {
   const user = await requireSession(["admin", "manager"]);
-  const settings = await getSystemSettings();
+  const [settings, stockItems] = await Promise.all([getSystemSettings(), listStockItems()]);
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) redirect("/admin");
 
   return (
@@ -25,7 +26,7 @@ export default async function NewOrderPage() {
       </header>
 
       <div className="mt-5 max-w-5xl">
-        <OrderForm />
+        <OrderForm stockItems={stockItems} />
       </div>
     </AppShell>
   );

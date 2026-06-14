@@ -1,7 +1,7 @@
 "use client";
 
-import { CheckCircle2, ClipboardPlus, Boxes, XCircle } from "lucide-react";
-import { useActionState, useRef, useState } from "react";
+import { CheckCircle2, ClipboardPlus, XCircle } from "lucide-react";
+import { useActionState, useRef } from "react";
 import { createWorkshopOrder, type WorkshopOrderState } from "@/app/taller/actions";
 import type { Order } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
@@ -11,29 +11,9 @@ const inputClass = "control";
 
 export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order["priority"] }) {
   const formRef = useRef<HTMLFormElement>(null);
-  const [width, setWidth] = useState(0);
-  const [depth, setDepth] = useState(0);
-  const [height, setHeight] = useState(0);
-  const [material, setMaterial] = useState("");
-
-  const w = Number(width) || 0;
-  const d = Number(depth) || 0;
-  const h = Number(height) || 0;
-  const matName = material || "";
-
-  const leatherQty = w && d && h ? Math.round(((w * d * 3 + w * h * 2 + d * h * 2) / 10000) * 10) / 10 : 0;
-  const woodQty = w && d && h ? Math.max(2, Math.round((w * 2 + d * 4 + h * 4) / 100)) : 0;
-  const foamQty = w && d && h ? Math.max(1, Math.round((w * d * 2) / 10000)) : 0;
-
   const [state, action] = useActionState(async (_state: WorkshopOrderState, formData: FormData) => {
     const result = await createWorkshopOrder(_state, formData);
-    if (result.status === "success") {
-      formRef.current?.reset();
-      setWidth(0);
-      setDepth(0);
-      setHeight(0);
-      setMaterial("");
-    }
+    if (result.status === "success") formRef.current?.reset();
     return result;
   }, initialState);
 
@@ -62,7 +42,7 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
           <select name="priority" defaultValue={defaultPriority} className={inputClass}>
             <option value="normal">Normal</option>
             <option value="high">Alta</option>
-            <option value="critical">Crítica</option>
+            <option value="critical">Critica</option>
           </select>
         </Field>
         <Field label="Producto" className="sm:col-span-2">
@@ -75,19 +55,19 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
           <input name="deliveryDate" required type="date" className={inputClass} />
         </Field>
         <Field label="Material">
-          <input name="material" placeholder="Por definir" className={inputClass} onChange={(e) => setMaterial(e.target.value)} />
+          <input name="material" placeholder="Por definir" className={inputClass} />
         </Field>
         <Field label="Color">
           <input name="color" placeholder="Por definir" className={inputClass} />
         </Field>
         <Field label="Ancho (cm)">
-          <input name="width" required type="number" placeholder="200" className={inputClass} onChange={(e) => setWidth(Number(e.target.value))} />
+          <input name="width" required type="number" placeholder="200" className={inputClass} />
         </Field>
         <Field label="Profundidad (cm)">
-          <input name="depth" required type="number" placeholder="90" className={inputClass} onChange={(e) => setDepth(Number(e.target.value))} />
+          <input name="depth" required type="number" placeholder="90" className={inputClass} />
         </Field>
         <Field label="Alto (cm)">
-          <input name="height" required type="number" placeholder="80" className={inputClass} onChange={(e) => setHeight(Number(e.target.value))} />
+          <input name="height" required type="number" placeholder="80" className={inputClass} />
         </Field>
         <Field label="Observaciones" className="sm:col-span-2">
           <textarea
@@ -99,28 +79,9 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
         </Field>
       </div>
 
-      {w > 0 && d > 0 && h > 0 ? (
-        <section className="mt-4 rounded-md border border-amber-200 bg-amber-50/30 p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Boxes className="size-4 text-amber-700" />
-            <p className="text-xs font-semibold text-amber-950">Consumo Estimado de Stock</p>
-          </div>
-          <div className="grid gap-2 grid-cols-3 text-[11px] leading-4 text-stone-600 bg-white p-2 rounded border border-amber-200">
-            <div>
-              <span className="font-medium">Cuero ({matName || "Riga Honey"}):</span>
-              <p className="text-stone-900 font-bold">{leatherQty} m²</p>
-            </div>
-            <div>
-              <span className="font-medium">Madera:</span>
-              <p className="text-stone-900 font-bold">{woodQty} tablas</p>
-            </div>
-            <div>
-              <span className="font-medium">Espuma:</span>
-              <p className="text-stone-900 font-bold">{foamQty} planchas</p>
-            </div>
-          </div>
-        </section>
-      ) : null}
+      <p className="mt-4 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-600">
+        Este ingreso no descuenta stock automaticamente. El consumo por dimension quedara disponible cuando existan reglas confirmadas para cada producto y material.
+      </p>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ActionFeedback state={state} />
@@ -143,7 +104,7 @@ function Field({ label, className, children }: { label: string; className?: stri
 }
 
 function ActionFeedback({ state }: { state: WorkshopOrderState }) {
-  if (!state.message) return <p className="text-xs text-stone-400">El código se genera automáticamente.</p>;
+  if (!state.message) return <p className="text-xs text-stone-400">El codigo se genera automaticamente.</p>;
   const ok = state.status === "success";
   const Icon = ok ? CheckCircle2 : XCircle;
   return (

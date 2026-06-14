@@ -5,9 +5,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, updateLocalOrder } from "@/lib/local-store";
+import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, createLocalStockMovement, moveLocalOrderToStep, updateLocalOrder } from "@/lib/local-store";
 import { createClient } from "@/lib/supabase/server";
-import { listOrders, listUsers } from "@/lib/repositories/production";
+import { listOrders, listStockItems, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
 
@@ -23,6 +23,18 @@ export type MoveOrderStageResult = {
 };
 
 const maxAttachmentSize = 10 * 1024 * 1024;
+
+type ConsumptionLine = {
+  materialId: string;
+  quantity: number;
+  notes?: string;
+};
+
+const consumptionLineSchema = z.object({
+  materialId: z.string().trim().min(1),
+  quantity: z.coerce.number().positive("Ingresa una cantidad mayor que 0."),
+  notes: z.string().trim().max(300).optional(),
+});
 
 export async function createOrder(
   _prevState: CreateOrderState,
@@ -56,26 +68,36 @@ export async function createOrder(
   const ruleError = await validateOrderRules(parsed.data, settings);
   if (ruleError) return { status: "error", message: ruleError };
 
+  const consumption = parseConsumptionLines(formData);
+  if (!consumption.ok) return { status: "error", message: consumption.message };
+  const stockError = await validateConsumptionAvailability(consumption.lines);
+  if (stockError) return { status: "error", message: stockError };
+
   if (!hasSupabaseConfig()) {
     const order = await createLocalOrder({
       ...parsed.data,
       clientName: clientNameFromStore(parsed.data.store),
       steps: settings.production.steps,
     });
+    const consumptionError = await applyLocalOrderConsumption(order.id, order.code, consumption.lines);
+    if (consumptionError) return { status: "error", message: consumptionError, orderId: order.id };
     const attachmentResult = await saveInitialAttachment({
       formData,
       orderId: order.id,
       profileId: null,
     });
     revalidatePath("/admin");
+    revalidatePath("/admin/stock");
     revalidatePath("/taller");
     revalidatePath(`/admin/orders/${order.id}`);
 
     return {
       status: "success",
-      message: attachmentResult.message
-        ? `Orden creada en almacenamiento local. ${attachmentResult.message}`
-        : "Orden creada en almacenamiento local.",
+      message: [
+        "Orden creada en almacenamiento local.",
+        consumption.lines.length ? "Stock descontado." : "",
+        attachmentResult.message,
+      ].filter(Boolean).join(" "),
       orderId: order.id,
     };
   }
@@ -164,27 +186,21 @@ export async function createOrder(
     supabase,
   });
 
-    // Auto-deduct stock
-  try {
-    await deductSupabaseStockForOrder(supabase, order.id, parsed.data.salesNoteNumber, {
-      material: parsed.data.material,
-      width: parsed.data.width,
-      depth: parsed.data.depth,
-      height: parsed.data.height,
-    });
-  } catch (err) {
-    console.error("Failed to automatically deduct stock in Supabase:", err);
-  }
+  const consumptionError = await applySupabaseOrderConsumption(supabase, order.id, parsed.data.salesNoteNumber, consumption.lines);
+  if (consumptionError) return { status: "error", message: consumptionError, orderId: order.id };
 
   revalidatePath("/admin");
+  revalidatePath("/admin/stock");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${order.id}`);
 
   return {
     status: "success",
-    message: attachmentResult.message
-      ? `Orden creada y etapas productivas generadas. ${attachmentResult.message}`
-      : "Orden creada y etapas productivas generadas.",
+    message: [
+      "Orden creada y etapas productivas generadas.",
+      consumption.lines.length ? "Stock descontado." : "",
+      attachmentResult.message,
+    ].filter(Boolean).join(" "),
     orderId: order.id,
   };
 }
@@ -380,8 +396,8 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
             }
           : index === targetIndex
             ? {
-                status: "pending" as const,
-                started_at: null,
+                status: "active" as const,
+                started_at: now,
                 completed_at: null,
                 blocked_reason: null,
                 notes: null,
@@ -433,6 +449,91 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${parsed.data.orderId}`);
   return { ok: true, message: "Orden movida." };
+}
+
+function parseConsumptionLines(formData: FormData): { ok: true; lines: ConsumptionLine[] } | { ok: false; message: string } {
+  const materialIds = formData.getAll("consumptionMaterialId").map((value) => value.toString().trim());
+  const quantities = formData.getAll("consumptionQuantity").map((value) => value.toString().trim());
+  const notes = formData.getAll("consumptionNotes").map((value) => value.toString().trim());
+  const lines: ConsumptionLine[] = [];
+
+  for (let index = 0; index < Math.max(materialIds.length, quantities.length, notes.length); index += 1) {
+    const materialId = materialIds[index] ?? "";
+    const quantity = quantities[index] ?? "";
+    const note = notes[index] ?? "";
+    if (!materialId && !quantity && !note) continue;
+    if (!materialId && !quantity) continue;
+
+    const parsed = consumptionLineSchema.safeParse({
+      materialId,
+      quantity,
+      notes: note || undefined,
+    });
+    if (!parsed.success) {
+      return { ok: false, message: `Revisa el material a descontar en la linea ${index + 1}. ${formatZodError(parsed.error)}` };
+    }
+    lines.push(parsed.data);
+  }
+
+  return { ok: true, lines };
+}
+
+async function validateConsumptionAvailability(lines: ConsumptionLine[]) {
+  if (!lines.length) return null;
+  const stockItems = await listStockItems();
+  const stockById = new Map(stockItems.map((item) => [item.id, item]));
+  const totals = new Map<string, number>();
+
+  for (const line of lines) {
+    totals.set(line.materialId, (totals.get(line.materialId) ?? 0) + line.quantity);
+  }
+
+  for (const [materialId, quantity] of totals.entries()) {
+    const item = stockById.get(materialId);
+    if (!item) return "Uno de los materiales a descontar ya no existe o no esta activo.";
+    if (quantity > item.available) {
+      return `Stock insuficiente para ${item.name}. Disponible: ${item.available} ${item.unit}. Requerido: ${quantity} ${item.unit}.`;
+    }
+  }
+
+  return null;
+}
+
+async function applyLocalOrderConsumption(orderId: string, orderCode: string, lines: ConsumptionLine[]) {
+  for (const line of lines) {
+    const ok = await createLocalStockMovement({
+      materialId: line.materialId,
+      type: "out",
+      quantity: line.quantity,
+      notes: consumptionNote(orderCode, line),
+      orderId,
+    });
+    if (!ok) return "La orden se creo, pero no fue posible descontar uno de los materiales.";
+  }
+  return null;
+}
+
+async function applySupabaseOrderConsumption(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orderId: string,
+  orderCode: string,
+  lines: ConsumptionLine[],
+) {
+  for (const line of lines) {
+    const { error } = await supabase.rpc("record_stock_movement", {
+      p_material_id: line.materialId,
+      p_movement_type: "out",
+      p_quantity: line.quantity,
+      p_notes: consumptionNote(orderCode, line),
+      p_order_id: orderId,
+    });
+    if (error) return `La orden se creo, pero no fue posible descontar stock: ${error.message}`;
+  }
+  return null;
+}
+
+function consumptionNote(orderCode: string, line: ConsumptionLine) {
+  return [`Consumo orden ${orderCode}`, line.notes].filter(Boolean).join(" - ");
 }
 
 function formatZodError(error: z.ZodError) {
@@ -535,65 +636,4 @@ function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
     }
   }
   return map;
-}
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-async function deductSupabaseStockForOrder(
-  supabase: any,
-  orderId: string,
-  orderCode: string,
-  input: {
-    material: string;
-    width: number;
-    depth: number;
-    height: number;
-  }
-) {
-  const { material, width, depth, height } = input;
-  const leatherQty = Math.round(((width * depth * 3 + width * height * 2 + depth * height * 2) / 10000) * 10) / 10;
-  const woodQty = Math.max(2, Math.round((width * 2 + depth * 4 + height * 4) / 100));
-  const foamQty = Math.max(1, Math.round((width * depth * 2) / 10000));
-
-  const { data: materials } = await supabase.from("materials").select("*").eq("active", true);
-  if (!materials) return;
-
-  // 1. Deduct Leather
-  const leatherItem = materials.find((item: any) => 
-    item.category.toLowerCase() === "cuero" && 
-    (item.name.toLowerCase().includes(material.toLowerCase()) || material.toLowerCase().includes(item.name.toLowerCase()))
-  ) || materials.find((item: any) => item.category.toLowerCase() === "cuero");
-
-  if (leatherItem) {
-    await supabase.rpc("record_stock_movement", {
-      p_material_id: leatherItem.id,
-      p_movement_type: "out",
-      p_quantity: leatherQty,
-      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
-      p_order_id: orderId,
-    });
-  }
-
-  // 2. Deduct Wood
-  const woodItem = materials.find((item: any) => item.category.toLowerCase() === "estructura") || materials.find((item: any) => item.name.toLowerCase().includes("madera"));
-  if (woodItem) {
-    await supabase.rpc("record_stock_movement", {
-      p_material_id: woodItem.id,
-      p_movement_type: "out",
-      p_quantity: woodQty,
-      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
-      p_order_id: orderId,
-    });
-  }
-
-  // 3. Deduct Foam
-  const foamItem = materials.find((item: any) => item.category.toLowerCase() === "relleno") || materials.find((item: any) => item.name.toLowerCase().includes("espuma"));
-  if (foamItem) {
-    await supabase.rpc("record_stock_movement", {
-      p_material_id: foamItem.id,
-      p_movement_type: "out",
-      p_quantity: foamQty,
-      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
-      p_order_id: orderId,
-    });
-  }
 }

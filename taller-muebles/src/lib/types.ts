@@ -78,6 +78,7 @@ export type StockMovement = {
   id: string;
   materialId: string;
   materialName: string;
+  orderId?: string;
   type: "in" | "out" | "adjustment";
   quantity: number;
   notes: string;

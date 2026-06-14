@@ -30,7 +30,6 @@ export function AppShell({ active, user, children }: AppShellProps) {
           </div>
           <div className="mt-3">
             <p className="text-[15px] font-semibold leading-tight text-stone-950">Produccion taller</p>
-            <p className="mt-1 text-xs leading-5 text-stone-500">Leather House / La Reina</p>
           </div>
         </div>
 

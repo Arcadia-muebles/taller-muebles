@@ -153,18 +153,6 @@ export async function createWorkshopOrder(
     new_value: input.salesNoteNumber,
   });
 
-    // Auto-deduct stock
-  try {
-    await deductSupabaseStockForOrder(supabase, order.id, input.salesNoteNumber, {
-      material: input.material,
-      width: input.width,
-      depth: input.depth,
-      height: input.height,
-    });
-  } catch (err) {
-    console.error("Failed to automatically deduct stock in Supabase:", err);
-  }
-
   revalidatePath("/admin");
   revalidatePath("/taller");
   return { status: "success", message: "Producto ingresado al flujo de taller.", orderId: order.id };
@@ -381,65 +369,4 @@ function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
     }
   }
   return map;
-}
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-async function deductSupabaseStockForOrder(
-  supabase: any,
-  orderId: string,
-  orderCode: string,
-  input: {
-    material: string;
-    width: number;
-    depth: number;
-    height: number;
-  }
-) {
-  const { material, width, depth, height } = input;
-  const leatherQty = Math.round(((width * depth * 3 + width * height * 2 + depth * height * 2) / 10000) * 10) / 10;
-  const woodQty = Math.max(2, Math.round((width * 2 + depth * 4 + height * 4) / 100));
-  const foamQty = Math.max(1, Math.round((width * depth * 2) / 10000));
-
-  const { data: materials } = await supabase.from("materials").select("*").eq("active", true);
-  if (!materials) return;
-
-  // 1. Deduct Leather
-  const leatherItem = materials.find((item: any) => 
-    item.category.toLowerCase() === "cuero" && 
-    (item.name.toLowerCase().includes(material.toLowerCase()) || material.toLowerCase().includes(item.name.toLowerCase()))
-  ) || materials.find((item: any) => item.category.toLowerCase() === "cuero");
-
-  if (leatherItem) {
-    await supabase.rpc("record_stock_movement", {
-      p_material_id: leatherItem.id,
-      p_movement_type: "out",
-      p_quantity: leatherQty,
-      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
-      p_order_id: orderId,
-    });
-  }
-
-  // 2. Deduct Wood
-  const woodItem = materials.find((item: any) => item.category.toLowerCase() === "estructura") || materials.find((item: any) => item.name.toLowerCase().includes("madera"));
-  if (woodItem) {
-    await supabase.rpc("record_stock_movement", {
-      p_material_id: woodItem.id,
-      p_movement_type: "out",
-      p_quantity: woodQty,
-      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
-      p_order_id: orderId,
-    });
-  }
-
-  // 3. Deduct Foam
-  const foamItem = materials.find((item: any) => item.category.toLowerCase() === "relleno") || materials.find((item: any) => item.name.toLowerCase().includes("espuma"));
-  if (foamItem) {
-    await supabase.rpc("record_stock_movement", {
-      p_material_id: foamItem.id,
-      p_movement_type: "out",
-      p_quantity: foamQty,
-      p_notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
-      p_order_id: orderId,
-    });
-  }
 }

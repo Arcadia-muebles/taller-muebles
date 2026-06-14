@@ -165,57 +165,6 @@ export async function getLocalOrder(id: string) {
   return (await readData()).orders.find((order) => order.id === id);
 }
 
-async function deductStockForOrder(orderId: string, orderCode: string, input: {
-  material: string;
-  width: number;
-  depth: number;
-  height: number;
-}) {
-  const { material, width, depth, height } = input;
-  const leatherQty = Math.round(((width * depth * 3 + width * height * 2 + depth * height * 2) / 10000) * 10) / 10;
-  const woodQty = Math.max(2, Math.round((width * 2 + depth * 4 + height * 4) / 100));
-  const foamQty = Math.max(1, Math.round((width * depth * 2) / 10000));
-
-  const items = await listLocalStockItems();
-  
-  // 1. Deduct Leather
-  const leatherItem = items.find((item) => 
-    item.category.toLowerCase() === "cuero" && 
-    (item.name.toLowerCase().includes(material.toLowerCase()) || material.toLowerCase().includes(item.name.toLowerCase()))
-  ) || items.find((item) => item.category.toLowerCase() === "cuero");
-
-  if (leatherItem) {
-    await createLocalStockMovement({
-      materialId: leatherItem.id,
-      type: "out",
-      quantity: leatherQty,
-      notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
-    });
-  }
-
-  // 2. Deduct Wood
-  const woodItem = items.find((item) => item.category.toLowerCase() === "estructura") || items.find((item) => item.name.toLowerCase().includes("madera"));
-  if (woodItem) {
-    await createLocalStockMovement({
-      materialId: woodItem.id,
-      type: "out",
-      quantity: woodQty,
-      notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
-    });
-  }
-
-  // 3. Deduct Foam
-  const foamItem = items.find((item) => item.category.toLowerCase() === "relleno") || items.find((item) => item.name.toLowerCase().includes("espuma"));
-  if (foamItem) {
-    await createLocalStockMovement({
-      materialId: foamItem.id,
-      type: "out",
-      quantity: foamQty,
-      notes: `Consumo automático orden ${orderCode} (${width}x${depth}x${height})`,
-    });
-  }
-}
-
 export async function createLocalOrder(input: {
   store: Order["store"];
   salesNoteNumber: string;
@@ -275,18 +224,6 @@ export async function createLocalOrder(input: {
   data.orders.unshift(order);
   addAudit(data, order.id, "create_order", `Orden ${order.code} creada con dimensiones ${input.width}x${input.depth}x${input.height}`);
   await writeData(data);
-
-  // Auto-deduct stock
-  try {
-    await deductStockForOrder(id, order.code, {
-      material: input.material,
-      width: input.width,
-      depth: input.depth,
-      height: input.height,
-    });
-  } catch (err) {
-    console.error("Failed to automatically deduct stock:", err);
-  }
 
   return order;
 }
@@ -421,8 +358,8 @@ export async function moveLocalOrderToStep(input: {
     if (index === targetIndex) {
       return {
         ...step,
-        status: "pending",
-        startedAt: undefined,
+        status: "active",
+        startedAt: now,
         completedAt: undefined,
         notes: undefined,
       };
@@ -538,6 +475,7 @@ export async function createLocalStockMovement(input: {
   type: StockMovement["type"];
   quantity: number;
   notes: string;
+  orderId?: string;
 }) {
   const data = await readData();
   const item = data.stockItems.find((stockItem) => stockItem.id === input.materialId);
@@ -556,6 +494,7 @@ export async function createLocalStockMovement(input: {
     id: crypto.randomUUID(),
     materialId: item.id,
     materialName: item.name,
+    orderId: input.orderId,
     type: input.type,
     quantity: input.quantity,
     notes: input.notes,

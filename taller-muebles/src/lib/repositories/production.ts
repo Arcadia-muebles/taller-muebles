@@ -131,7 +131,7 @@ export async function listStockMovements(): Promise<StockMovement[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("stock_movements")
-    .select("id, material_id, movement_type, quantity, notes, created_at, materials(name)")
+    .select("id, material_id, order_id, movement_type, quantity, notes, created_at, materials(name)")
     .order("created_at", { ascending: false })
     .limit(20);
 
@@ -140,6 +140,7 @@ export async function listStockMovements(): Promise<StockMovement[]> {
   return (data as unknown as Array<{
     id: string;
     material_id: string;
+    order_id: string | null;
     movement_type: StockMovement["type"];
     quantity: number;
     notes: string | null;
@@ -149,6 +150,7 @@ export async function listStockMovements(): Promise<StockMovement[]> {
     id: movement.id,
     materialId: movement.material_id,
     materialName: movement.materials?.name ?? "Material",
+    orderId: movement.order_id ?? undefined,
     type: movement.movement_type,
     quantity: Number(movement.quantity),
     notes: movement.notes ?? "Sin nota",

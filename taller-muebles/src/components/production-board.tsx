@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { moveOrderStage } from "@/app/admin/orders/actions";
 import type { AreaKey, Order, ProductionStep, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, durationLabel, formatDate } from "@/lib/utils";
@@ -31,14 +31,24 @@ type Feedback = {
   message: string;
 };
 
+type TouchDrag = {
+  orderId: string;
+  startX: number;
+  startY: number;
+  moved: boolean;
+};
+
 export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps) {
   const enabledSteps = steps.filter((step) => step.enabled);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeStepTab, setActiveStepTab] = useState<AreaKey>(enabledSteps[0]?.key);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverStep, setHoverStep] = useState<AreaKey | null>(null);
+  const [touchDrag, setTouchDrag] = useState<TouchDrag | null>(null);
   const [stageOverrides, setStageOverrides] = useState<Record<string, AreaKey>>({});
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const touchDragRef = useRef<TouchDrag | null>(null);
+  const suppressSelectRef = useRef<string | null>(null);
   const [, startTransition] = useTransition();
 
   const boardOrders = useMemo(
@@ -72,6 +82,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
     const current = order ? currentStep(order) : undefined;
     if (!order || current?.key === stepKey || !canMove) return;
 
+    setActiveStepTab(stepKey);
     setStageOverrides((currentOverrides) => ({ ...currentOverrides, [orderId]: stepKey }));
     setFeedback(null);
     startTransition(async () => {
@@ -87,6 +98,61 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
       }
       setFeedback({ tone: "success", message: "Orden movida." });
     });
+  }
+
+  function stepFromPoint(clientX: number, clientY: number) {
+    const element = document.elementFromPoint(clientX, clientY);
+    const target = element?.closest<HTMLElement>("[data-mobile-step-drop]");
+    return target?.dataset.mobileStepDrop ?? null;
+  }
+
+  function onMobilePointerDown(event: React.PointerEvent<HTMLElement>, orderId: string) {
+    if (!canMove || event.pointerType === "mouse") return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const nextDrag = {
+      orderId,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    };
+    touchDragRef.current = nextDrag;
+    setTouchDrag(nextDrag);
+    setDraggingId(orderId);
+    setFeedback(null);
+  }
+
+  function onMobilePointerMove(event: React.PointerEvent<HTMLElement>, orderId: string) {
+    const currentDrag = touchDragRef.current;
+    if (!currentDrag || currentDrag.orderId !== orderId) return;
+
+    const moved = currentDrag.moved || Math.abs(event.clientX - currentDrag.startX) + Math.abs(event.clientY - currentDrag.startY) > 10;
+    const nextHover = stepFromPoint(event.clientX, event.clientY);
+    setHoverStep(nextHover);
+    if (moved) event.preventDefault();
+    if (moved !== currentDrag.moved) {
+      const nextDrag = { ...currentDrag, moved };
+      touchDragRef.current = nextDrag;
+      setTouchDrag(nextDrag);
+    }
+  }
+
+  function onMobilePointerUp(event: React.PointerEvent<HTMLElement>, orderId: string) {
+    const currentDrag = touchDragRef.current;
+    if (!currentDrag || currentDrag.orderId !== orderId) return;
+
+    const targetStep = stepFromPoint(event.clientX, event.clientY) ?? hoverStep;
+    finishMobileDrop(orderId, targetStep, currentDrag.moved);
+  }
+
+  function finishMobileDrop(orderId: string, targetStep: AreaKey | null, moved: boolean) {
+    touchDragRef.current = null;
+    setTouchDrag(null);
+    setDraggingId(null);
+    setHoverStep(null);
+
+    if (!moved) return;
+    suppressSelectRef.current = orderId;
+    if (targetStep) move(orderId, targetStep);
   }
 
   return (
@@ -118,6 +184,11 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
 
         <div className="p-4">
           {/* Selector de etapas en móvil */}
+          {canMove ? (
+            <p className="mb-2 text-xs font-medium text-stone-500 lg:hidden">
+              {draggingId ? "Suelta la tarjeta dentro de la pila destino." : "En movil, arrastra una tarjeta hacia la pila de otra etapa."}
+            </p>
+          ) : null}
           <div className="flex gap-2 overflow-x-auto pb-3 mb-4 lg:hidden scrollbar-none snap-x -mx-4 px-4">
             {enabledSteps.map((step) => {
               const columnOrders = grouped.get(step.key) ?? [];
@@ -126,10 +197,19 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                 <button
                   key={step.key}
                   type="button"
+                  data-mobile-step-drop={step.key}
                   onClick={() => setActiveStepTab(step.key)}
+                  onPointerUp={(event) => {
+                    const currentDrag = touchDragRef.current;
+                    if (!currentDrag?.moved) return;
+                    event.preventDefault();
+                    finishMobileDrop(currentDrag.orderId, step.key, true);
+                  }}
                   className={cn(
                     "flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold shrink-0 transition snap-center border select-none",
-                    isActive
+                    hoverStep === step.key
+                      ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
+                      : isActive
                       ? "bg-stone-950 border-stone-950 text-white shadow-sm"
                       : "bg-white border-stone-200 text-stone-600 hover:border-stone-300"
                   )}
@@ -137,7 +217,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                   <span>{step.label}</span>
                   <span className={cn(
                     "rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
-                    isActive ? "bg-white/20 text-white" : "bg-stone-100 text-stone-500"
+                    hoverStep === step.key || isActive ? "bg-white/20 text-white" : "bg-stone-100 text-stone-500"
                   )}>
                     {columnOrders.length}
                   </span>
@@ -147,7 +227,10 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
           </div>
 
           <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0">
-            <div className="flex flex-col lg:flex-row gap-4">
+            <div
+              className="flex flex-col gap-4 lg:grid"
+              style={{ gridTemplateColumns: `repeat(${Math.max(enabledSteps.length, 1)}, minmax(0, 1fr))` }}
+            >
               {enabledSteps.map((step) => {
                 const columnOrders = grouped.get(step.key) ?? [];
                 const isHover = hoverStep === step.key;
@@ -155,6 +238,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                 return (
                   <section
                     key={step.key}
+                    data-mobile-step-drop={step.key}
                     onDragOver={(event) => {
                       if (!canMove) return;
                       event.preventDefault();
@@ -169,10 +253,10 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                       if (orderId) move(orderId, step.key);
                     }}
                     className={cn(
-                      "flex flex-col rounded-lg border bg-stone-50 min-h-[400px] lg:min-h-[620px] transition-all",
+                      "min-w-0 flex flex-col rounded-lg border bg-stone-50 min-h-[220px] lg:min-h-[620px] transition-all",
                       isHover ? "border-stone-950 bg-white" : "border-stone-200",
-                      "w-full lg:w-[270px] xl:w-72 shrink-0",
-                      isActiveTab ? "flex" : "hidden lg:flex"
+                      "w-full",
+                      "flex"
                     )}
                   >
                     <header className="border-b border-stone-200 px-3.5 py-3">
@@ -194,7 +278,13 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                             selected={selectedId === order.id}
                             dragging={draggingId === order.id}
                             draggable={canMove}
-                            onSelect={() => setSelectedId(order.id)}
+                            onSelect={() => {
+                              if (suppressSelectRef.current === order.id) {
+                                suppressSelectRef.current = null;
+                                return;
+                              }
+                              setSelectedId(order.id);
+                            }}
                             onDragStart={(event) => {
                               if (!canMove) return;
                               setDraggingId(order.id);
@@ -202,6 +292,15 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                               event.dataTransfer.effectAllowed = "move";
                             }}
                             onDragEnd={() => {
+                              setDraggingId(null);
+                              setHoverStep(null);
+                            }}
+                            onPointerDown={(event) => onMobilePointerDown(event, order.id)}
+                            onPointerMove={(event) => onMobilePointerMove(event, order.id)}
+                            onPointerUp={(event) => onMobilePointerUp(event, order.id)}
+                            onPointerCancel={() => {
+                              touchDragRef.current = null;
+                              setTouchDrag(null);
                               setDraggingId(null);
                               setHoverStep(null);
                             }}
@@ -238,6 +337,10 @@ function ProductCard({
   onSelect,
   onDragStart,
   onDragEnd,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
 }: {
   order: Order;
   step?: ProductionStep;
@@ -247,6 +350,10 @@ function ProductCard({
   onSelect: () => void;
   onDragStart: React.DragEventHandler<HTMLElement>;
   onDragEnd: React.DragEventHandler<HTMLElement>;
+  onPointerDown: React.PointerEventHandler<HTMLElement>;
+  onPointerMove: React.PointerEventHandler<HTMLElement>;
+  onPointerUp: React.PointerEventHandler<HTMLElement>;
+  onPointerCancel: React.PointerEventHandler<HTMLElement>;
 }) {
   const days = daysUntil(order.deliveryDate);
   const isLate = days < 0;
@@ -260,8 +367,12 @@ function ProductCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onSelect}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       className={cn(
-        "cursor-pointer rounded-lg border bg-white p-2.5 transition text-left select-none relative group",
+        "cursor-pointer touch-none rounded-lg border bg-white p-2.5 transition text-left select-none relative group",
         selected
           ? "border-stone-950 shadow-md ring-1 ring-stone-950"
           : "border-stone-200 hover:border-stone-400 hover:shadow-sm",
@@ -445,7 +556,7 @@ function orderWithStage(order: Order, stepKey: AreaKey): Order {
     ...order,
     steps: order.steps.map((step, index) => {
       if (index < targetIndex) return { ...step, status: "done" };
-      if (index === targetIndex) return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
+      if (index === targetIndex) return { ...step, status: "active", completedAt: undefined };
       return { ...step, status: "pending" };
     }),
   };

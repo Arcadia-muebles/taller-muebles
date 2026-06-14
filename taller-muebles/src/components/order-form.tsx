@@ -1,11 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Boxes, CalendarDays, CheckCircle2, FileText, Paperclip, Save, XCircle } from "lucide-react";
+import { ArrowLeft, Boxes, CalendarDays, CheckCircle2, FileText, Paperclip, Plus, Save, Trash2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
+import type { StockItem } from "@/lib/types";
 import { orderSchema, type OrderFormValues } from "@/lib/validation/order";
 
 const inputClass = "control-lg bg-white";
@@ -15,10 +16,23 @@ const initialState: CreateOrderState = {
   message: "",
 };
 
-export function OrderForm({ orderId, initialValues }: { orderId?: string; initialValues?: OrderFormValues }) {
+type ConsumptionRow = {
+  id: string;
+};
+
+export function OrderForm({
+  orderId,
+  initialValues,
+  stockItems = [],
+}: {
+  orderId?: string;
+  initialValues?: OrderFormValues;
+  stockItems?: StockItem[];
+}) {
   const action = orderId ? updateOrder.bind(null, orderId) : createOrder;
   const [state, formAction, actionPending] = useActionState(action, initialState);
   const [formPending, startTransition] = useTransition();
+  const [consumptionRows, setConsumptionRows] = useState<ConsumptionRow[]>([{ id: crypto.randomUUID() }]);
   const {
     register,
     handleSubmit,
@@ -35,15 +49,8 @@ export function OrderForm({ orderId, initialValues }: { orderId?: string; initia
   });
 
   // eslint-disable-next-line react-hooks/incompatible-library
-  const [width, depth, height, material] = watch(["width", "depth", "height", "material"]);
-  const w = Number(width) || 0;
-  const d = Number(depth) || 0;
-  const h = Number(height) || 0;
-  const matName = material || "";
-
-  const leatherQty = w && d && h ? Math.round(((w * d * 3 + w * h * 2 + d * h * 2) / 10000) * 10) / 10 : 0;
-  const woodQty = w && d && h ? Math.max(2, Math.round((w * 2 + d * 4 + h * 4) / 100)) : 0;
-  const foamQty = w && d && h ? Math.max(1, Math.round((w * d * 2) / 10000)) : 0;
+  const [width, depth, height] = watch(["width", "depth", "height"]);
+  const hasDimensions = Number(width) > 0 && Number(depth) > 0 && Number(height) > 0;
   const pending = actionPending || formPending;
   const submit = handleSubmit((_values, event) => {
     if (!(event?.target instanceof HTMLFormElement)) return;
@@ -51,12 +58,16 @@ export function OrderForm({ orderId, initialValues }: { orderId?: string; initia
     startTransition(() => formAction(formData));
   });
 
+  function addConsumptionRow() {
+    setConsumptionRows((rows) => [...rows, { id: crypto.randomUUID() }]);
+  }
+
+  function removeConsumptionRow(id: string) {
+    setConsumptionRows((rows) => rows.length > 1 ? rows.filter((row) => row.id !== id) : rows);
+  }
+
   return (
-    <form
-      action={formAction}
-      onSubmit={submit}
-      className="space-y-5"
-    >
+    <form action={formAction} onSubmit={submit} className="space-y-5">
       {state.message ? (
         <div
           className={
@@ -88,7 +99,7 @@ export function OrderForm({ orderId, initialValues }: { orderId?: string; initia
           </div>
         </div>
 
-                <div className="grid gap-4 p-4 md:grid-cols-2">
+        <div className="grid gap-4 p-4 md:grid-cols-2">
           <Field label="Empresa Cliente" error={errors.store?.message}>
             <select {...register("store")} className={inputClass}>
               <option value="LH">Leather House</option>
@@ -159,6 +170,74 @@ export function OrderForm({ orderId, initialValues }: { orderId?: string; initia
       {!orderId ? (
         <section className="panel">
           <div className="panel-header flex items-center gap-3">
+            <Boxes className="size-5 text-stone-500" />
+            <div>
+              <h2 className="panel-title">Materiales a descontar</h2>
+              <p className="panel-description">Registra solo cantidades reales o confirmadas para esta orden.</p>
+            </div>
+          </div>
+
+          <div className="space-y-3 p-4">
+            {hasDimensions ? (
+              <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-600">
+                Dimensiones ingresadas: {width} x {depth} x {height} cm. Aun no hay reglas de consumo configuradas, por eso el stock solo se descuenta con las cantidades que indiques abajo.
+              </p>
+            ) : (
+              <p className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs leading-5 text-stone-600">
+                Cuando definan reglas por producto y dimension, esta seccion podra precargar consumos. Por ahora evita descuentos inventados.
+              </p>
+            )}
+
+            {stockItems.length ? (
+              <>
+                <div className="space-y-2">
+                  {consumptionRows.map((row, index) => (
+                    <div key={row.id} className="grid gap-3 rounded-md border border-stone-200 bg-white p-3 md:grid-cols-[minmax(0,1.3fr)_150px_minmax(0,1fr)_44px]">
+                      <Field label={`Material ${index + 1}`}>
+                        <select name="consumptionMaterialId" defaultValue="" className={inputClass}>
+                          <option value="">Sin descuento</option>
+                          {stockItems.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name} - disponible {item.available} {item.unit}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Cantidad">
+                        <input name="consumptionQuantity" type="number" min="0" step="0.01" placeholder="0" className={inputClass} />
+                      </Field>
+                      <Field label="Referencia">
+                        <input name="consumptionNotes" placeholder="Ej. cuero cuerpo sofa" className={inputClass} />
+                      </Field>
+                      <button
+                        type="button"
+                        onClick={() => removeConsumptionRow(row.id)}
+                        disabled={consumptionRows.length === 1}
+                        className="mt-6 inline-flex size-11 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 disabled:opacity-40"
+                        aria-label="Quitar material"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" onClick={addConsumptionRow} className="btn-lg btn-secondary">
+                  <Plus className="size-4" />
+                  Agregar material
+                </button>
+              </>
+            ) : (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium leading-5 text-amber-900">
+                No hay materiales activos en stock. Puedes crear la orden, pero no se descontara inventario.
+              </p>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {!orderId ? (
+        <section className="panel">
+          <div className="panel-header flex items-center gap-3">
             <Paperclip className="size-5 text-stone-500" />
             <div>
               <h2 className="panel-title">Archivo adjunto</h2>
@@ -180,52 +259,12 @@ export function OrderForm({ orderId, initialValues }: { orderId?: string; initia
         </section>
       ) : null}
 
-            {w > 0 && d > 0 && h > 0 ? (
-        <section className="panel border-amber-200 bg-amber-50/30">
-          <div className="panel-header flex items-center gap-3">
-            <Boxes className="size-5 text-amber-700" />
-            <div>
-              <h2 className="panel-title text-amber-950">Consumo Estimado de Materiales</h2>
-              <p className="panel-description text-amber-800">Cálculo en tiempo real según las dimensiones ingresadas.</p>
-            </div>
-          </div>
-          <div className="grid gap-3 p-4 sm:grid-cols-3">
-            <div className="rounded-md border border-amber-200 bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Cuero (${matName || "Riga Honey"})</p>
-              <p className="mt-2 text-2xl font-bold text-stone-900">${leatherQty} <span className="text-sm font-normal text-stone-500">m²</span></p>
-              <p className="mt-1 text-xs text-stone-500">Fórmula: (Ancho×Prof×3 + Ancho×Alto×2 + Prof×Alto×2) / 10,000</p>
-            </div>
-            <div className="rounded-md border border-amber-200 bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Madera estructura</p>
-              <p className="mt-2 text-2xl font-bold text-stone-900">${woodQty} <span className="text-sm font-normal text-stone-500">tablas</span></p>
-              <p className="mt-1 text-xs text-stone-500">Fórmula: (Ancho×2 + Prof×4 + Alto×4) / 100</p>
-            </div>
-            <div className="rounded-md border border-amber-200 bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Espuma relleno</p>
-              <p className="mt-2 text-2xl font-bold text-stone-900">${foamQty} <span className="text-sm font-normal text-stone-500">planchas</span></p>
-              <p className="mt-1 text-xs text-stone-500">Fórmula: (Ancho×Prof×2) / 10,000</p>
-            </div>
-          </div>
-          <div className="px-4 pb-4">
-            <p className="text-xs leading-5 text-amber-800 font-medium">
-              * Nota: Al guardar esta orden de producción, el stock disponible de estos materiales se descontará automáticamente.
-            </p>
-          </div>
-        </section>
-      ) : null}
-
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-        <Link
-          href="/admin"
-          className="btn-lg btn-secondary"
-        >     <ArrowLeft className="size-4" />
+        <Link href="/admin" className="btn-lg btn-secondary">
+          <ArrowLeft className="size-4" />
           Volver
         </Link>
-        <button
-          type="submit"
-          disabled={pending}
-          className="btn-lg btn-primary"
-        >
+        <button type="submit" disabled={pending} className="btn-lg btn-primary">
           <Save className="size-4" />
           {pending ? "Guardando..." : orderId ? "Guardar cambios" : "Guardar nota"}
         </button>
