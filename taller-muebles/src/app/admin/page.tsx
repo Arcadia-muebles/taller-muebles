@@ -9,11 +9,10 @@ import {
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { ProductionBoard } from "@/components/production-board";
-import { PrintButton } from "@/components/print-button";
 import { StatCard } from "@/components/stat-card";
 import { requireSession } from "@/lib/auth";
 import { activeOrders, blockedOrders, overdueOrders } from "@/lib/metrics";
-import { listOrders } from "@/lib/repositories/production";
+import { listOrderComments, listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 
 export default async function AdminPage() {
@@ -25,6 +24,9 @@ export default async function AdminPage() {
   const blocked = blockedOrders(orders);
   const waitingQuality = active.filter((order) => currentStepKey(order) === "quality");
   const dispatching = active.filter((order) => currentStepKey(order) === "dispatch");
+  const commentsByOrder = Object.fromEntries(
+    await Promise.all(active.map(async (order) => [order.id, await listOrderComments(order.id)])),
+  );
 
   return (
     <AppShell active="admin" user={user}>
@@ -37,7 +39,6 @@ export default async function AdminPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <PrintButton />
           {canEditOrders ? (
             <Link href="/admin/orders/new" className="btn btn-primary">
               <Plus className="size-4" />
@@ -55,7 +56,7 @@ export default async function AdminPage() {
         <StatCard label="Despacho" value={String(dispatching.length)} helper="Listas para salida." icon={Truck} tone={dispatching.length ? "emerald" : "neutral"} />
       </section>
 
-      <ProductionBoard orders={active} steps={settings.production.steps} canMove={canEditOrders} />
+      <ProductionBoard orders={active} steps={settings.production.steps} canMove={canEditOrders} commentsByOrder={commentsByOrder} />
     </AppShell>
   );
 }

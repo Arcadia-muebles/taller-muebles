@@ -128,16 +128,20 @@ export async function createWorkshopOrder(
   const enabledSteps = settings.production.steps.filter((step) => step.enabled);
   const operatorByArea = operatorMapByArea(await listUsers());
   const { error: stepsError } = await supabase.from("production_steps").insert(
-    enabledSteps.map((step, index) => ({
+    enabledSteps.map((step, index) => {
+      const startedAt = index === 0 ? new Date().toISOString() : null;
+      return {
       order_id: order.id,
       step: step.key,
       step_label: step.label,
       sort_order: index + 1,
       status: index === 0 ? "active" : "pending",
-      started_at: index === 0 ? new Date().toISOString() : null,
+      started_at: startedAt,
+      work_sessions: startedAt ? [{ startedAt }] : [],
       notes: index === 0 ? `Ingresado por ${user.name}` : null,
       assigned_to: index === 0 ? profileId : operatorByArea.get(step.key) ?? profileId,
-    })),
+    };
+    }),
   );
   if (stepsError) {
     await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id);
@@ -174,7 +178,7 @@ export async function updateProductionStep(
   const currentOrder = await getOrder(parsed.data.orderId);
   const currentStep = currentOrder?.steps.find((step) => step.key === parsed.data.stepKey);
   if (!currentOrder || !currentStep) return { status: "error", message: "No se encontro la etapa seleccionada." };
-  if (!isAllowedTransition(currentStep.status, parsed.data.status)) {
+  if (!parsed.data.noteOnly && !isAllowedTransition(currentStep.status, parsed.data.status)) {
     return { status: "error", message: "La etapa cambio de estado. Actualiza la vista e intenta nuevamente." };
   }
 
@@ -190,6 +194,7 @@ export async function updateProductionStep(
   if (user.role === "operator") {
     const permissions = settings.permissions;
     const allowed =
+      parsed.data.noteOnly ||
       (parsed.data.status === "active" && permissions.operatorsCanStartSteps) ||
       (parsed.data.status === "done" && permissions.operatorsCanCompleteSteps) ||
       (parsed.data.status === "blocked" && permissions.operatorsCanBlockSteps);
@@ -200,7 +205,9 @@ export async function updateProductionStep(
   if (!hasSupabaseConfig()) {
     const updated = await updateLocalProductionStep({
       ...parsed.data,
+      status: parsed.data.noteOnly ? currentStep.status : parsed.data.status,
       autoCompleteAfterQuality: settings.production.autoCompleteAfterQuality,
+      noteOnly: parsed.data.noteOnly,
     });
     if (!updated) {
       return {
@@ -231,11 +238,18 @@ export async function updateProductionStep(
   if (!profile) return { status: "error", message: "No se pudo identificar tu perfil." };
 
   const patch = {
-    status: parsed.data.status,
-    blocked_reason: parsed.data.status === "blocked" ? parsed.data.reason : null,
+    status: parsed.data.noteOnly ? currentStep.status : parsed.data.status,
+    blocked_reason: parsed.data.noteOnly ? undefined : parsed.data.status === "blocked" ? parsed.data.reason : null,
     notes: parsed.data.reason?.trim() || (parsed.data.status === "blocked" ? parsed.data.reason : null),
-    started_at: parsed.data.status === "active" ? now : undefined,
-    completed_at: parsed.data.status === "done" ? now : undefined,
+    started_at: !parsed.data.noteOnly && parsed.data.status === "active" ? now : undefined,
+    completed_at: !parsed.data.noteOnly && parsed.data.status === "done" ? now : !parsed.data.noteOnly && parsed.data.status === "active" ? null : undefined,
+    work_sessions: parsed.data.noteOnly
+      ? undefined
+      : parsed.data.status === "active"
+        ? openWorkSessions(currentStep, now)
+        : parsed.data.status === "done"
+          ? closeWorkSessions(currentStep, now)
+          : undefined,
     updated_by: profile.id,
   };
 
@@ -254,7 +268,7 @@ export async function updateProductionStep(
     };
   }
 
-  const nextStep = parsed.data.status === "done"
+  const nextStep = !parsed.data.noteOnly && parsed.data.status === "done"
     ? nextPendingStep(currentOrder, parsed.data.stepKey)
     : undefined;
 
@@ -276,7 +290,9 @@ export async function updateProductionStep(
   }
 
   const nextOrderStatus =
-    parsed.data.status === "blocked"
+    parsed.data.noteOnly
+      ? currentOrder.status
+      : parsed.data.status === "blocked"
       ? "blocked"
       : parsed.data.status === "done" && !nextStep
         ? "completed"
@@ -290,8 +306,8 @@ export async function updateProductionStep(
     .from("orders")
     .update({
       status: nextOrderStatus,
-      condition: nextOrderStatus === "completed" ? "delivered" : undefined,
-      completed_at: nextOrderStatus === "completed" ? now : undefined,
+      condition: nextOrderStatus === "completed" ? "delivered" : parsed.data.status === "active" ? "none" : undefined,
+      completed_at: nextOrderStatus === "completed" ? now : parsed.data.status === "active" ? null : undefined,
     })
     .eq("id", parsed.data.orderId);
 
@@ -317,9 +333,11 @@ export async function updateProductionStep(
     entity: "production_steps",
     profile_id: profile.id,
     field_name: "status",
-    new_value: parsed.data.reason
-      ? `${parsed.data.status}: ${parsed.data.reason}`
-      : parsed.data.status,
+    new_value: parsed.data.noteOnly
+      ? `nota: ${parsed.data.reason ?? ""}`
+      : parsed.data.reason
+        ? `${parsed.data.status}: ${parsed.data.reason}`
+        : parsed.data.status,
   });
   if (auditError) return { status: "error", message: `La etapa cambio, pero no se pudo registrar la auditoria: ${auditError.message}` };
 
@@ -338,6 +356,7 @@ function isAllowedTransition(current: UpdateStepInput["status"], next: UpdateSte
   if (current === "pending") return next === "active" || next === "blocked";
   if (current === "active") return next === "done" || next === "blocked";
   if (current === "blocked") return next === "active";
+  if (current === "done") return next === "active";
   return false;
 }
 
@@ -345,6 +364,33 @@ function nextPendingStep(order: NonNullable<Awaited<ReturnType<typeof getOrder>>
   const currentIndex = order.steps.findIndex((step) => step.key === currentStepKey);
   if (currentIndex < 0) return undefined;
   return order.steps.slice(currentIndex + 1).find((step) => step.status === "pending");
+}
+
+function sessionsForStep(step: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"][number]) {
+  return step.workSessions?.length
+    ? step.workSessions
+    : step.startedAt
+      ? [{ startedAt: step.startedAt, completedAt: step.completedAt }]
+      : [];
+}
+
+function openWorkSessions(step: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"][number], startedAt: string) {
+  const sessions = sessionsForStep(step).map((session) => ({ ...session }));
+  if (!sessions.some((session) => !session.completedAt)) {
+    sessions.push({ startedAt });
+  }
+  return sessions;
+}
+
+function closeWorkSessions(step: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"][number], completedAt: string) {
+  const sessions = sessionsForStep(step).map((session) => ({ ...session }));
+  const openSession = [...sessions].reverse().find((session) => !session.completedAt);
+  if (openSession) {
+    openSession.completedAt = completedAt;
+  } else {
+    sessions.push({ startedAt: step.startedAt ?? completedAt, completedAt });
+  }
+  return sessions;
 }
 
 async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createClient>>) {

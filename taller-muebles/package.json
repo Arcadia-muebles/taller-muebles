@@ -6,12 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "supabase:status": "supabase status",
+    "supabase:db:dry-run": "supabase db push --linked --dry-run",
+    "supabase:db:push": "supabase db push --linked",
+    "supabase:db:lint": "supabase db lint --linked --schema public --level warning --fail-on error",
+    "supabase:migrations": "supabase migration list --linked",
+    "supabase:types": "supabase gen types --linked --schema public > src/lib/supabase/database.types.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
-    "@supabase/ssr": "^0.10.3",
-    "@supabase/supabase-js": "^2.106.2",
+    "@supabase/ssr": "0.12.0",
+    "@supabase/supabase-js": "2.108.2",
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -31,6 +37,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
+    "supabase": "2.107.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

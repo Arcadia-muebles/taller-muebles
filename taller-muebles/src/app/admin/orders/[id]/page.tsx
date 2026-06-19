@@ -18,7 +18,7 @@ import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getOrder, listOrderAttachments, listOrderAudit, listOrderComments } from "@/lib/repositories/production";
-import { deliveryLabel, durationLabel, formatDate, formatDateTime } from "@/lib/utils";
+import { deliveryLabel, formatDate, formatDateTime, totalDurationLabel } from "@/lib/utils";
 
 type OrderDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -139,7 +139,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                     <div className="flex flex-wrap items-center gap-3">
                       <StatusBadge type="step" value={step.status} />
                       <p className="text-xs text-stone-500">
-                        {durationLabel(step.startedAt, step.completedAt)}
+                        {totalDurationLabel(step)}
                       </p>
                       {canEditOrder ? (
                         <ProductionStepControls orderId={order.id} stepKey={step.key} status={step.status} />
@@ -212,6 +212,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           comments={comments}
           attachments={attachments}
           canUpload={canEditOrder}
+          steps={order.steps}
+          defaultStepKey={order.steps.find((step) => step.status === "active")?.key}
         />
       </div>
     </AppShell>
@@ -234,6 +236,8 @@ function auditActionLabel(action: string) {
     create_order: "Orden creada",
     update_order: "Orden actualizada",
     update_step: "Etapa actualizada",
+    add_comment: "Comentario agregado",
+    add_attachment: "Adjunto agregado",
     close_order: "Orden cerrada",
     cancel_order: "Orden cancelada",
   };

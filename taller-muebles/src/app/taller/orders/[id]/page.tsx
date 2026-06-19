@@ -22,7 +22,7 @@ import {
   listOrderComments,
 } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
-import { deliveryLabel, durationLabel, formatDate, formatDateTime } from "@/lib/utils";
+import { deliveryLabel, formatDate, formatDateTime, totalDurationLabel } from "@/lib/utils";
 import { canWorkerSeeOrder } from "@/lib/workshop-access";
 
 export default async function WorkshopOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -130,7 +130,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
               <div className="flex flex-wrap items-center gap-3">
                 <StatusBadge type="step" value={step.status} />
                 <p className="text-xs text-stone-500">
-                  {durationLabel(step.startedAt, step.completedAt)}
+                  {totalDurationLabel(step)}
                 </p>
               </div>
             </div>
@@ -156,6 +156,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
             canBlock: settings.permissions.operatorsCanBlockSteps,
             requireBlockReason: settings.permissions.requireBlockReason,
           }}
+          productionSteps={settings.production.steps}
         />
       </div>
 
@@ -187,6 +188,8 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
           comments={comments}
           attachments={attachments}
           canUpload
+          steps={order.steps}
+          defaultStepKey={order.steps.find((step) => step.status === "active")?.key}
         />
       </div>
     </AppShell>

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Boxes, CalendarDays, CheckCircle2, FileText, Paperclip, Plus, Save, Trash2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
 import type { StockItem } from "@/lib/types";
 import { orderSchema, type OrderFormValues } from "@/lib/validation/order";
@@ -39,7 +39,7 @@ export function OrderForm({
     formState: { errors },
     watch,
   } = useForm<OrderFormValues>({
-    resolver: zodResolver(orderSchema) as any,
+    resolver: zodResolver(orderSchema) as Resolver<OrderFormValues>,
     defaultValues: initialValues ?? {
       store: "LH",
       priority: "normal",

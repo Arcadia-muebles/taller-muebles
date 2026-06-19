@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BellRing,
   Check,
   ClipboardList,
   Clock3,
@@ -19,18 +18,13 @@ import { saveSystemSettings } from "@/app/admin/settings/actions";
 import { defaultSystemSettings } from "@/lib/system-settings";
 import type { SystemSettings } from "@/lib/types";
 
-type SectionKey = "general" | "production" | "orders" | "alerts" | "permissions";
+type SectionKey = "general" | "production" | "orders" | "permissions";
 
 const sections = [
-  { key: "general", label: "Operacion general", description: "Jornada e identidad", icon: Settings2 },
-  { key: "production", label: "Flujo productivo", description: "Etapas y tiempos objetivo", icon: Factory },
-  { key: "orders", label: "Notas de venta", description: "Validaciones y cierre", icon: ClipboardList },
-  { key: "alerts", label: "Alertas", description: "Umbrales y resumen diario", icon: BellRing },
+  { key: "general", label: "Operacion general", description: "Identidad visible", icon: Settings2 },
+  { key: "production", label: "Flujo productivo", description: "Etapas operativas", icon: Factory },
+  { key: "orders", label: "Notas de venta", description: "Validaciones reales", icon: ClipboardList },
   { key: "permissions", label: "Permisos operativos", description: "Acciones por perfil", icon: ShieldCheck },
-] as const;
-
-const dayOptions = [
-  [1, "Lun"], [2, "Mar"], [3, "Mie"], [4, "Jue"], [5, "Vie"], [6, "Sab"], [0, "Dom"],
 ] as const;
 
 export function SystemSettingsForm({
@@ -114,7 +108,6 @@ export function SystemSettingsForm({
             {active === "general" ? <GeneralSection settings={settings} setSettings={setSettings} disabled={!canEdit} /> : null}
             {active === "production" ? <ProductionSection settings={settings} setSettings={setSettings} disabled={!canEdit} /> : null}
             {active === "orders" ? <OrdersSection settings={settings} setSettings={setSettings} disabled={!canEdit} /> : null}
-            {active === "alerts" ? <AlertsSection settings={settings} setSettings={setSettings} disabled={!canEdit} /> : null}
             {active === "permissions" ? <PermissionsSection settings={settings} setSettings={setSettings} disabled={!canEdit} /> : null}
           </div>
         </section>
@@ -157,10 +150,9 @@ function SectionHeader({ section }: { section: SectionKey }) {
 }
 
 const sectionCopy: Record<SectionKey, string> = {
-  general: "Configura el nombre visible, zona horaria y dias efectivos de trabajo.",
-  production: "Ajusta nombres, disponibilidad y tiempos esperados de cada etapa.",
-  orders: "Controla la calidad minima de los datos y el tratamiento de ordenes terminadas.",
-  alerts: "Define cuando una situacion requiere atencion del equipo.",
+  general: "Configura el nombre que aparece en la navegacion de la plataforma.",
+  production: "Ajusta nombres y disponibilidad de las etapas usadas al crear ordenes nuevas.",
+  orders: "Controla validaciones que se aplican al crear o editar notas de venta.",
   permissions: "Limita las acciones sensibles de supervisores y trabajadores.",
 };
 
@@ -168,29 +160,10 @@ function GeneralSection({ settings, setSettings, disabled }: SectionProps) {
   const update = (patch: Partial<SystemSettings["general"]>) => setSettings({ ...settings, general: { ...settings.general, ...patch } });
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Nombre visible del sistema" hint="Aparece en encabezados y reportes.">
+      <div className="max-w-xl">
+        <Field label="Nombre visible del sistema" hint="Aparece en la barra lateral de la plataforma.">
           <input disabled={disabled} value={settings.general.businessName} onChange={(event) => update({ businessName: event.target.value })} className={inputClass} />
         </Field>
-        <Field label="Zona horaria" hint="Usada para alertas, fechas y auditoria.">
-          <select disabled={disabled} value={settings.general.timezone} onChange={(event) => update({ timezone: event.target.value })} className={inputClass}>
-            <option value="America/Santiago">America/Santiago</option>
-            <option value="America/Bogota">America/Bogota</option>
-            <option value="America/Lima">America/Lima</option>
-          </select>
-        </Field>
-        <Field label="Inicio de jornada"><input disabled={disabled} type="time" value={settings.general.workdayStart} onChange={(event) => update({ workdayStart: event.target.value })} className={inputClass} /></Field>
-        <Field label="Fin de jornada"><input disabled={disabled} type="time" value={settings.general.workdayEnd} onChange={(event) => update({ workdayEnd: event.target.value })} className={inputClass} /></Field>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-stone-800">Dias laborales</p>
-        <p className="mt-1 text-xs text-stone-500">Se usan para calcular plazos productivos.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {dayOptions.map(([value, label]) => {
-            const selected = settings.general.workdays.includes(value);
-            return <button disabled={disabled} key={value} type="button" onClick={() => update({ workdays: selected ? settings.general.workdays.filter((day) => day !== value) : [...settings.general.workdays, value] })} className={`h-10 min-w-14 rounded-md border px-3 text-sm font-medium ${selected ? "border-stone-950 bg-stone-950 text-white" : "border-stone-200 bg-white text-stone-600"}`}>{label}</button>;
-          })}
-        </div>
       </div>
     </div>
   );
@@ -222,11 +195,11 @@ function ProductionSection({ settings, setSettings, disabled }: SectionProps) {
   return (
     <div className="space-y-6">
       <div className="overflow-hidden rounded-lg border border-stone-200">
-        <div className="hidden grid-cols-[minmax(0,1fr)_120px_90px_90px_44px] gap-3 bg-stone-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-stone-400 sm:grid">
-          <span>Etapa</span><span>Plazo objetivo</span><span>Activa</span><span>Obligatoria</span><span />
+        <div className="hidden grid-cols-[minmax(0,1fr)_90px_90px_44px] gap-3 bg-stone-50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-stone-400 sm:grid">
+          <span>Etapa</span><span>Activa</span><span>Obligatoria</span><span />
         </div>
         {settings.production.steps.map((step, index) => (
-          <div key={step.key} className="grid gap-3 border-t border-stone-100 p-4 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_120px_90px_90px_44px] sm:items-center">
+          <div key={step.key} className="grid gap-3 border-t border-stone-100 p-4 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_90px_90px_44px] sm:items-center">
             <div>
               <input
                 disabled={disabled}
@@ -236,7 +209,6 @@ function ProductionSection({ settings, setSettings, disabled }: SectionProps) {
               />
               <p className="mt-1 font-mono text-[11px] text-stone-400">{step.key}</p>
             </div>
-            <label className="relative"><input disabled={disabled} type="number" min="0" max="90" value={step.targetDays} onChange={(event) => updateStep(index, { targetDays: Number(event.target.value) })} className={`${inputClass} pr-10`} /><span className="absolute right-3 top-3 text-xs text-stone-400">dias</span></label>
             <Toggle compact disabled={disabled} checked={step.enabled} onChange={(checked) => updateStep(index, { enabled: checked, required: checked ? step.required : false })} />
             <Toggle compact disabled={disabled || !step.enabled} checked={step.required} onChange={(checked) => updateStep(index, { required: checked })} />
             <button
@@ -261,8 +233,6 @@ function ProductionSection({ settings, setSettings, disabled }: SectionProps) {
         Agregar etapa
       </button>
       <div className="grid gap-3">
-        <RuleRow title="Permitir etapas en paralelo" description="Una orden puede tener mas de una etapa activa al mismo tiempo." checked={settings.production.allowParallelSteps} disabled={disabled} onChange={(value) => updateProduction({ allowParallelSteps: value })} />
-        <RuleRow title="Exigir aprobacion de calidad" description="Evita cerrar una orden sin completar la revision final." checked={settings.production.requireQualityApproval} disabled={disabled} onChange={(value) => updateProduction({ requireQualityApproval: value })} />
         <RuleRow title="Cerrar automaticamente tras calidad" description="Marca la orden como terminada al aprobar la etapa de revision." checked={settings.production.autoCompleteAfterQuality} disabled={disabled} onChange={(value) => updateProduction({ autoCompleteAfterQuality: value })} />
       </div>
     </div>
@@ -272,35 +242,13 @@ function ProductionSection({ settings, setSettings, disabled }: SectionProps) {
 function OrdersSection({ settings, setSettings, disabled }: SectionProps) {
   const update = (patch: Partial<SystemSettings["orders"]>) => setSettings({ ...settings, orders: { ...settings.orders, ...patch } });
   return <div className="space-y-6">
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="max-w-xl">
       <Field label="Prioridad por defecto"><select disabled={disabled} value={settings.orders.defaultPriority} onChange={(event) => update({ defaultPriority: event.target.value as SystemSettings["orders"]["defaultPriority"] })} className={inputClass}><option value="normal">Normal</option><option value="high">Alta</option><option value="critical">Critica</option></select></Field>
-      <Field label="Archivar terminadas despues de" hint="Usa 0 para archivar inmediatamente."><NumberInput disabled={disabled} value={settings.orders.archiveCompletedAfterDays} suffix="dias" onChange={(value) => update({ archiveCompletedAfterDays: value })} /></Field>
     </div>
     <div className="grid gap-3">
-      <RuleRow title="Exigir responsable asignado" description="No permite crear ordenes sin una persona responsable." checked={settings.orders.requireAssignedPerson} disabled={disabled} onChange={(value) => update({ requireAssignedPerson: value })} />
-      <RuleRow title="Exigir material y color" description="Mantiene la ficha productiva completa desde el ingreso." checked={settings.orders.requireMaterialAndColor} disabled={disabled} onChange={(value) => update({ requireMaterialAndColor: value })} />
       <RuleRow title="Exigir observaciones en garantias" description="Obliga a documentar el motivo y alcance del trabajo." checked={settings.orders.requireObservationsForWarranty} disabled={disabled} onChange={(value) => update({ requireObservationsForWarranty: value })} />
       <RuleRow title="Numero de nota de venta unico" description="Previene el ingreso duplicado de una misma venta." checked={settings.orders.enforceUniqueSalesNote} disabled={disabled} onChange={(value) => update({ enforceUniqueSalesNote: value })} />
       <RuleRow title="Permitir fechas de entrega pasadas" description="Habilita carga historica con fechas anteriores a hoy." checked={settings.orders.allowPastDeliveryDates} disabled={disabled} onChange={(value) => update({ allowPastDeliveryDates: value })} />
-    </div>
-  </div>;
-}
-
-function AlertsSection({ settings, setSettings, disabled }: SectionProps) {
-  const update = (patch: Partial<SystemSettings["alerts"]>) => setSettings({ ...settings, alerts: { ...settings.alerts, ...patch } });
-  return <div className="space-y-6">
-    <div className="grid gap-4 md:grid-cols-3">
-      <Field label="Entrega proxima"><NumberInput disabled={disabled} value={settings.alerts.upcomingDeliveryDays} suffix="dias" onChange={(value) => update({ upcomingDeliveryDays: value })} /></Field>
-      <Field label="Entrega urgente"><NumberInput disabled={disabled} value={settings.alerts.urgentDeliveryDays} suffix="dias" onChange={(value) => update({ urgentDeliveryDays: value })} /></Field>
-      <Field label="Bloqueo prolongado"><NumberInput disabled={disabled} value={settings.alerts.blockedAfterHours} suffix="horas" onChange={(value) => update({ blockedAfterHours: value })} /></Field>
-    </div>
-    <div className="grid gap-3">
-      <RuleRow title="Alertas de stock bajo" description="Destaca materiales bajo su minimo configurado." checked={settings.alerts.stockAlertsEnabled} disabled={disabled} onChange={(value) => update({ stockAlertsEnabled: value })} />
-      <RuleRow title="Alertas de entrega" description="Muestra entregas proximas, urgentes y atrasadas." checked={settings.alerts.deliveryAlertsEnabled} disabled={disabled} onChange={(value) => update({ deliveryAlertsEnabled: value })} />
-      <RuleRow title="Alertas de bloqueos" description="Destaca etapas bloqueadas que requieren intervencion." checked={settings.alerts.blockedAlertsEnabled} disabled={disabled} onChange={(value) => update({ blockedAlertsEnabled: value })} />
-      <RuleRow title="Resumen diario" description="Prepara un resumen operativo al inicio de la jornada." checked={settings.alerts.dailySummaryEnabled} disabled={disabled} onChange={(value) => update({ dailySummaryEnabled: value })}>
-        <input disabled={disabled || !settings.alerts.dailySummaryEnabled} type="time" value={settings.alerts.dailySummaryTime} onChange={(event) => update({ dailySummaryTime: event.target.value })} className="h-9 rounded-md border border-stone-200 bg-white px-2 text-sm disabled:opacity-40" />
-      </RuleRow>
     </div>
   </div>;
 }
@@ -333,10 +281,6 @@ const inputClass = "control-lg text-stone-800 disabled:cursor-not-allowed disabl
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return <label className="block"><span className="text-sm font-medium text-stone-800">{label}</span>{hint ? <span className="mt-1 block text-xs text-stone-500">{hint}</span> : null}<span className="mt-2 block">{children}</span></label>;
-}
-
-function NumberInput({ value, suffix, onChange, disabled }: { value: number; suffix: string; onChange: (value: number) => void; disabled: boolean }) {
-  return <label className="relative block"><input disabled={disabled} type="number" min="0" value={value} onChange={(event) => onChange(Number(event.target.value))} className={`${inputClass} pr-14`} /><span className="absolute right-3 top-3.5 text-xs text-stone-400">{suffix}</span></label>;
 }
 
 function RuleRow({ title, description, checked, onChange, disabled, children }: { title: string; description: string; checked: boolean; onChange: (checked: boolean) => void; disabled: boolean; children?: React.ReactNode }) {

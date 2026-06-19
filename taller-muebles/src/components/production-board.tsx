@@ -8,22 +8,26 @@ import {
   Clock,
   GripVertical,
   Maximize2,
+  MessageSquarePlus,
   MessageSquareText,
   PackageOpen,
   UserRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useActionState, useMemo, useRef, useState, useTransition } from "react";
+import { addOrderComment, type CollaborationActionResult } from "@/app/admin/orders/collaboration-actions";
 import { moveOrderStage } from "@/app/admin/orders/actions";
-import type { AreaKey, Order, ProductionStep, SystemSettings } from "@/lib/types";
-import { cn, daysUntil, deliveryLabel, durationLabel, formatDate } from "@/lib/utils";
+import type { AreaKey, Order, OrderComment, ProductionStep, SystemSettings } from "@/lib/types";
+import { cn, daysUntil, deliveryLabel, formatDate, totalDurationLabel } from "@/lib/utils";
+import { SubmitButton } from "./submit-button";
 import { StatusBadge } from "./status-badge";
 
 type ProductionBoardProps = {
   orders: Order[];
   steps: SystemSettings["production"]["steps"];
   canMove: boolean;
+  commentsByOrder?: Record<string, OrderComment[]>;
 };
 
 type Feedback = {
@@ -38,13 +42,15 @@ type TouchDrag = {
   moved: boolean;
 };
 
-export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps) {
+const initialCommentState: CollaborationActionResult = { ok: false, message: "" };
+
+export function ProductionBoard({ orders, steps, canMove, commentsByOrder = {} }: ProductionBoardProps) {
   const enabledSteps = steps.filter((step) => step.enabled);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeStepTab, setActiveStepTab] = useState<AreaKey>(enabledSteps[0]?.key);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverStep, setHoverStep] = useState<AreaKey | null>(null);
-  const [touchDrag, setTouchDrag] = useState<TouchDrag | null>(null);
+  const [, setTouchDrag] = useState<TouchDrag | null>(null);
   const [stageOverrides, setStageOverrides] = useState<Record<string, AreaKey>>({});
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const touchDragRef = useRef<TouchDrag | null>(null);
@@ -234,7 +240,6 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
               {enabledSteps.map((step) => {
                 const columnOrders = grouped.get(step.key) ?? [];
                 const isHover = hoverStep === step.key;
-                const isActiveTab = activeStepTab === step.key;
                 return (
                   <section
                     key={step.key}
@@ -278,6 +283,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                             selected={selectedId === order.id}
                             dragging={draggingId === order.id}
                             draggable={canMove}
+                            commentsCount={commentsByOrder[order.id]?.length ?? 0}
                             onSelect={() => {
                               if (suppressSelectRef.current === order.id) {
                                 suppressSelectRef.current = null;
@@ -285,6 +291,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                               }
                               setSelectedId(order.id);
                             }}
+                            onComment={() => setSelectedId(order.id)}
                             onDragStart={(event) => {
                               if (!canMove) return;
                               setDraggingId(order.id);
@@ -322,7 +329,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
       </div>
 
       {selectedId && selected && (
-        <OrderDetailDrawer order={selected} onClose={() => setSelectedId(null)} />
+        <OrderDetailDrawer order={selected} comments={commentsByOrder[selected.id] ?? []} onClose={() => setSelectedId(null)} />
       )}
     </section>
   );
@@ -334,7 +341,9 @@ function ProductCard({
   selected,
   dragging,
   draggable,
+  commentsCount,
   onSelect,
+  onComment,
   onDragStart,
   onDragEnd,
   onPointerDown,
@@ -347,7 +356,9 @@ function ProductCard({
   selected: boolean;
   dragging: boolean;
   draggable: boolean;
+  commentsCount: number;
   onSelect: () => void;
+  onComment: () => void;
   onDragStart: React.DragEventHandler<HTMLElement>;
   onDragEnd: React.DragEventHandler<HTMLElement>;
   onPointerDown: React.PointerEventHandler<HTMLElement>;
@@ -410,19 +421,44 @@ function ProductCard({
 
       <div className="mt-2.5 flex items-center justify-between border-t border-stone-100 pt-2 text-[11px]">
         <span className="text-stone-400">Entrega</span>
-        <span className={cn(
-          "font-medium",
-          isLate ? "text-rose-600 font-semibold" : isToday ? "text-amber-700 font-semibold" : "text-stone-600"
-        )}>
-          {isLate || isToday ? deliveryLabel(order.deliveryDate, false) : formatDate(order.deliveryDate)}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={cn(
+            "font-medium",
+            isLate ? "text-rose-600 font-semibold" : isToday ? "text-amber-700 font-semibold" : "text-stone-600"
+          )}>
+            {isLate || isToday ? deliveryLabel(order.deliveryDate, false) : formatDate(order.deliveryDate)}
+          </span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onComment();
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            className="inline-flex h-6 items-center gap-1 rounded-md border border-stone-200 bg-stone-50 px-1.5 text-[10px] font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-white hover:text-stone-950"
+            aria-label={`Comentar ${order.code}`}
+            title="Comentar"
+          >
+            <MessageSquarePlus className="size-3" />
+            {commentsCount ? commentsCount : null}
+          </button>
+        </div>
       </div>
     </article>
   );
 }
 
-function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: () => void }) {
+function OrderDetailDrawer({ order, comments, onClose }: { order: Order; comments: OrderComment[]; onClose: () => void }) {
   const step = currentStep(order);
+  const commentFormRef = useRef<HTMLFormElement>(null);
+  const [commentState, commentAction] = useActionState(
+    async (_state: CollaborationActionResult, formData: FormData) => {
+      const result = await addOrderComment(formData);
+      if (result.ok) commentFormRef.current?.reset();
+      return result;
+    },
+    initialCommentState,
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -500,10 +536,54 @@ function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: () => vo
                 <div key={item.key} className="flex items-center justify-between gap-3 text-xs border-b border-stone-50 pb-1.5 last:border-0 last:pb-0">
                   <span className="truncate text-stone-600 font-medium">{item.label}</span>
                   <span className="shrink-0 font-mono text-stone-950 bg-stone-50 px-1.5 py-0.5 rounded text-[10px]">
-                    {durationLabel(item.startedAt, item.completedAt)}
+                    {totalDurationLabel(item)}
                   </span>
                 </div>
               ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-stone-200 bg-white p-3">
+            <div className="flex items-center gap-2">
+              <MessageSquarePlus className="size-4 text-stone-500" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500">Comentarios por etapa</h3>
+            </div>
+            <form ref={commentFormRef} action={commentAction} className="mt-3 space-y-2">
+              <input type="hidden" name="orderId" value={order.id} />
+              <input type="hidden" name="stepKey" value={step?.key ?? ""} />
+              <textarea
+                name="body"
+                required
+                minLength={2}
+                maxLength={1000}
+                placeholder={step ? `Comentario para ${step.label}...` : "Comentario sobre el producto..."}
+                className="min-h-20 w-full resize-none rounded-md border border-stone-200 bg-stone-50 p-2.5 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+              />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <CommentFeedback state={commentState} />
+                <SubmitButton pendingLabel="Guardando..." className="inline-flex h-9 items-center justify-center rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">
+                  Guardar comentario
+                </SubmitButton>
+              </div>
+            </form>
+            <div className="mt-3 max-h-52 divide-y divide-stone-100 overflow-y-auto rounded-md border border-stone-100">
+              {comments.map((comment) => (
+                <article key={comment.id} className="p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-stone-900">{comment.author}</p>
+                      <p className="mt-0.5 text-xs text-stone-500">{comment.stepLabel ?? "Comentario general"}</p>
+                    </div>
+                    <time className="text-[10px] font-medium uppercase tracking-[0.1em] text-stone-400">
+                      {new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" }).format(new Date(comment.createdAt))}
+                    </time>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-stone-600">{comment.body}</p>
+                </article>
+              ))}
+              {!comments.length ? (
+                <p className="p-3 text-xs text-stone-500">No hay comentarios para este producto.</p>
+              ) : null}
             </div>
           </section>
 
@@ -528,6 +608,15 @@ function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: () => vo
       </aside>
     </div>
   );}
+
+function CommentFeedback({ state }: { state: CollaborationActionResult }) {
+  if (!state.message) return <span className="text-xs text-stone-400">Se guarda con usuario, fecha y etapa.</span>;
+  return (
+    <span className={cn("text-xs font-medium", state.ok ? "text-emerald-700" : "text-rose-700")}>
+      {state.message}
+    </span>
+  );
+}
 
 function DetailBlock({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
   return (

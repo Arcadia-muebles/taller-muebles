@@ -15,11 +15,14 @@ export function nextWorkStep(order: Order) {
   );
 }
 
+export function workerStep(user: WorkshopUser, order: Order) {
+  const areas = workerAreas(user);
+  return order.steps.find((step) => areas.includes(step.key));
+}
+
 export function canWorkerSeeOrder(user: WorkshopUser, order: Order) {
   if (user.role !== "operator") return true;
-  if (["completed", "cancelled"].includes(order.status)) return false;
-  const step = nextWorkStep(order);
-  return Boolean(step && workerAreas(user).includes(step.key));
+  return Boolean(workerStep(user, order));
 }
 
 export function canWorkerUseStep(user: WorkshopUser, step: ProductionStep) {

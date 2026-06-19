@@ -24,12 +24,6 @@ type OrderTableProps = {
   emptyText?: string;
 };
 
-const priorityLabel = {
-  normal: "Normal",
-  high: "Alta",
-  critical: "Critica",
-};
-
 export function OrderTable({
   orders,
   canEditOrders = false,
@@ -95,15 +89,6 @@ export function OrderTable({
         accessorKey: "status",
         header: "Estado",
         cell: ({ row }) => <StatusBadge type="order" value={row.original.status} />,
-      },
-      {
-        accessorKey: "assignedTo",
-        header: "Resp.",
-        cell: ({ row }) => (
-          <span className="inline-flex max-w-full rounded-md border border-stone-200 bg-white px-2 py-1 text-xs font-medium">
-            <span className="truncate">{row.original.assignedTo}</span>
-          </span>
-        ),
       },
       {
         accessorKey: "deliveryDate",
@@ -288,15 +273,6 @@ export function OrderTable({
           </tbody>
         </table>
       </div>
-
-      <div className="flex flex-wrap items-center gap-2 border-t border-stone-200 px-4 py-3 text-xs text-stone-500">
-        <span>Prioridad:</span>
-        {Object.entries(priorityLabel).map(([key, label]) => (
-          <span key={key} className="rounded-full border border-stone-200 bg-stone-50 px-2 py-1">
-            {label}
-          </span>
-        ))}
-      </div>
     </section>
   );
 }
@@ -324,8 +300,7 @@ function OrderCard({ order, canEditOrders }: { order: Order; canEditOrders: bool
         <StatusBadge type="order" value={order.status} />
       </div>
 
-      <div className="mt-3 grid gap-2 text-xs text-stone-600 sm:grid-cols-3">
-        <Info label="Responsable" value={order.assignedTo} />
+      <div className="mt-3 grid gap-2 text-xs text-stone-600 sm:grid-cols-2">
         <Info label="Entrega" value={`${formatDate(order.deliveryDate)} · ${deliveryLabel(order.deliveryDate, order.status === "completed")}`} />
         <div className="min-w-0 rounded-md border border-stone-200 bg-white p-2">
           <p className="font-medium uppercase tracking-[0.12em] text-stone-400">Avance</p>

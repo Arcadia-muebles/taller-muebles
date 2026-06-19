@@ -12,6 +12,7 @@ import type {
   StockItem,
   StockMovement,
   StoreCode,
+  WorkSession,
 } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
 import { getLocalOrder, listLocalAuditLogs, listLocalOrderAttachments, listLocalOrderComments, listLocalOrders, listLocalStockItems, listLocalStockMovements } from "@/lib/local-store";
@@ -220,7 +221,7 @@ export async function listOrderComments(orderId: string): Promise<OrderComment[]
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_comments")
-    .select("id, order_id, body, created_at, profiles(full_name)")
+    .select("id, order_id, body, step_key, step_label, created_at, profiles(full_name)")
     .eq("order_id", orderId)
     .order("created_at", { ascending: false });
   if (error || !data) return [];
@@ -229,6 +230,8 @@ export async function listOrderComments(orderId: string): Promise<OrderComment[]
     id: string;
     order_id: string;
     body: string;
+    step_key: string | null;
+    step_label: string | null;
     created_at: string;
     profiles: { full_name: string } | null;
   }>).map((comment) => ({
@@ -236,6 +239,8 @@ export async function listOrderComments(orderId: string): Promise<OrderComment[]
     orderId: comment.order_id,
     author: comment.profiles?.full_name ?? "Usuario",
     body: comment.body,
+    stepKey: comment.step_key ?? undefined,
+    stepLabel: comment.step_label ?? undefined,
     createdAt: comment.created_at,
   }));
 }
@@ -307,7 +312,25 @@ function mapStepRecord(record: StepRecord): ProductionStep {
     notes: record.notes ?? record.blocked_reason ?? undefined,
     startedAt: record.started_at ?? undefined,
     completedAt: record.completed_at ?? undefined,
+    workSessions: parseWorkSessions(record.work_sessions, record.started_at ?? undefined, record.completed_at ?? undefined),
   };
+}
+
+function parseWorkSessions(value: unknown, startedAt?: string, completedAt?: string): WorkSession[] {
+  if (Array.isArray(value)) {
+    const sessions = value
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const session = item as { startedAt?: unknown; completedAt?: unknown };
+        if (typeof session.startedAt !== "string") return null;
+        const parsed: WorkSession = { startedAt: session.startedAt };
+        if (typeof session.completedAt === "string") parsed.completedAt = session.completedAt;
+        return parsed;
+      })
+      .filter((session): session is WorkSession => Boolean(session));
+    if (sessions.length) return sessions;
+  }
+  return startedAt ? [{ startedAt, completedAt }] : [];
 }
 
 function labelFromStepKey(step: string) {

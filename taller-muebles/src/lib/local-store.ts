@@ -191,12 +191,14 @@ export async function createLocalOrder(input: {
     enabled: true,
     required: true,
   }))).filter((step) => step.enabled);
+  const createdAt = nowIso();
   const steps: ProductionStep[] = enabledSteps.map((step, index) => ({
     key: step.key,
     label: step.label,
     owner: pickLocalStepOwner(data, step.key, step.label),
     status: index === 0 ? "active" : "pending",
-    startedAt: index === 0 ? nowIso() : undefined,
+    startedAt: index === 0 ? createdAt : undefined,
+    workSessions: index === 0 ? [{ startedAt: createdAt }] : [],
   }));
 
   const order: Order = {
@@ -285,10 +287,12 @@ export async function closeLocalOrder(id: string) {
 
   order.status = "completed";
   order.condition = "Entregado";
+  const now = nowIso();
   order.steps = order.steps.map((step) => ({
     ...step,
     status: "done",
-    completedAt: step.completedAt ?? nowIso(),
+    completedAt: step.completedAt ?? now,
+    workSessions: closeSessions(step, now),
   }));
   addAudit(data, order.id, "close_order", "Orden cerrada y etapas marcadas como terminadas");
   await writeData(data);
@@ -300,6 +304,7 @@ export async function updateLocalProductionStep(input: {
   status: StepStatus;
   reason?: string;
   autoCompleteAfterQuality?: boolean;
+  noteOnly?: boolean;
 }) {
   const data = await readData();
   const order = data.orders.find((item) => item.id === input.orderId);
@@ -307,11 +312,27 @@ export async function updateLocalProductionStep(input: {
   if (!order || !step) return false;
 
   step.status = input.status;
+  if (input.noteOnly) step.notes = input.reason?.trim() || undefined;
   if (input.reason?.trim()) step.notes = input.reason.trim();
   if (input.status === "blocked") step.notes = input.reason;
-  if (input.status === "active") step.startedAt = nowIso();
-  if (input.status === "done") {
-    step.completedAt = nowIso();
+  const now = nowIso();
+  step.workSessions = step.workSessions?.length ? step.workSessions : step.startedAt ? [{ startedAt: step.startedAt, completedAt: step.completedAt }] : [];
+
+  if (!input.noteOnly && input.status === "active") {
+    step.startedAt = now;
+    step.completedAt = undefined;
+    if (!step.workSessions.some((session) => !session.completedAt)) {
+      step.workSessions.push({ startedAt: now });
+    }
+  }
+  if (!input.noteOnly && input.status === "done") {
+    step.completedAt = now;
+    const openSession = [...step.workSessions].reverse().find((session) => !session.completedAt);
+    if (openSession) {
+      openSession.completedAt = now;
+    } else {
+      step.workSessions.push({ startedAt: step.startedAt ?? now, completedAt: now });
+    }
     const nextStep = nextPendingStep(order, step.key);
     if (nextStep) {
       nextStep.status = "pending";
@@ -353,6 +374,7 @@ export async function moveLocalOrderToStep(input: {
         ...step,
         status: "done",
         completedAt: step.completedAt ?? now,
+        workSessions: closeSessions(step, now),
       };
     }
     if (index === targetIndex) {
@@ -361,16 +383,18 @@ export async function moveLocalOrderToStep(input: {
         status: "active",
         startedAt: now,
         completedAt: undefined,
+        workSessions: openSessions(step, now),
         notes: undefined,
       };
     }
     return {
       ...step,
-      status: "pending",
-      startedAt: undefined,
-      completedAt: undefined,
-      notes: undefined,
-    };
+        status: "pending",
+        startedAt: undefined,
+        completedAt: undefined,
+        workSessions: step.workSessions ?? [],
+        notes: undefined,
+      };
   });
 
   order.status = input.stepKey === "quality"
@@ -418,16 +442,24 @@ export async function listLocalOrderComments(orderId: string) {
   return (await readData()).comments.filter((comment) => comment.orderId === orderId);
 }
 
-export async function createLocalOrderComment(orderId: string, author: string, body: string) {
+export async function createLocalOrderComment(input: {
+  orderId: string;
+  author: string;
+  body: string;
+  stepKey?: AreaKey;
+  stepLabel?: string;
+}) {
   const data = await readData();
   data.comments.unshift({
     id: crypto.randomUUID(),
-    orderId,
-    author,
-    body,
+    orderId: input.orderId,
+    author: input.author,
+    body: input.body,
+    stepKey: input.stepKey,
+    stepLabel: input.stepLabel,
     createdAt: new Date().toISOString(),
   });
-  addAudit(data, orderId, "add_comment", `${author} agregó un comentario`);
+  addAudit(data, input.orderId, "add_comment", `${input.author} agrego un comentario${input.stepLabel ? ` en ${input.stepLabel}` : ""}`);
   await writeData(data);
 }
 
@@ -616,6 +648,33 @@ function nextPendingStep(order: Order, currentStepKey: AreaKey) {
   const currentIndex = order.steps.findIndex((step) => step.key === currentStepKey);
   if (currentIndex < 0) return undefined;
   return order.steps.slice(currentIndex + 1).find((step) => step.status === "pending");
+}
+
+function sessionsForStep(step: ProductionStep) {
+  return step.workSessions?.length
+    ? step.workSessions
+    : step.startedAt
+      ? [{ startedAt: step.startedAt, completedAt: step.completedAt }]
+      : [];
+}
+
+function openSessions(step: ProductionStep, startedAt: string) {
+  const sessions = sessionsForStep(step).map((session) => ({ ...session }));
+  if (!sessions.some((session) => !session.completedAt)) {
+    sessions.push({ startedAt });
+  }
+  return sessions;
+}
+
+function closeSessions(step: ProductionStep, completedAt: string) {
+  const sessions = sessionsForStep(step).map((session) => ({ ...session }));
+  const openSession = [...sessions].reverse().find((session) => !session.completedAt);
+  if (openSession) {
+    openSession.completedAt = completedAt;
+  } else if (step.startedAt) {
+    sessions.push({ startedAt: step.startedAt, completedAt });
+  }
+  return sessions;
 }
 
 function addAudit(data: LocalData, orderId: string, action: string, summary: string) {

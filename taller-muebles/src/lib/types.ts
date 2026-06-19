@@ -16,6 +16,11 @@ export type Role = "admin" | "manager" | "operator" | "viewer";
 
 export type AreaKey = string;
 
+export type WorkSession = {
+  startedAt: string;
+  completedAt?: string;
+};
+
 export type ProductionStep = {
   key: AreaKey;
   label: string;
@@ -24,6 +29,7 @@ export type ProductionStep = {
   notes?: string;
   startedAt?: string;
   completedAt?: string;
+  workSessions?: WorkSession[];
 };
 
 export type AppUser = {
@@ -99,6 +105,8 @@ export type OrderComment = {
   author: string;
   body: string;
   createdAt: string;
+  stepKey?: AreaKey;
+  stepLabel?: string;
 };
 
 export type OrderAttachment = {

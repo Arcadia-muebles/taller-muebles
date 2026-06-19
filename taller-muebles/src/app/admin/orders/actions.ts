@@ -152,16 +152,20 @@ export async function createOrder(
     const enabledSteps = settings.production.steps.filter((step) => step.enabled);
   const operatorByArea = operatorMapByArea(await listUsers());
   const { error: stepsError } = await supabase.from("production_steps").insert(
-    enabledSteps.map((step, index) => ({
+    enabledSteps.map((step, index) => {
+      const startedAt = index === 0 ? new Date().toISOString() : null;
+      return {
       order_id: order.id,
       step: step.key,
       step_label: step.label,
       sort_order: index + 1,
       status: index === 0 ? "active" : "pending",
-      started_at: index === 0 ? new Date().toISOString() : null,
+      started_at: startedAt,
+      work_sessions: startedAt ? [{ startedAt }] : [],
       notes: null,
       assigned_to: operatorByArea.get(step.key) ?? null,
-    })),
+    };
+    }),
   );  if (stepsError) {
     await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id);
     return {
@@ -392,6 +396,7 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
           ? {
               status: "done" as const,
               completed_at: step.completedAt ?? now,
+              work_sessions: closeWorkSessions(step, now),
               updated_by: profileId,
             }
           : index === targetIndex
@@ -399,6 +404,7 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
                 status: "active" as const,
                 started_at: now,
                 completed_at: null,
+                work_sessions: openWorkSessions(step, now),
                 blocked_reason: null,
                 notes: null,
                 updated_by: profileId,
@@ -636,4 +642,31 @@ function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
     }
   }
   return map;
+}
+
+function sessionsForStep(step: Awaited<ReturnType<typeof listOrders>>[number]["steps"][number]) {
+  return step.workSessions?.length
+    ? step.workSessions
+    : step.startedAt
+      ? [{ startedAt: step.startedAt, completedAt: step.completedAt }]
+      : [];
+}
+
+function openWorkSessions(step: Awaited<ReturnType<typeof listOrders>>[number]["steps"][number], startedAt: string) {
+  const sessions = sessionsForStep(step).map((session) => ({ ...session }));
+  if (!sessions.some((session) => !session.completedAt)) {
+    sessions.push({ startedAt });
+  }
+  return sessions;
+}
+
+function closeWorkSessions(step: Awaited<ReturnType<typeof listOrders>>[number]["steps"][number], completedAt: string) {
+  const sessions = sessionsForStep(step).map((session) => ({ ...session }));
+  const openSession = [...sessions].reverse().find((session) => !session.completedAt);
+  if (openSession) {
+    openSession.completedAt = completedAt;
+  } else {
+    sessions.push({ startedAt: step.startedAt ?? completedAt, completedAt });
+  }
+  return sessions;
 }

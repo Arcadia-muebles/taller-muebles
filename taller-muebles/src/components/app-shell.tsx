@@ -2,6 +2,7 @@ import { LogIn } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { roleLabel } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
+import { getSystemSettings } from "@/lib/repositories/settings";
 import type { Role } from "@/lib/types";
 import { MobileNavigation } from "./mobile-navigation";
 import { SidebarNavigation } from "./sidebar-navigation";
@@ -15,10 +16,12 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
-export function AppShell({ active, user, children }: AppShellProps) {
+export async function AppShell({ active, user, children }: AppShellProps) {
+  const settings = await getSystemSettings();
   const canUseAdmin = user?.role !== "operator";
   const canEditAdmin = user?.role === "admin";
   const localMode = !hasSupabaseConfig();
+  const appName = settings.general.businessName.trim() || "Produccion taller";
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-stone-100 text-stone-950">
@@ -29,7 +32,7 @@ export function AppShell({ active, user, children }: AppShellProps) {
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-500">Arcadia</p>
           </div>
           <div className="mt-3">
-            <p className="text-[15px] font-semibold leading-tight text-stone-950">Produccion taller</p>
+            <p className="text-[15px] font-semibold leading-tight text-stone-950">{appName}</p>
           </div>
         </div>
 

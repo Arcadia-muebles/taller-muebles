@@ -7,7 +7,7 @@ import {
   type CollaborationActionResult,
   uploadOrderAttachment,
 } from "@/app/admin/orders/collaboration-actions";
-import type { OrderAttachment, OrderComment } from "@/lib/types";
+import type { OrderAttachment, OrderComment, ProductionStep } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
 
 const initialActionState: CollaborationActionResult = { ok: false, message: "" };
@@ -17,11 +17,15 @@ export function OrderCollaboration({
   comments,
   attachments,
   canUpload,
+  steps = [],
+  defaultStepKey,
 }: {
   orderId: string;
   comments: OrderComment[];
   attachments: OrderAttachment[];
   canUpload: boolean;
+  steps?: ProductionStep[];
+  defaultStepKey?: string;
 }) {
   const commentFormRef = useRef<HTMLFormElement>(null);
   const uploadFormRef = useRef<HTMLFormElement>(null);
@@ -54,6 +58,23 @@ export function OrderCollaboration({
         </div>
         <form ref={commentFormRef} action={commentAction} className="border-b border-stone-100 p-4">
           <input type="hidden" name="orderId" value={orderId} />
+          {steps.length ? (
+            <label className="mb-3 block text-xs font-medium uppercase tracking-[0.12em] text-stone-500">
+              Etapa del proceso
+              <select
+                name="stepKey"
+                defaultValue={defaultStepKey ?? ""}
+                className="mt-2 w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm normal-case tracking-normal text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
+              >
+                <option value="">Comentario general</option>
+                {steps.map((step) => (
+                  <option key={step.key} value={step.key}>
+                    {step.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <textarea
             name="body"
             required
@@ -72,8 +93,11 @@ export function OrderCollaboration({
         <div className="max-h-80 divide-y divide-stone-100 overflow-y-auto">
           {comments.map((comment) => (
             <article key={comment.id} className="p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold">{comment.author}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{comment.author}</p>
+                  <p className="mt-0.5 text-xs text-stone-500">{comment.stepLabel ?? "Comentario general"}</p>
+                </div>
                 <time className="text-[11px] font-medium uppercase tracking-[0.1em] text-stone-400">
                   {new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(comment.createdAt))}
                 </time>

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { createLocalOrderAttachment, createLocalOrderComment } from "@/lib/local-store";
+import { getOrder } from "@/lib/repositories/production";
 import { createClient } from "@/lib/supabase/server";
 
 const maxAttachmentSize = 10 * 1024 * 1024;
@@ -12,6 +13,8 @@ const maxAttachmentSize = 10 * 1024 * 1024;
 const commentSchema = z.object({
   orderId: z.string().min(1),
   body: z.string().trim().min(2).max(1000),
+  stepKey: z.string().trim().max(40).optional(),
+  stepLabel: z.string().trim().max(80).optional(),
 });
 
 export type CollaborationActionResult = {
@@ -24,13 +27,28 @@ export async function addOrderComment(formData: FormData) {
   const parsed = commentSchema.safeParse({
     orderId: formData.get("orderId"),
     body: formData.get("body"),
+    stepKey: formData.get("stepKey")?.toString() || undefined,
+    stepLabel: formData.get("stepLabel")?.toString() || undefined,
   });
   if (!parsed.success) {
     return { ok: false, message: "Escribe un comentario de al menos 2 caracteres." };
   }
+  const order = await getOrder(parsed.data.orderId);
+  if (!order) return { ok: false, message: "No se encontro la orden." };
+  const commentStep = parsed.data.stepKey
+    ? order.steps.find((step) => step.key === parsed.data.stepKey)
+    : undefined;
+  const stepKey = commentStep?.key;
+  const stepLabel = commentStep?.label;
 
   if (!hasSupabaseConfig()) {
-    await createLocalOrderComment(parsed.data.orderId, user.name, parsed.data.body);
+    await createLocalOrderComment({
+      orderId: parsed.data.orderId,
+      author: user.name,
+      body: parsed.data.body,
+      stepKey,
+      stepLabel,
+    });
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
@@ -40,6 +58,8 @@ export async function addOrderComment(formData: FormData) {
       order_id: parsed.data.orderId,
       profile_id: profileId,
       body: parsed.data.body,
+      step_key: stepKey,
+      step_label: stepLabel,
     });
     if (error) return { ok: false, message: "No fue posible publicar el comentario." };
 
@@ -48,12 +68,14 @@ export async function addOrderComment(formData: FormData) {
       action: "add_comment",
       entity: "order_comments",
       profile_id: profileId,
+      field_name: stepLabel ?? null,
       new_value: parsed.data.body.slice(0, 180),
     });
   }
 
   revalidatePath(`/admin/orders/${parsed.data.orderId}`);
   revalidatePath(`/taller/orders/${parsed.data.orderId}`);
+  revalidatePath("/admin");
   revalidatePath("/taller");
   return { ok: true, message: "Comentario publicado." };
 }

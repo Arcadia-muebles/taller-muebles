@@ -190,6 +190,8 @@ export type Database = {
           id: string
           order_id: string
           profile_id: string | null
+          step_key: string | null
+          step_label: string | null
         }
         Insert: {
           body: string
@@ -197,6 +199,8 @@ export type Database = {
           id?: string
           order_id: string
           profile_id?: string | null
+          step_key?: string | null
+          step_label?: string | null
         }
         Update: {
           body?: string
@@ -204,6 +208,8 @@ export type Database = {
           id?: string
           order_id?: string
           profile_id?: string | null
+          step_key?: string | null
+          step_label?: string | null
         }
         Relationships: [
           {
@@ -338,6 +344,7 @@ export type Database = {
           step_label: string
           updated_at: string
           updated_by: string | null
+          work_sessions: Json
         }
         Insert: {
           assigned_to?: string | null
@@ -354,6 +361,7 @@ export type Database = {
           step_label: string
           updated_at?: string
           updated_by?: string | null
+          work_sessions?: Json
         }
         Update: {
           assigned_to?: string | null
@@ -370,6 +378,7 @@ export type Database = {
           step_label?: string
           updated_at?: string
           updated_by?: string | null
+          work_sessions?: Json
         }
         Relationships: [
           {
