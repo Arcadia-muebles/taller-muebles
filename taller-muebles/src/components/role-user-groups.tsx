@@ -112,7 +112,12 @@ export function RoleUserGroups({
                             </div>
                             <DeactivateUserButton userId={user.id} disabled={disabled} />
                           </div>
-                          <UserEditForm user={user} steps={steps} disabled={disabled} />
+                          <UserEditForm
+                            user={user}
+                            steps={steps}
+                            supabaseEnabled={supabaseEnabled}
+                            disabled={disabled}
+                          />
                         </div>
                       ) : null}
                     </article>

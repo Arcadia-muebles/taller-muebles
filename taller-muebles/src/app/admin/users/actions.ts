@@ -104,10 +104,15 @@ const updateUserSchema = z.object({
   role: z.enum(["admin", "manager", "operator", "viewer"]),
   areas: z.array(z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/)).optional(),
   active: z.enum(["true", "false"]).transform((value) => value === "true"),
-});
+  password: z.string().min(8, "La nueva clave debe tener al menos 8 caracteres.").max(72).optional(),
+  passwordConfirmation: z.string().optional(),
+}).refine(
+  (data) => !data.password || data.password === data.passwordConfirmation,
+  { message: "Las claves no coinciden.", path: ["passwordConfirmation"] },
+);
 
 export async function updateUser(formData: FormData): Promise<UserActionResult> {
-  await requireSession(["admin"]);
+  const session = await requireSession(["admin"]);
   const parsed = updateUserSchema.safeParse({
     id: formData.get("userId"),
     email: formData.get("email"),
@@ -115,6 +120,8 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
     role: formData.get("role"),
     areas: formData.getAll("areas").map(String).filter(Boolean),
     active: formData.get("active") ?? "false",
+    password: formData.get("password") || undefined,
+    passwordConfirmation: formData.get("passwordConfirmation") || undefined,
   });
 
   if (!parsed.success) {
@@ -153,6 +160,7 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
 
       const { error: authError } = await admin.auth.admin.updateUserById(profile.user_id, {
         email: parsed.data.email,
+        ...(parsed.data.password ? { password: parsed.data.password } : {}),
       });
       if (authError) return { ok: false, message: authError.message };
 
@@ -166,6 +174,16 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
         })
         .eq("id", parsed.data.id);
       if (error) return { ok: false, message: error.message };
+
+      if (parsed.data.password) {
+        const { error: auditError } = await admin.from("audit_logs").insert({
+          profile_id: session.id,
+          action: "password_changed_by_admin",
+          entity: "profile",
+          entity_id: parsed.data.id,
+        });
+        if (auditError) console.error("Password change audit failed:", auditError.message);
+      }
     }
   } catch (error) {
     console.error("User update failed:", error);
@@ -175,5 +193,8 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
   revalidatePath("/admin/users");
   revalidatePath("/admin");
   revalidatePath("/taller");
-  return { ok: true, message: "Usuario actualizado." };
+  return {
+    ok: true,
+    message: parsed.data.password ? "Usuario y clave actualizados." : "Usuario actualizado.",
+  };
 }

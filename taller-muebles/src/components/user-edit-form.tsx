@@ -12,10 +12,12 @@ const inputClass = "control disabled:cursor-not-allowed disabled:opacity-50";
 export function UserEditForm({
   user,
   steps,
+  supabaseEnabled,
   disabled,
 }: {
   user: AppUser;
   steps: SystemSettings["production"]["steps"];
+  supabaseEnabled: boolean;
   disabled: boolean;
 }) {
   const [role, setRole] = useState(user.role);
@@ -74,6 +76,37 @@ export function UserEditForm({
             ))}
           </div>
         </fieldset>
+      ) : null}
+      {supabaseEnabled ? (
+        <div className="grid gap-3 border-t border-stone-200 pt-3 md:col-span-5 md:grid-cols-2">
+          <Field label="Nueva clave (opcional)">
+            <input
+              name="password"
+              type="password"
+              minLength={8}
+              maxLength={72}
+              autoComplete="new-password"
+              placeholder="Mínimo 8 caracteres"
+              disabled={disabled}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Confirmar nueva clave">
+            <input
+              name="passwordConfirmation"
+              type="password"
+              minLength={8}
+              maxLength={72}
+              autoComplete="new-password"
+              placeholder="Repite la nueva clave"
+              disabled={disabled}
+              className={inputClass}
+            />
+          </Field>
+          <p className="text-xs text-stone-500 md:col-span-2">
+            Déjalas vacías para conservar la clave actual.
+          </p>
+        </div>
       ) : null}
     </form>
   );

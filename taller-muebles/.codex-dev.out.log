@@ -1,0 +1,116 @@
+
+> taller-muebles@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.7 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://100.69.254.3:3000
+- Environments: .env.local
+✓ Ready in 878ms
+
+ GET /login 200 in 45ms (next.js: 6ms, application-code: 39ms)
+ GET /login 200 in 50ms (next.js: 6ms, application-code: 44ms)
+ GET /login 200 in 48ms (next.js: 8ms, application-code: 40ms)
+ GET / 307 in 229ms (next.js: 77ms, application-code: 152ms)
+ GET /login 200 in 47ms (next.js: 5ms, application-code: 42ms)
+ GET /login 200 in 42ms (next.js: 6ms, application-code: 35ms)
+ GET /login 200 in 49ms (next.js: 6ms, application-code: 43ms)
+ GET /login 200 in 64ms (next.js: 8ms, application-code: 57ms)
+ GET /admin 200 in 1042ms (next.js: 96ms, application-code: 946ms)
+ POST /login 303 in 1761ms (next.js: 6ms, application-code: 1755ms)
+  └─ ƒ requestLogin({"message":"","status":"idle"}, {}) in 652ms src/app/login/actions.ts
+ GET /admin/stock 200 in 1072ms (next.js: 46ms, application-code: 1025ms)
+ GET /admin/reports 200 in 762ms (next.js: 51ms, application-code: 711ms)
+ GET /admin/history 200 in 722ms (next.js: 39ms, application-code: 683ms)
+ GET /admin/users 200 in 919ms (next.js: 40ms, application-code: 879ms)
+ POST /admin/users 200 in 1831ms (next.js: 5ms, application-code: 1826ms)
+  └─ ƒ createUser({}) in 1030ms src/app/admin/users/actions.ts
+ GET /admin/users 200 in 987ms (next.js: 5ms, application-code: 983ms)
+ GET /login 200 in 23ms (next.js: 4ms, application-code: 19ms)
+ POST /admin/users 303 in 253ms (next.js: 5ms, application-code: 248ms)
+  └─ ƒ logout() in 209ms src/app/login/actions.ts
+ POST /login 200 in 285ms (next.js: 5ms, application-code: 280ms)
+  └─ ƒ requestLogin({"message":"","status":"idle"}, {}) in 269ms src/app/login/actions.ts
+ GET /admin 200 in 584ms (next.js: 4ms, application-code: 579ms)
+ POST /login 303 in 1227ms (next.js: 8ms, application-code: 1219ms)
+  └─ ƒ requestLogin({"message":"Correo o clave incorrectos.","status":"error"}, {}) in 620ms src/app/login/actions.ts
+ GET /admin/users 200 in 737ms (next.js: 4ms, application-code: 733ms)
+ POST /admin/users 200 in 1909ms (next.js: 4ms, application-code: 1905ms)
+  └─ ƒ createUser({}) in 1230ms src/app/admin/users/actions.ts
+ GET /login 200 in 23ms (next.js: 4ms, application-code: 19ms)
+ POST /admin/users 303 in 252ms (next.js: 5ms, application-code: 247ms)
+  └─ ƒ logout() in 213ms src/app/login/actions.ts
+ POST /login 200 in 950ms (next.js: 7ms, application-code: 943ms)
+  └─ ƒ requestLogin({"message":"","status":"idle"}, {}) in 921ms src/app/login/actions.ts
+ GET /taller 200 in 612ms (next.js: 47ms, application-code: 565ms)
+ POST /login 303 in 1215ms (next.js: 8ms, application-code: 1207ms)
+  └─ ƒ requestLogin({"message":"Este usuario es de taller y no puede entrar al panel administrador.","status":"error"}, {}) in 584ms src/app/login/actions.ts
+ GET /login 200 in 24ms (next.js: 4ms, application-code: 20ms)
+ POST /taller 303 in 268ms (next.js: 4ms, application-code: 264ms)
+  └─ ƒ logout() in 227ms src/app/login/actions.ts
+ GET /admin 200 in 573ms (next.js: 4ms, application-code: 569ms)
+ POST /login 303 in 1271ms (next.js: 4ms, application-code: 1266ms)
+  └─ ƒ requestLogin({"message":"","status":"idle"}, {}) in 681ms src/app/login/actions.ts
+ GET /admin/users 200 in 721ms (next.js: 7ms, application-code: 714ms)
+ POST /admin/users 200 in 1996ms (next.js: 4ms, application-code: 1992ms)
+  └─ ƒ createUser({}) in 1263ms src/app/admin/users/actions.ts
+ POST /admin/users 200 in 1583ms (next.js: 4ms, application-code: 1579ms)
+  └─ ƒ createUser({}) in 887ms src/app/admin/users/actions.ts
+ GET /admin 200 in 901ms (next.js: 4ms, application-code: 897ms)
+ GET /admin 200 in 756ms (next.js: 5ms, application-code: 751ms)
+ GET /admin/orders/new 200 in 677ms (next.js: 50ms, application-code: 627ms)
+ GET /admin 200 in 1705ms (next.js: 6ms, application-code: 1699ms)
+ GET /admin 200 in 1473ms (next.js: 4ms, application-code: 1469ms)
+ POST /admin 200 in 901ms (next.js: 5ms, application-code: 895ms)
+  └─ ƒ moveOrderStage({"orderId":"c5d38b1f-36ff-438e-855a-39d8709455e4","stepKey":"dispatch"}) in 878ms src/app/admin/orders/actions.ts
+ POST /admin 200 in 904ms (next.js: 9ms, application-code: 896ms)
+  └─ ƒ moveOrderStage({"orderId":"c5d38b1f-36ff-438e-855a-39d8709455e4","stepKey":"dispatch"}) in 887ms src/app/admin/orders/actions.ts
+ GET /admin 200 in 1484ms (next.js: 5ms, application-code: 1479ms)
+ POST /admin 200 in 4.1s (next.js: 4ms, application-code: 4.0s)
+  └─ ƒ moveOrderStage({"orderId":"1aed2611-0163-415f-9544-5f43b37caaa4","stepKey":"quality"}) in 2736ms src/app/admin/orders/actions.ts
+ POST /admin 200 in 775ms (next.js: 5ms, application-code: 770ms)
+  └─ ƒ moveOrderStage({"orderId":"1aed2611-0163-415f-9544-5f43b37caaa4","stepKey":"dispatch"}) in 762ms src/app/admin/orders/actions.ts
+ POST /admin 200 in 901ms (next.js: 5ms, application-code: 896ms)
+  └─ ƒ moveOrderStage({"orderId":"1aed2611-0163-415f-9544-5f43b37caaa4","stepKey":"dispatch"}) in 887ms src/app/admin/orders/actions.ts
+ POST /admin 200 in 3.7s (next.js: 8ms, application-code: 3.6s)
+  └─ ƒ moveOrderStage({"orderId":"1aed2611-0163-415f-9544-5f43b37caaa4","stepKey":"upholstery"}) in 2299ms src/app/admin/orders/actions.ts
+ POST /admin 200 in 880ms (next.js: 6ms, application-code: 875ms)
+  └─ ƒ moveOrderStage({"orderId":"f9f6b0d7-225a-400f-af6e-9d63e141e2d7","stepKey":"en_blanco"}) in 865ms src/app/admin/orders/actions.ts
+ GET /admin 200 in 1599ms (next.js: 7ms, application-code: 1592ms)
+ GET /admin/users 200 in 724ms (next.js: 5ms, application-code: 719ms)
+ GET /admin/users 200 in 791ms (next.js: 4ms, application-code: 786ms)
+ GET /admin/users 200 in 956ms (next.js: 5ms, application-code: 951ms)
+ GET /admin 200 in 1735ms (next.js: 4ms, application-code: 1731ms)
+ POST /admin 200 in 4.0s (next.js: 5ms, application-code: 4.0s)
+  └─ ƒ moveOrderStage({"orderId":"cf7f4e83-f827-430d-b302-015a023b8353","stepKey":"en_blanco"}) in 2679ms src/app/admin/orders/actions.ts
+ POST /admin 200 in 3.7s (next.js: 7ms, application-code: 3.7s)
+  └─ ƒ moveOrderStage({"orderId":"cf7f4e83-f827-430d-b302-015a023b8353","stepKey":"structure"}) in 2639ms src/app/admin/orders/actions.ts
+ POST /admin 200 in 3.6s (next.js: 8ms, application-code: 3.6s)
+  └─ ƒ moveOrderStage({"orderId":"c514fd2b-44d1-4699-ac75-3f051a065ad5","stepKey":"dispatch"}) in 2475ms src/app/admin/orders/actions.ts
+ POST /admin 200 in 3.6s (next.js: 4ms, application-code: 3.6s)
+  └─ ƒ moveOrderStage({"orderId":"c514fd2b-44d1-4699-ac75-3f051a065ad5","stepKey":"quality"}) in 2569ms src/app/admin/orders/actions.ts
+ GET /admin 200 in 2.0s (next.js: 6ms, application-code: 2.0s)
+✓ Compiled in 255ms
+ GET /admin 200 in 1461ms (next.js: 4ms, application-code: 1457ms)
+ GET /admin 200 in 861ms (next.js: 163ms, application-code: 698ms)
+ GET /admin 200 in 425ms (next.js: 7ms, application-code: 418ms)
+ GET /admin 200 in 426ms (next.js: 31ms, application-code: 395ms)
+✓ Compiled in 90ms
+ GET /admin 200 in 1029ms (next.js: 188ms, application-code: 840ms)
+ GET /admin 200 in 537ms (next.js: 5ms, application-code: 532ms)
+ GET /admin 200 in 357ms (next.js: 6ms, application-code: 351ms)
+ GET /admin 200 in 357ms (next.js: 27ms, application-code: 330ms)
+ GET /admin/users 200 in 1220ms (next.js: 237ms, application-code: 983ms)
+ GET /admin/users 200 in 937ms (next.js: 6ms, application-code: 932ms)
+ GET /admin 200 in 1531ms (next.js: 8ms, application-code: 1522ms)
+ GET /admin 200 in 1571ms (next.js: 5ms, application-code: 1566ms)
+ GET /admin 200 in 1499ms (next.js: 5ms, application-code: 1494ms)
+ POST /admin 200 in 4.4s (next.js: 5ms, application-code: 4.4s)
+  └─ ƒ moveOrderStage({"orderId":"cf7f4e83-f827-430d-b302-015a023b8353","stepKey":"en_blanco"}) in 2944ms src/app/admin/orders/actions.ts
+ GET /admin/stock 200 in 653ms (next.js: 27ms, application-code: 627ms)
+ GET /admin/reports 200 in 1090ms (next.js: 36ms, application-code: 1055ms)
+ GET /admin/history 200 in 1010ms (next.js: 25ms, application-code: 985ms)
+ GET /admin/users 200 in 794ms (next.js: 5ms, application-code: 790ms)
+ GET /admin/settings 200 in 599ms (next.js: 41ms, application-code: 558ms)
+ GET /admin/stock 200 in 687ms (next.js: 34ms, application-code: 653ms)
+ GET /admin 200 in 1301ms (next.js: 5ms, application-code: 1297ms)
