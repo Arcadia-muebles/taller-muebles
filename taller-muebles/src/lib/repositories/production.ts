@@ -309,7 +309,9 @@ function mapStepRecord(record: StepRecord): ProductionStep {
     label: record.step_label || labelFromStepKey(record.step),
     owner: record.assigned_profile?.full_name ?? "Sin asignar",
     status: record.status as StepStatus,
-    notes: record.notes ?? record.blocked_reason ?? undefined,
+    notes: record.status === "blocked"
+      ? record.blocked_reason ?? record.notes ?? undefined
+      : record.notes ?? undefined,
     startedAt: record.started_at ?? undefined,
     completedAt: record.completed_at ?? undefined,
     workSessions: parseWorkSessions(record.work_sessions, record.started_at ?? undefined, record.completed_at ?? undefined),

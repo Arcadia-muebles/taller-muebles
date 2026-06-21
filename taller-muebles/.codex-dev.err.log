@@ -10,3 +10,4 @@ module.exports = {
 
 Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
 Supabase session validation failed: Auth session missing!
+Supabase session validation failed: Auth session missing!

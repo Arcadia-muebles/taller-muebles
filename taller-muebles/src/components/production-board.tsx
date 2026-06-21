@@ -21,12 +21,14 @@ import { moveOrderStage } from "@/app/admin/orders/actions";
 import type { AreaKey, Order, OrderComment, ProductionStep, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, formatDate, totalDurationLabel } from "@/lib/utils";
 import { SubmitButton } from "./submit-button";
+import { ProductionStepControls } from "./production-step-controls";
 import { StatusBadge } from "./status-badge";
 
 type ProductionBoardProps = {
   orders: Order[];
   steps: SystemSettings["production"]["steps"];
   canMove: boolean;
+  canManageProcess: boolean;
   commentsByOrder?: Record<string, OrderComment[]>;
 };
 
@@ -44,7 +46,7 @@ type TouchDrag = {
 
 const initialCommentState: CollaborationActionResult = { ok: false, message: "" };
 
-export function ProductionBoard({ orders, steps, canMove, commentsByOrder = {} }: ProductionBoardProps) {
+export function ProductionBoard({ orders, steps, canMove, canManageProcess, commentsByOrder = {} }: ProductionBoardProps) {
   const enabledSteps = steps.filter((step) => step.enabled);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeStepTab, setActiveStepTab] = useState<AreaKey>(enabledSteps[0]?.key);
@@ -329,7 +331,12 @@ export function ProductionBoard({ orders, steps, canMove, commentsByOrder = {} }
       </div>
 
       {selectedId && selected && (
-        <OrderDetailDrawer order={selected} comments={commentsByOrder[selected.id] ?? []} onClose={() => setSelectedId(null)} />
+        <OrderDetailDrawer
+          order={selected}
+          comments={commentsByOrder[selected.id] ?? []}
+          canManageProcess={canManageProcess}
+          onClose={() => setSelectedId(null)}
+        />
       )}
     </section>
   );
@@ -448,7 +455,17 @@ function ProductCard({
   );
 }
 
-function OrderDetailDrawer({ order, comments, onClose }: { order: Order; comments: OrderComment[]; onClose: () => void }) {
+function OrderDetailDrawer({
+  order,
+  comments,
+  canManageProcess,
+  onClose,
+}: {
+  order: Order;
+  comments: OrderComment[];
+  canManageProcess: boolean;
+  onClose: () => void;
+}) {
   const step = currentStep(order);
   const commentFormRef = useRef<HTMLFormElement>(null);
   const [commentState, commentAction] = useActionState(
@@ -524,6 +541,16 @@ function OrderDetailDrawer({ order, comments, onClose }: { order: Order; comment
                 Iniciada el {formatDate(step.startedAt)}
               </p>
             )}
+            {canManageProcess && step ? (
+              <div className="mt-3 border-t border-stone-200 pt-3">
+                <ProductionStepControls
+                  orderId={order.id}
+                  stepKey={step.key}
+                  status={step.status}
+                  reason={step.notes}
+                />
+              </div>
+            ) : null}
           </div>
 
           <section className="rounded-lg border border-stone-200 bg-white p-3">

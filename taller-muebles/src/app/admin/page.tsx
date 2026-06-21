@@ -19,6 +19,7 @@ export default async function AdminPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
   const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
+  const canManageProcess = user.role === "admin" || user.role === "manager";
   const active = activeOrders(orders);
   const overdue = overdueOrders(orders);
   const blocked = blockedOrders(orders);
@@ -56,7 +57,13 @@ export default async function AdminPage() {
         <StatCard label="Despacho" value={String(dispatching.length)} helper="Listas para salida." icon={Truck} tone={dispatching.length ? "emerald" : "neutral"} />
       </section>
 
-      <ProductionBoard orders={active} steps={settings.production.steps} canMove={canEditOrders} commentsByOrder={commentsByOrder} />
+      <ProductionBoard
+        orders={active}
+        steps={settings.production.steps}
+        canMove={canEditOrders}
+        canManageProcess={canManageProcess}
+        commentsByOrder={commentsByOrder}
+      />
     </AppShell>
   );
 }

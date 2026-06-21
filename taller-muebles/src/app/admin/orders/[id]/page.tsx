@@ -41,6 +41,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 
   const progress = completionPercent(order);
   const canEditOrder = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
+  const canManageProcess = user.role === "admin" || user.role === "manager";
   const canClose = order.steps.every((step) => step.status === "done");
 
   return (
@@ -141,8 +142,13 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                       <p className="text-xs text-stone-500">
                         {totalDurationLabel(step)}
                       </p>
-                      {canEditOrder ? (
-                        <ProductionStepControls orderId={order.id} stepKey={step.key} status={step.status} />
+                      {canManageProcess ? (
+                        <ProductionStepControls
+                          orderId={order.id}
+                          stepKey={step.key}
+                          status={step.status}
+                          reason={step.notes}
+                        />
                       ) : null}
                     </div>
                   </div>
