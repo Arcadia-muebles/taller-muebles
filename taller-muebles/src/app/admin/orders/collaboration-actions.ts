@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { createLocalOrderAttachment, createLocalOrderComment } from "@/lib/local-store";
+import {
+  createLocalOrderAttachment,
+  createLocalOrderComment,
+  updateLocalProductionStepComment,
+} from "@/lib/local-store";
 import { getOrder } from "@/lib/repositories/production";
 import { createClient } from "@/lib/supabase/server";
 import { canWorkerSeeOrder } from "@/lib/workshop-access";
@@ -13,6 +17,12 @@ const maxAttachmentSize = 10 * 1024 * 1024;
 
 const commentSchema = z.object({
   orderId: z.string().min(1),
+  body: z.string().trim().min(2).max(1000),
+});
+
+const stepCommentSchema = z.object({
+  orderId: z.string().min(1),
+  stepKey: z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/),
   body: z.string().trim().min(2).max(1000),
 });
 
@@ -128,6 +138,59 @@ async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createCli
     .eq("active", true)
     .maybeSingle();
   return profile?.id ?? null;
+}
+
+export async function saveProductionStepComment(formData: FormData): Promise<CollaborationActionResult> {
+  const user = await requireSession(["admin", "manager"]);
+  const parsed = stepCommentSchema.safeParse({
+    orderId: formData.get("orderId"),
+    stepKey: formData.get("stepKey"),
+    body: formData.get("body"),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: "Escribe un comentario de al menos 2 caracteres." };
+  }
+
+  if (!hasSupabaseConfig()) {
+    const updated = await updateLocalProductionStepComment(
+      parsed.data.orderId,
+      parsed.data.stepKey,
+      parsed.data.body,
+      user.name,
+    );
+    if (!updated) return { ok: false, message: "No se encontró la etapa seleccionada." };
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) return { ok: false, message: "No se pudo identificar tu perfil." };
+
+    const { data: updated, error } = await supabase
+      .from("production_steps")
+      .update({ notes: parsed.data.body, updated_by: profileId })
+      .eq("order_id", parsed.data.orderId)
+      .eq("step", parsed.data.stepKey)
+      .select("id")
+      .maybeSingle();
+    if (error || !updated) {
+      return { ok: false, message: error?.message ?? "No se encontró la etapa seleccionada." };
+    }
+
+    await supabase.from("audit_logs").insert({
+      order_id: parsed.data.orderId,
+      action: "comment_step",
+      entity: "production_steps",
+      entity_id: updated.id,
+      field_name: "notes",
+      profile_id: profileId,
+      new_value: `${parsed.data.stepKey}: ${parsed.data.body.slice(0, 180)}`,
+    });
+  }
+
+  revalidatePath(`/admin/orders/${parsed.data.orderId}`);
+  revalidatePath(`/taller/orders/${parsed.data.orderId}`);
+  revalidatePath("/admin");
+  revalidatePath("/taller");
+  return { ok: true, message: "Comentario guardado." };
 }
 
 async function canAccessOrder(

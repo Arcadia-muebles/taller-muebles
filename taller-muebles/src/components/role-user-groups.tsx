@@ -146,7 +146,7 @@ function RoleCreateForm({
       )}
       {supabaseEnabled ? (
         <Field label="Clave temporal">
-          <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Minimo 8 caracteres" className={inputClass} />
+          <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" className={inputClass} />
         </Field>
       ) : null}
       <div className="flex flex-col gap-2">

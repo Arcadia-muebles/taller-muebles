@@ -15,7 +15,7 @@ export function ProductionTimeline({ orders }: ProductionTimelineProps) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Carga por proceso</h2>
-          <p className="text-sm text-stone-500">Lectura rapida de avance y cuellos de botella.</p>
+          <p className="text-sm text-stone-500">Lectura rápida de avance y cuellos de botella.</p>
         </div>
         <Timer className="size-5 text-stone-400" />
       </div>
@@ -32,7 +32,7 @@ export function ProductionTimeline({ orders }: ProductionTimelineProps) {
                   <CircleDot className="size-4 text-stone-400" />
                   <p className="text-sm font-medium">{area.label}</p>
                 </div>
-                <p className="text-xs text-stone-500">{total} ordenes</p>
+                <p className="text-xs text-stone-500">{total} órdenes</p>
               </div>
               <div className="flex h-2 overflow-hidden rounded-full bg-stone-200">
                 <div className="bg-blue-500" style={{ width: `${activePct}%` }} />

@@ -13,7 +13,7 @@ export function StockPanel({ items }: StockPanelProps) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold">Stock critico</h2>
-          <p className="text-sm text-stone-500">Materiales que pueden frenar produccion.</p>
+          <p className="text-sm text-stone-500">Materiales que pueden frenar producción.</p>
         </div>
         <Boxes className="size-5 text-stone-400" />
       </div>
@@ -29,7 +29,7 @@ export function StockPanel({ items }: StockPanelProps) {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-amber-950">{item.name}</p>
                 <p className="text-xs text-amber-800">
-                  Minimo {item.minimum} {item.unit}
+                  Mínimo {item.minimum} {item.unit}
                 </p>
               </div>
             </div>

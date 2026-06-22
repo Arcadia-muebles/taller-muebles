@@ -122,7 +122,7 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
         areas: parsed.data.role === "operator" ? parsed.data.areas : undefined,
         active: parsed.data.active,
       });
-      if (!updated) return { ok: false, message: "No se encontro el usuario." };
+      if (!updated) return { ok: false, message: "No se encontró el usuario." };
     } else {
       if (!hasSupabaseAdminConfig()) {
         return { ok: false, message: "Falta configurar la clave de servicio para administrar cuentas." };

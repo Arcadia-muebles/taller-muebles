@@ -10,7 +10,7 @@ export function DeactivateStockButton({ itemId, itemName }: { itemId: string; it
       <input type="hidden" name="stockItemId" value={itemId} />
       <ConfirmSubmitButton
         title="Desactivar material"
-        description={`${itemName} dejara de estar disponible para nuevos movimientos. Sus movimientos historicos se conservaran.`}
+        description={`${itemName} dejará de estar disponible para nuevos movimientos. Sus movimientos históricos se conservarán.`}
         confirmLabel="Desactivar"
         pendingLabel="..."
         triggerTitle={`Desactivar ${itemName}`}

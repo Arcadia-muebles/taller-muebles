@@ -2,7 +2,7 @@ import type { SystemSettings } from "@/lib/types";
 
 export const defaultSystemSettings: SystemSettings = {
   general: {
-    businessName: "Control Produccion",
+    businessName: "Control Producción",
     timezone: "America/Santiago",
     workdayStart: "08:30",
     workdayEnd: "18:00",

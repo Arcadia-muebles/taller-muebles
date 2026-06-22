@@ -12,7 +12,7 @@ export default async function SettingsPage() {
     <AppShell active="admin" user={user}>
       <header className="page-header">
         <div>
-          <p className="page-kicker">Configuracion</p>
+          <p className="page-kicker">Configuración</p>
           <h1 className="page-title">Reglas del sistema</h1>
           <p className="page-description max-w-2xl">
             Controla el funcionamiento diario, validaciones, alertas y permisos de la plataforma.
@@ -20,7 +20,7 @@ export default async function SettingsPage() {
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs text-stone-500">
           <Settings2 className="size-4" />
-          {settings.updatedAt ? `Ultima edicion por ${settings.updatedBy ?? "administrador"}` : "Configuracion inicial"}
+          {settings.updatedAt ? `Última edición por ${settings.updatedBy ?? "administrador"}` : "Configuración inicial"}
         </div>
       </header>
       <SystemSettingsForm initialSettings={settings} canEdit={user.role === "admin"} />

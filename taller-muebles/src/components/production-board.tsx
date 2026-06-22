@@ -2,22 +2,27 @@
 
 import {
   AlertTriangle,
+  ArrowUpRight,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Clock,
   GripVertical,
-  Maximize2,
   MessageSquareText,
   PackageOpen,
+  PauseCircle,
+  Truck,
   UserRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { moveOrderStage } from "@/app/admin/orders/actions";
+import { closeOrder, moveOrderStage } from "@/app/admin/orders/actions";
+import { updateProductionStep } from "@/app/taller/actions";
 import type { AreaKey, Order, ProductionStep, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, durationLabel, formatDate } from "@/lib/utils";
+import { ConfirmSubmitButton } from "./confirm-submit-button";
 import { StatusBadge } from "./status-badge";
 
 type ProductionBoardProps = {
@@ -38,6 +43,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
   const [hoverStep, setHoverStep] = useState<AreaKey | null>(null);
   const [stageOverrides, setStageOverrides] = useState<Record<string, AreaKey>>({});
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   const boardOrders = useMemo(
@@ -89,7 +95,10 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
   }
 
   return (
-    <section className="mt-5 grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_390px]">
+    <section className={cn(
+      "mt-5 grid min-w-0 gap-5",
+      detailOpen ? "2xl:grid-cols-[minmax(0,1fr)_390px]" : "grid-cols-1",
+    )}>
       <div className="panel min-w-0 overflow-hidden">
         <div className="panel-header flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -100,23 +109,34 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                 : "Vista de seguimiento por etapa productiva."}
             </p>
           </div>
-          {feedback ? (
-            <div className={cn(
-              "flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm font-medium",
-              feedback.tone === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-rose-200 bg-rose-50 text-rose-800",
-            )}>
-              <span>{feedback.message}</span>
-              <button type="button" onClick={() => setFeedback(null)} aria-label="Ocultar mensaje" className="grid size-6 place-items-center rounded hover:bg-white/60">
-                <X className="size-3.5" />
+          <div className="flex flex-wrap items-center gap-2">
+            {feedback ? (
+              <div className={cn(
+                "flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm font-medium",
+                feedback.tone === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-rose-200 bg-rose-50 text-rose-800",
+              )}>
+                <span>{feedback.message}</span>
+                <button type="button" onClick={() => setFeedback(null)} aria-label="Ocultar mensaje" className="grid size-6 place-items-center rounded hover:bg-white/60">
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ) : null}
+            {!detailOpen ? (
+              <button type="button" onClick={() => setDetailOpen(true)} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-950">
+                <ChevronLeft className="size-4" />
+                Mostrar detalle
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
 
         <div className="overflow-x-auto p-4">
-          <div className="grid min-w-[1400px] grid-cols-7 gap-3">
+          <div
+            className="grid min-w-[1400px] gap-3 xl:min-w-0"
+            style={{ gridTemplateColumns: `repeat(${enabledSteps.length}, minmax(0, 1fr))` }}
+          >
             {enabledSteps.map((step) => {
               const columnOrders = grouped.get(step.key) ?? [];
               const isHover = hoverStep === step.key;
@@ -160,7 +180,10 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                           selected={selected?.id === order.id}
                           dragging={draggingId === order.id}
                           draggable={canMove}
-                          onSelect={() => setSelectedId(order.id)}
+                          onSelect={() => {
+                            setSelectedId(order.id);
+                            setDetailOpen(true);
+                          }}
                           onDragStart={(event) => {
                             if (!canMove) return;
                             setDraggingId(order.id);
@@ -187,7 +210,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
         </div>
       </div>
 
-      <OrderDetailDrawer order={selected} />
+      {detailOpen ? <OrderDetailDrawer order={selected} canMove={canMove} onClose={() => setDetailOpen(false)} /> : null}
     </section>
   );
 }
@@ -217,13 +240,14 @@ function ProductCard({
   const isBlocked = step?.status === "blocked" || order.status === "blocked";
 
   return (
-    <article
+    <button
+      type="button"
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onSelect}
       className={cn(
-        "min-w-0 cursor-pointer overflow-hidden rounded-lg border bg-white p-3 transition",
+        "min-w-0 cursor-pointer overflow-hidden rounded-lg border bg-white p-3 text-left transition",
         selected ? "border-stone-950 shadow-sm" : "border-stone-200 hover:border-stone-400",
         dragging ? "opacity-50" : "",
         isBlocked ? "border-rose-200 bg-rose-50" : "",
@@ -256,15 +280,19 @@ function ProductCard({
         <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-stone-400">Entrega</p>
         <p className="mt-1 text-xs font-semibold text-stone-900">{formatDate(order.deliveryDate)}</p>
       </div>
-    </article>
+    </button>
   );
 }
 
-function OrderDetailDrawer({ order }: { order?: Order }) {
+function OrderDetailDrawer({ order, canMove, onClose }: { order?: Order; canMove: boolean; onClose: () => void }) {
   if (!order) {
     return (
       <aside className="panel-pad hidden self-start 2xl:block">
         <p className="text-sm text-stone-500">Selecciona una tarjeta para ver sus datos.</p>
+        <button type="button" onClick={onClose} className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-950">
+          <ChevronRight className="size-4" />
+          Ocultar detalle
+        </button>
       </aside>
     );
   }
@@ -280,13 +308,24 @@ function OrderDetailDrawer({ order }: { order?: Order }) {
             <h2 className="mt-2 text-xl font-semibold text-stone-950">{order.code}</h2>
             <p className="mt-1 text-sm text-stone-500">{order.product}</p>
           </div>
-          <Link href={`/admin/orders/${order.id}`} className="btn btn-secondary h-9 px-2.5" aria-label="Abrir detalle completo">
-            <Maximize2 className="size-4" />
-          </Link>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="grid size-8 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-950" aria-label="Ocultar panel de detalle" title="Ocultar panel de detalle">
+              <ChevronRight className="size-4" />
+            </button>
+            <Link href={`/admin/orders/${order.id}`} className="grid size-8 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-950" aria-label="Abrir detalle completo" title="Abrir detalle completo">
+              <ArrowUpRight className="size-4" />
+            </Link>
+          </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <StatusBadge type="order" value={order.status} />
-          {step ? <StatusBadge type="step" value={step.status} /> : null}
+          {order.status !== "blocked" || step?.status !== "blocked" ? (
+            <StatusBadge type="order" value={order.status} />
+          ) : null}
+          {step?.status === "blocked" && canMove ? (
+            <UnblockStepButton orderId={order.id} stepKey={step.key} />
+          ) : step ? (
+            <StatusBadge type="step" value={step.status} />
+          ) : null}
         </div>
       </div>
 
@@ -321,12 +360,56 @@ function OrderDetailDrawer({ order }: { order?: Order }) {
           <p className="mt-2 text-sm leading-6 text-stone-600">{order.observations}</p>
         </section>
 
+        {step?.key === "dispatch" ? (
+          <form action={closeOrder}>
+            <input type="hidden" name="orderId" value={order.id} />
+            <ConfirmSubmitButton
+              title="Marcar como despachado"
+              description="La orden saldrá del tablero activo y quedará registrada como despachada en el historial."
+              confirmLabel="Confirmar despacho"
+              pendingLabel="Despachando..."
+              tone="neutral"
+              triggerClassName="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
+              trigger={<><Truck className="size-4" />Marcar como despachado</>}
+            />
+          </form>
+        ) : null}
+
         <Link href={`/admin/orders/${order.id}`} className="btn btn-primary w-full">
           Ver todos los datos
           <ChevronRight className="size-4" />
         </Link>
       </div>
     </aside>
+  );
+}
+
+function UnblockStepButton({ orderId, stepKey }: { orderId: string; stepKey: AreaKey }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function unblock() {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateProductionStep({ orderId, stepKey, status: "pending" });
+      if (result.status === "error") setError(result.message);
+    });
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={unblock}
+        title="Quitar el bloqueo de esta etapa"
+        className="inline-flex h-7 items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+      >
+        <PauseCircle className="size-3.5" />
+        {pending ? "Desbloqueando..." : "Desbloquear"}
+      </button>
+      {error ? <p className="mt-1 text-xs font-medium text-rose-700">{error}</p> : null}
+    </div>
   );
 }
 

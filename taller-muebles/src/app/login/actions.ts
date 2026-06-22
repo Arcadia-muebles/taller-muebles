@@ -8,7 +8,7 @@ import { getLocalUserByEmail } from "@/lib/local-store";
 import { createClient } from "@/lib/supabase/server";
 
 const loginSchema = z.object({
-  email: z.string().email("Ingresa un correo valido."),
+  email: z.string().email("Ingresa un correo válido."),
   password: z.string().min(1, "Ingresa una clave."),
 });
 
@@ -44,7 +44,7 @@ export async function requestLogin(
     const user = await getSessionUser();
     if (!user) {
       await supabase.auth.signOut();
-      return { status: "error", message: "Tu perfil no esta activo o no tiene permisos asignados." };
+      return { status: "error", message: "Tu perfil no está activo o no tiene permisos asignados." };
     }
     redirect(dashboardPathForRole(user.role));
   } else {

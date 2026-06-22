@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Control de Produccion | Leather House",
-  description: "Sistema interno para produccion, stock y seguimiento de taller.",
+  title: "Control de Producción | Leather House",
+  description: "Sistema interno para producción, stock y seguimiento de taller.",
 };
 
 export default function RootLayout({

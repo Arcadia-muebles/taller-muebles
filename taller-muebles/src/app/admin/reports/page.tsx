@@ -28,13 +28,13 @@ export default async function ReportsPage() {
           <p className="page-kicker">Reportes</p>
           <h1 className="page-title">Indicadores del taller</h1>
           <p className="page-description max-w-2xl">
-          Reportes iniciales para operar. La IA se conectara sobre esta base para explicar atrasos y sugerir prioridades.
+          Reportes iniciales para operar. La IA se conectará sobre esta base para explicar atrasos y sugerir prioridades.
           </p>
         </div>
       </header>
 
       <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Activas" value={String(active.length)} helper="Ordenes en flujo." icon={Factory} tone="blue" />
+        <StatCard label="Activas" value={String(active.length)} helper="Órdenes en flujo." icon={Factory} tone="blue" />
         <StatCard label="Urgentes" value={String(urgent.length)} helper="Seguimiento diario." icon={TriangleAlert} tone="amber" />
         <StatCard label="Atrasadas" value={String(overdue.length)} helper="Fuera de plazo." icon={Clock} tone={overdue.length ? "rose" : "emerald"} />
         <StatCard label="Bloqueadas" value={String(blocked.length)} helper="Requieren decision." icon={BarChart3} tone={blocked.length ? "rose" : "neutral"} />
@@ -43,7 +43,7 @@ export default async function ReportsPage() {
       <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)]">
         <div className="panel">
           <div className="panel-header">
-            <h2 className="panel-title">Carga por area</h2>
+            <h2 className="panel-title">Carga por área</h2>
             <p className="panel-description">Etapas activas y bloqueadas.</p>
           </div>
           <div className="divide-y divide-stone-100">
@@ -66,7 +66,7 @@ export default async function ReportsPage() {
 
         <div className="panel">
           <div className="panel-header">
-            <h2 className="panel-title">Ordenes en riesgo</h2>
+            <h2 className="panel-title">Órdenes en riesgo</h2>
             <p className="panel-description">Entregas cercanas, bloqueadas o con avance insuficiente.</p>
           </div>
 
@@ -101,7 +101,7 @@ export default async function ReportsPage() {
                 ))}
                 {!riskOrders.length ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-stone-500">No hay ordenes en riesgo.</td>
+                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-stone-500">No hay órdenes en riesgo.</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -130,5 +130,5 @@ function RiskCard({ order }: { order: Order }) {
 }
 
 function EmptyState() {
-  return <div className="empty-state">No hay ordenes en riesgo.</div>;
+  return <div className="empty-state">No hay órdenes en riesgo.</div>;
 }

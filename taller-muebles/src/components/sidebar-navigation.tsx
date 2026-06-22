@@ -15,7 +15,7 @@ const moduleLinks = [
   { href: "/admin/reports", label: "Reportes", icon: BarChart3 },
   { href: "/admin/history", label: "Historial", icon: Archive },
   { href: "/admin/users", label: "Usuarios", icon: Users, requiresEdit: true },
-  { href: "/admin/settings", label: "Configuracion", icon: Settings },
+  { href: "/admin/settings", label: "Configuración", icon: Settings },
 ];
 
 export function SidebarNavigation({ active, canUseAdmin, canEditAdmin }: SidebarNavigationProps) {
@@ -49,7 +49,7 @@ export function SidebarNavigation({ active, canUseAdmin, canEditAdmin }: Sidebar
 
       {canUseAdmin ? (
         <div className="mt-5">
-          <p className="px-3 text-xs font-medium uppercase tracking-[0.16em] text-stone-400">Modulos</p>
+          <p className="px-3 text-xs font-medium uppercase tracking-[0.16em] text-stone-400">Módulos</p>
           <div className="mt-3 space-y-1 text-sm">
             {moduleLinks.map(({ href, label, icon: Icon, requiresEdit }) => {
               if (requiresEdit && !canEditAdmin) return null;

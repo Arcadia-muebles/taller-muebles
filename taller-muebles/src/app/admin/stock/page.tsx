@@ -21,7 +21,7 @@ export default async function StockPage() {
           <p className="page-kicker">Stock</p>
           <h1 className="page-title">Materiales y alertas</h1>
           <p className="page-description max-w-2xl">
-            Control inicial de cuero, madera, espuma y materiales que pueden frenar produccion.
+            Control inicial de cuero, madera, espuma y materiales que pueden frenar producción.
           </p>
         </div>
         {canEdit ? (
@@ -43,7 +43,7 @@ export default async function StockPage() {
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
           <TriangleAlert className="size-5 text-amber-700" />
           <p className="mt-3 text-3xl font-semibold text-amber-950">{critical.length}</p>
-          <p className="mt-1 text-sm text-amber-800">Bajo minimo</p>
+          <p className="mt-1 text-sm text-amber-800">Bajo mínimo</p>
         </div>
       </section>
 
@@ -63,12 +63,12 @@ export default async function StockPage() {
             <thead className="table-head">
               <tr>
                 <th className="px-3 py-3">Material</th>
-                <th className="px-3 py-3">Categoria</th>
+                <th className="px-3 py-3">Categoría</th>
                 <th className="px-3 py-3">Disponible</th>
-                <th className="px-3 py-3">Minimo</th>
+                <th className="px-3 py-3">Mínimo</th>
                 <th className="px-3 py-3">Unidad</th>
-                <th className="px-3 py-3">Ubicacion</th>
-                {canEdit ? <th className="px-3 py-3">Accion</th> : null}
+                <th className="px-3 py-3">Ubicación</th>
+                {canEdit ? <th className="px-3 py-3">Acción</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -102,12 +102,12 @@ export default async function StockPage() {
 
       <section className="panel mt-5">
         <div className="panel-header">
-          <h2 className="panel-title">Ultimos movimientos</h2>
+          <h2 className="panel-title">Últimos movimientos</h2>
           <p className="panel-description">Entradas, consumos y ajustes registrados.</p>
         </div>
         <div className="divide-y divide-stone-100">
           {movements.slice(0, 12).map((movement) => <MovementRow key={movement.id} movement={movement} />)}
-          {!movements.length ? <p className="p-6 text-sm text-stone-500">Aun no hay movimientos registrados.</p> : null}
+          {!movements.length ? <p className="p-6 text-sm text-stone-500">Aún no hay movimientos registrados.</p> : null}
         </div>
       </section>
     </AppShell>
@@ -126,7 +126,7 @@ function StockCard({ item, canEdit }: { item: StockItem; canEdit: boolean }) {
       </div>
       <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
         <Info label="Alerta bajo" value={String(item.minimum)} />
-        <Info label="Ubicacion" value={item.store} />
+        <Info label="Ubicación" value={item.store} />
       </div>
       {canEdit ? (
         <div className="mt-3 flex flex-wrap gap-2">

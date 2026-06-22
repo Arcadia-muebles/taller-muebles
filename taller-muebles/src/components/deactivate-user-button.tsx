@@ -10,7 +10,7 @@ export function DeactivateUserButton({ userId, disabled }: { userId: string; dis
       <input type="hidden" name="userId" value={userId} />
       <ConfirmSubmitButton
         title="Desactivar usuario"
-        description="El usuario ya no podra ingresar, pero su historial y trazabilidad se conservaran."
+        description="El usuario ya no podrá ingresar, pero su historial y trazabilidad se conservarán."
         confirmLabel="Desactivar usuario"
         pendingLabel="Desactivando..."
         disabled={disabled}

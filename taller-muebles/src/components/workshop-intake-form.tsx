@@ -49,7 +49,7 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
           <input name="productName" required placeholder="Ej. Sofa 3 cuerpos, respaldo alto" className={inputClass} />
         </Field>
         <Field label="Cliente">
-          <input name="clientName" placeholder="Trabajo interno si queda vacio" className={inputClass} />
+          <input name="clientName" placeholder="Trabajo interno si queda vacío" className={inputClass} />
         </Field>
         <Field label="Entrega">
           <input name="deliveryDate" required type="date" className={inputClass} />

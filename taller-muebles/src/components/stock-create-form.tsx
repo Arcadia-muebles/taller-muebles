@@ -20,7 +20,7 @@ export function StockCreateForm() {
     <form ref={formRef} id="nuevo-material" action={action} className="panel-pad mt-5">
       <h2 className="panel-title">Registrar material</h2>
       <p className="panel-description">
-        Las cantidades disponible y minima se registran usando la misma unidad de medida.
+        Las cantidades disponible y mínima se registran usando la misma unidad de medida.
       </p>
       <div className="mt-4 grid gap-3 md:grid-cols-6">
         <Field label="Material" className="md:col-span-2">
@@ -46,7 +46,7 @@ export function StockCreateForm() {
         <Field label="Alerta bajo">
           <input name="minimum" required type="number" min="0" step="1" placeholder="0" className={inputClass} />
         </Field>
-        <Field label="Ubicacion">
+        <Field label="Ubicación">
           <select name="store" defaultValue="general" className={inputClass}>
             <option value="general">General</option>
             <option value="LH">LH</option>
@@ -78,7 +78,7 @@ function Field({ label, className, children }: { label: string; className?: stri
 
 function ActionFeedback({ state }: { state: StockActionResult }) {
   if (!state.message) {
-    return <p className="text-xs text-stone-400">El material quedara disponible para movimientos y alertas de stock.</p>;
+    return <p className="text-xs text-stone-400">El material quedará disponible para movimientos y alertas de stock.</p>;
   }
   const Icon = state.ok ? CheckCircle2 : XCircle;
   return (

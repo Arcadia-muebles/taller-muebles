@@ -1,40 +1,23 @@
 "use client";
 
-import { CheckCircle2, Download, FileUp, MessageSquarePlus, Paperclip, XCircle } from "lucide-react";
+import { CheckCircle2, Download, FileUp, Paperclip, XCircle } from "lucide-react";
 import { useActionState, useRef } from "react";
-import {
-  addOrderComment,
-  type CollaborationActionResult,
-  uploadOrderAttachment,
-} from "@/app/admin/orders/collaboration-actions";
-import type { OrderAttachment, OrderComment } from "@/lib/types";
+import { type CollaborationActionResult, uploadOrderAttachment } from "@/app/admin/orders/collaboration-actions";
+import type { OrderAttachment } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
 
 const initialActionState: CollaborationActionResult = { ok: false, message: "" };
 
 export function OrderCollaboration({
   orderId,
-  comments,
   attachments,
   canUpload,
-  canComment,
 }: {
   orderId: string;
-  comments: OrderComment[];
   attachments: OrderAttachment[];
   canUpload: boolean;
-  canComment: boolean;
 }) {
-  const commentFormRef = useRef<HTMLFormElement>(null);
   const uploadFormRef = useRef<HTMLFormElement>(null);
-  const [commentState, commentAction] = useActionState(
-    async (_state: CollaborationActionResult, formData: FormData) => {
-      const result = await addOrderComment(formData);
-      if (result.ok) commentFormRef.current?.reset();
-      return result;
-    },
-    initialActionState,
-  );
   const [uploadState, uploadAction] = useActionState(
     async (_state: CollaborationActionResult, formData: FormData) => {
       const result = await uploadOrderAttachment(formData);
@@ -45,91 +28,48 @@ export function OrderCollaboration({
   );
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
-      <section className="rounded-lg border border-stone-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-stone-200 p-4">
-          <MessageSquarePlus className="size-5 text-stone-500" />
-          <div>
-            <h2 className="text-base font-semibold">Comentarios</h2>
-            <p className="text-sm text-stone-500">Coordinación y decisiones sobre la orden.</p>
-          </div>
+    <section className="rounded-lg border border-stone-200 bg-white">
+      <div className="flex items-center gap-3 border-b border-stone-200 p-4">
+        <Paperclip className="size-5 text-stone-500" />
+        <div>
+          <h2 className="text-base font-semibold">Adjuntos</h2>
+          <p className="text-sm text-stone-500">Planos, fotografías y documentos de apoyo.</p>
         </div>
-        {canComment ? <form ref={commentFormRef} action={commentAction} className="border-b border-stone-100 p-4">
+      </div>
+      {canUpload ? (
+        <form ref={uploadFormRef} action={uploadAction} className="border-b border-stone-100 p-4">
           <input type="hidden" name="orderId" value={orderId} />
-          <textarea
-            name="body"
-            required
-            minLength={2}
-            maxLength={1000}
-            placeholder="Agregar comentario operativo..."
-            className="min-h-24 w-full resize-none rounded-md border border-stone-200 bg-stone-50 p-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-          />
+          <label className="block text-xs font-medium uppercase tracking-[0.12em] text-stone-500">
+            Archivo, máximo 10 MB
+            <input
+              name="file"
+              required
+              type="file"
+              className="mt-2 block w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium"
+            />
+          </label>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <ActionFeedback state={commentState} />
-            <SubmitButton pendingLabel="Publicando..." className="h-9 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">
-              Publicar comentario
+            <ActionFeedback state={uploadState} />
+            <SubmitButton pendingLabel="Subiendo..." className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">
+              <FileUp className="size-4" />
+              Subir
             </SubmitButton>
           </div>
-        </form> : null}
-        <div className="max-h-80 divide-y divide-stone-100 overflow-y-auto">
-          {comments.map((comment) => (
-            <article key={comment.id} className="p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold">{comment.author}</p>
-                <time className="text-[11px] font-medium uppercase tracking-[0.1em] text-stone-400">
-                  {new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(comment.createdAt))}
-                </time>
-              </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-600">{comment.body}</p>
-            </article>
-          ))}
-          {!comments.length ? <p className="p-5 text-sm text-stone-500">No hay comentarios todavía.</p> : null}
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-stone-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-stone-200 p-4">
-          <Paperclip className="size-5 text-stone-500" />
-          <div>
-            <h2 className="text-base font-semibold">Adjuntos</h2>
-            <p className="text-sm text-stone-500">Planos, fotografías y documentos de apoyo.</p>
-          </div>
-        </div>
-        {canUpload ? (
-          <form ref={uploadFormRef} action={uploadAction} className="border-b border-stone-100 p-4">
-            <input type="hidden" name="orderId" value={orderId} />
-            <label className="block text-xs font-medium uppercase tracking-[0.12em] text-stone-500">
-              Archivo, máximo 10 MB
-              <input
-                name="file"
-                required
-                type="file"
-                className="mt-2 block w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium"
-              />
-            </label>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <ActionFeedback state={uploadState} />
-              <SubmitButton pendingLabel="Subiendo..." className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white disabled:opacity-50">
-                <FileUp className="size-4" />
-                Subir
-              </SubmitButton>
+        </form>
+      ) : null}
+      <div className="max-h-80 divide-y divide-stone-100 overflow-y-auto">
+        {attachments.map((attachment) => (
+          <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 p-4 transition hover:bg-stone-50">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{attachment.fileName}</p>
+              <p className="mt-1 text-xs text-stone-500">{formatBytes(attachment.fileSize)} / {attachment.fileType}</p>
             </div>
-          </form>
-        ) : null}
-        <div className="max-h-80 divide-y divide-stone-100 overflow-y-auto">
-          {attachments.map((attachment) => (
-            <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 p-4 transition hover:bg-stone-50">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{attachment.fileName}</p>
-                <p className="mt-1 text-xs text-stone-500">{formatBytes(attachment.fileSize)} / {attachment.fileType}</p>
-              </div>
-              <Download className="size-4 shrink-0 text-stone-400" />
-            </a>
-          ))}
-          {!attachments.length ? <p className="p-5 text-sm text-stone-500">No hay archivos adjuntos.</p> : null}
-        </div>
-      </section>
-    </div>
+            <Download className="size-4 shrink-0 text-stone-400" />
+          </a>
+        ))}
+        {!attachments.length ? <p className="p-5 text-sm text-stone-500">No hay archivos adjuntos.</p> : null}
+      </div>
+    </section>
   );
 }
 

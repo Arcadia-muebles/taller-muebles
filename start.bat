@@ -2,7 +2,7 @@
 setlocal
 
 set "APP_DIR=%~dp0taller-muebles"
-set "LOCAL_DEMO_MODE=1"
+set "LOCAL_DEMO_MODE=0"
 
 cd /d "%APP_DIR%"
 if errorlevel 1 (
@@ -34,7 +34,7 @@ echo.
 echo Iniciando la version actual desde:
 echo %CD%
 echo.
-echo Modo local/demo activado. No se conectara a Supabase.
+echo Modo Supabase activado.
 echo Sitio: http://localhost:3000
 echo Presiona Ctrl+C para detenerlo.
 echo.

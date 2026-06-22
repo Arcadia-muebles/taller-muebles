@@ -27,15 +27,15 @@ type OrderTableProps = {
 const priorityLabel = {
   normal: "Normal",
   high: "Alta",
-  critical: "Critica",
+  critical: "Crítica",
 };
 
 export function OrderTable({
   orders,
   canEditOrders = false,
-  title = "Ordenes de produccion",
+  title = "Órdenes de producción",
   description,
-  emptyText = "No hay ordenes que coincidan con los filtros.",
+  emptyText = "No hay órdenes que coincidan con los filtros.",
 }: OrderTableProps) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [storeFilter, setStoreFilter] = useState("all");
@@ -56,7 +56,7 @@ export function OrderTable({
         accessorKey: "code",
         header: ({ column }) => (
           <button className="inline-flex items-center gap-1" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            Codigo
+            Código
             <ArrowUpDown className="size-3.5" />
           </button>
         ),
@@ -206,7 +206,7 @@ export function OrderTable({
       <div className="panel-header flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <h2 className="panel-title">{title}</h2>
-          <p className="panel-description">{description ?? `${table.getFilteredRowModel().rows.length} ordenes visibles.`}</p>
+          <p className="panel-description">{description ?? `${table.getFilteredRowModel().rows.length} órdenes visibles.`}</p>
         </div>
         <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:justify-end">
           <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="control min-w-0 bg-white text-stone-700">
@@ -216,7 +216,7 @@ export function OrderTable({
           </select>
           <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="control min-w-0 bg-white text-stone-700">
             <option value="all">Toda prioridad</option>
-            <option value="critical">Critica</option>
+            <option value="critical">Crítica</option>
             <option value="high">Alta</option>
             <option value="normal">Normal</option>
           </select>
@@ -225,7 +225,7 @@ export function OrderTable({
             <input
               value={globalFilter}
               onChange={(event) => setGlobalFilter(event.target.value)}
-              placeholder="Buscar cliente, codigo o producto"
+              placeholder="Buscar cliente, código o producto"
               className="control pl-9"
             />
           </label>

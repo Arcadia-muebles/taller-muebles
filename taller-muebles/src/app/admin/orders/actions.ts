@@ -98,7 +98,7 @@ export async function createOrder(
   if (storeError || !store) {
     return {
       status: "error",
-      message: storeError?.message ?? "No se encontro la tienda seleccionada.",
+      message: storeError?.message ?? "No se encontró la tienda seleccionada.",
     };
   }
 
@@ -299,27 +299,23 @@ export async function closeOrder(formData: FormData) {
   const id = formData.get("orderId")?.toString();
   if (!id) return;
 
+  const order = (await listOrders()).find((item) => item.id === id);
+  if (!order || !isReadyForDispatch(order)) return;
+
   if (!hasSupabaseConfig()) {
-    const { getLocalOrder } = await import("@/lib/local-store");
-    const order = await getLocalOrder(id);
-    if (!order?.steps.every((step) => step.status === "done")) return;
     await closeLocalOrder(id);
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
     if (!profileId) return;
-    const { data: steps } = await supabase
-      .from("production_steps")
-      .select("status")
-      .eq("order_id", id);
-    if (!steps?.length || steps.some((step) => step.status !== "done")) return;
+    const completedAt = new Date().toISOString();
     await supabase
       .from("orders")
-      .update({ status: "completed", condition: "delivered" })
+      .update({ status: "completed", condition: "delivered", completed_at: completedAt })
       .eq("id", id);
     await supabase
       .from("production_steps")
-      .update({ status: "done", completed_at: new Date().toISOString(), updated_by: profileId })
+      .update({ status: "done", completed_at: completedAt, updated_by: profileId })
       .eq("order_id", id);
     await supabase.from("audit_logs").insert({
       order_id: id,
@@ -333,8 +329,22 @@ export async function closeOrder(formData: FormData) {
   }
 
   revalidatePath("/admin");
+  revalidatePath("/admin/history");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${id}`);
+}
+
+function isReadyForDispatch(order: Awaited<ReturnType<typeof listOrders>>[number]) {
+  if (order.steps.length > 0 && order.steps.every((step) => step.status === "done")) return true;
+
+  const dispatchIndex = order.steps.findIndex((step) => step.key === "dispatch");
+  if (dispatchIndex < 0 || dispatchIndex !== order.steps.length - 1) return false;
+
+  const dispatch = order.steps[dispatchIndex];
+  return (
+    dispatch.status !== "blocked" &&
+    order.steps.slice(0, dispatchIndex).every((step) => step.status === "done")
+  );
 }
 
 const moveOrderStageSchema = z.object({
@@ -346,14 +356,14 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
   const user = await requireSession(["admin", "manager"]);
   const settings = await getSystemSettings();
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
-    return { ok: false, message: "Tu perfil no tiene permiso para mover ordenes." };
+    return { ok: false, message: "Tu perfil no tiene permiso para mover órdenes." };
   }
 
   const parsed = moveOrderStageSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: "Movimiento invalido." };
+  if (!parsed.success) return { ok: false, message: "Movimiento inválido." };
 
   const order = (await listOrders()).find((item) => item.id === parsed.data.orderId);
-  if (!order) return { ok: false, message: "No se encontro la orden." };
+  if (!order) return { ok: false, message: "No se encontró la orden." };
   const targetIndex = order.steps.findIndex((step) => step.key === parsed.data.stepKey);
   if (targetIndex < 0) return { ok: false, message: "La etapa destino no existe en esta orden." };
 
@@ -385,7 +395,6 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
                 started_at: null,
                 completed_at: null,
                 blocked_reason: null,
-                notes: null,
                 updated_by: profileId,
               }
             : {
@@ -393,7 +402,6 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
                 started_at: null,
                 completed_at: null,
                 blocked_reason: null,
-                notes: null,
                 updated_by: profileId,
               };
 

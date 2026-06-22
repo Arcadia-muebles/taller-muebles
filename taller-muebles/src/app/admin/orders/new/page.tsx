@@ -19,11 +19,11 @@ export default async function NewOrderPage() {
           Nueva nota
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-950">
-          Crear orden de produccion
+          Crear orden de producción
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
           Esta pantalla concentra los datos que antes quedaban repartidos entre
-          hojas: venta, cliente, producto, fechas, prioridad y primera asignacion.
+          hojas: venta, cliente, producto, fechas, prioridad y primera asignación.
         </p>
       </header>
 

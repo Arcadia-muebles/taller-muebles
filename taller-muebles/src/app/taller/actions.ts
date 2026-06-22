@@ -92,7 +92,7 @@ export async function createWorkshopOrder(
     .eq("code", input.store)
     .single();
   if (storeError || !store) {
-    return { status: "error", message: storeError?.message ?? "No se encontro la tienda seleccionada." };
+    return { status: "error", message: storeError?.message ?? "No se encontró la tienda seleccionada." };
   }
 
   const { data: order, error: orderError } = await supabase
@@ -167,9 +167,9 @@ export async function updateProductionStep(
 
   const currentOrder = await getOrder(parsed.data.orderId);
   const currentStep = currentOrder?.steps.find((step) => step.key === parsed.data.stepKey);
-  if (!currentOrder || !currentStep) return { status: "error", message: "No se encontro la etapa seleccionada." };
+  if (!currentOrder || !currentStep) return { status: "error", message: "No se encontró la etapa seleccionada." };
   if (!isAllowedTransition(currentStep.status, parsed.data.status)) {
-    return { status: "error", message: "La etapa cambio de estado. Actualiza la vista e intenta nuevamente." };
+    return { status: "error", message: "La etapa cambió de estado. Actualiza la vista e intenta nuevamente." };
   }
 
   const currentStepIndex = currentOrder.steps.findIndex((step) => step.key === parsed.data.stepKey);
@@ -201,7 +201,7 @@ export async function updateProductionStep(
     settings.permissions.requireBlockReason &&
     (!parsed.data.reason || parsed.data.reason.length < 5)
   ) {
-    return { status: "error", message: "Describe brevemente por que se bloquea la etapa." };
+    return { status: "error", message: "Describe brevemente por qué se bloquea la etapa." };
   }
 
   if (user.role === "operator") {
@@ -212,7 +212,7 @@ export async function updateProductionStep(
     if (isReversal && laterSteps.some(hasRecordedWork)) {
       return {
         status: "error",
-        message: "Una etapa posterior ya tiene actividad. Pide a un administrador que haga la correccion.",
+        message: "Una etapa posterior ya tiene actividad. Pide a un administrador que haga la corrección.",
       };
     }
   }
@@ -225,7 +225,7 @@ export async function updateProductionStep(
     if (!updated) {
       return {
         status: "error",
-        message: "No se encontro la etapa seleccionada.",
+        message: "No se encontró la etapa seleccionada.",
       };
     }
 
@@ -285,7 +285,6 @@ export async function updateProductionStep(
         started_at: null,
         completed_at: null,
         blocked_reason: null,
-        notes: null,
         updated_by: profile.id,
       })
       .eq("order_id", parsed.data.orderId)
@@ -293,7 +292,7 @@ export async function updateProductionStep(
     if (downstreamError) {
       return {
         status: "error",
-        message: `La etapa cambio, pero no se pudieron corregir las etapas posteriores: ${downstreamError.message}`,
+        message: `La etapa cambió, pero no se pudieron corregir las etapas posteriores: ${downstreamError.message}`,
       };
     }
   }
@@ -325,7 +324,7 @@ export async function updateProductionStep(
   if (orderStatusError) {
     return {
       status: "error",
-      message: `La etapa cambio, pero no se pudo actualizar el estado de la orden: ${orderStatusError.message}`,
+      message: `La etapa cambió, pero no se pudo actualizar el estado de la orden: ${orderStatusError.message}`,
     };
   }
 
@@ -340,7 +339,7 @@ export async function updateProductionStep(
       ? `${parsed.data.status}: ${parsed.data.reason}`
       : parsed.data.status,
   });
-  if (auditError) return { status: "error", message: `La etapa cambio, pero no se pudo registrar la auditoria: ${auditError.message}` };
+  if (auditError) return { status: "error", message: `La etapa cambió, pero no se pudo registrar la auditoría: ${auditError.message}` };
 
   revalidatePath("/admin");
   revalidatePath("/taller");
@@ -402,7 +401,7 @@ function stepPatch({
   return {
     status: nextStatus,
     blocked_reason: nextStatus === "blocked" ? reason?.trim() || null : null,
-    notes: reason?.trim() || (nextStatus === "pending" ? null : currentStep.notes ?? null),
+    notes: reason?.trim() || currentStep.notes || null,
     started_at:
       nextStatus === "pending"
         ? null

@@ -19,7 +19,6 @@ import {
   getOrder,
   listOrderAttachments,
   listOrderAudit,
-  listOrderComments,
 } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { deliveryLabel, durationLabel, formatDate, formatDateTime } from "@/lib/utils";
@@ -28,10 +27,9 @@ import { canWorkerSeeOrder } from "@/lib/workshop-access";
 export default async function WorkshopOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession(["operator"]);
   const { id } = await params;
-  const [order, audit, comments, attachments, settings] = await Promise.all([
+  const [order, audit, attachments, settings] = await Promise.all([
     getOrder(id),
     listOrderAudit(id),
-    listOrderComments(id),
     listOrderAttachments(id),
     getSystemSettings(),
   ]);
@@ -118,7 +116,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
                   <p className="font-semibold">{step.label}</p>
                   <p className="mt-1 text-sm text-stone-500">{step.owner}</p>
                   <p className="mt-1 text-xs text-stone-500">
-                    Inicio: {formatDateTime(step.startedAt)} · Termino: {formatDateTime(step.completedAt)}
+                    Inicio: {formatDateTime(step.startedAt)} · Término: {formatDateTime(step.completedAt)}
                   </p>
                   {step.notes ? (
                     <p className="mt-2 max-w-xl rounded-md border border-stone-200 bg-white px-2.5 py-2 text-xs font-medium text-stone-700">
@@ -185,10 +183,8 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
       <div className="mt-5">
         <OrderCollaboration
           orderId={order.id}
-          comments={comments}
           attachments={attachments}
           canUpload
-          canComment
         />
       </div>
     </AppShell>
@@ -223,6 +219,7 @@ function auditActionLabel(action: string) {
     update_order: "Orden actualizada",
     update_step: "Etapa actualizada",
     revert_step: "Cambio de etapa revertido",
+    comment_step: "Comentario de etapa",
     add_comment: "Comentario agregado",
     add_attachment: "Adjunto agregado",
     close_order: "Orden cerrada",

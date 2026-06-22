@@ -13,11 +13,12 @@ import { AppShell } from "@/components/app-shell";
 import { OrderActions } from "@/components/order-actions";
 import { OrderCollaboration } from "@/components/order-collaboration";
 import { ProductionStepControls } from "@/components/production-step-controls";
+import { StepCommentButton } from "@/components/step-comment-button";
 import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
 import { getSystemSettings } from "@/lib/repositories/settings";
-import { getOrder, listOrderAttachments, listOrderAudit, listOrderComments } from "@/lib/repositories/production";
+import { getOrder, listOrderAttachments, listOrderAudit } from "@/lib/repositories/production";
 import { deliveryLabel, durationLabel, formatDate, formatDateTime } from "@/lib/utils";
 
 type OrderDetailPageProps = {
@@ -27,10 +28,9 @@ type OrderDetailPageProps = {
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const { id } = await params;
-  const [order, audit, comments, attachments, settings] = await Promise.all([
+  const [order, audit, attachments, settings] = await Promise.all([
     getOrder(id),
     listOrderAudit(id),
-    listOrderComments(id),
     listOrderAttachments(id),
     getSystemSettings(),
   ]);
@@ -41,6 +41,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 
   const progress = completionPercent(order);
   const canEditOrder = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
+  const canCommentOnSteps = user.role === "admin" || user.role === "manager";
   const canClose = order.steps.every((step) => step.status === "done");
 
   return (
@@ -62,12 +63,12 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             {order.isWarranty ? (
               <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-2.5 text-xs font-medium text-stone-700">
                 <ShieldCheck className="size-3.5" />
-                Garantia
+                Garantía
               </span>
             ) : null}
           </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-            Seguimiento completo de venta, produccion, observaciones y estado de
+            Seguimiento completo de venta, producción, observaciones y estado de
             entrega para {order.client}.
           </p>
         </div>
@@ -84,7 +85,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               <FileText className="size-5 text-stone-500" />
               <div>
                 <h2 className="text-base font-semibold">Datos de la orden</h2>
-                <p className="text-sm text-stone-500">Informacion comercial y productiva.</p>
+                <p className="text-sm text-stone-500">Información comercial y productiva.</p>
               </div>
             </div>
             <div className="grid gap-4 p-4 md:grid-cols-2">
@@ -104,7 +105,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               <Clock className="size-5 text-stone-500" />
               <div>
                 <h2 className="text-base font-semibold">Etapas productivas</h2>
-                <p className="text-sm text-stone-500">Cada cambio quedara auditado al conectar Supabase.</p>
+                <p className="text-sm text-stone-500">Cada cambio quedará auditado al conectar Supabase.</p>
               </div>
             </div>
             <div className="p-4">
@@ -127,7 +128,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                         <p className="font-semibold">{step.label}</p>
                         <p className="mt-1 text-sm text-stone-500">{step.owner}</p>
                         <p className="mt-1 text-xs text-stone-500">
-                          Inicio: {formatDateTime(step.startedAt)} · Termino: {formatDateTime(step.completedAt)}
+                          Inicio: {formatDateTime(step.startedAt)} · Término: {formatDateTime(step.completedAt)}
                         </p>
                         {step.notes ? (
                           <p className="mt-2 max-w-xl rounded-md border border-stone-200 bg-white px-2.5 py-2 text-xs font-medium text-stone-700">
@@ -137,6 +138,14 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
+                      {canCommentOnSteps ? (
+                        <StepCommentButton
+                          orderId={order.id}
+                          stepKey={step.key}
+                          stepLabel={step.label}
+                          initialComment={step.notes}
+                        />
+                      ) : null}
                       <StatusBadge type="step" value={step.status} />
                       <p className="text-xs text-stone-500">
                         {durationLabel(step.startedAt, step.completedAt)}
@@ -217,10 +226,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
       <div className="mt-5">
         <OrderCollaboration
           orderId={order.id}
-          comments={comments}
           attachments={attachments}
           canUpload={canEditOrder}
-          canComment={user.role !== "viewer"}
         />
       </div>
     </AppShell>
@@ -243,6 +250,7 @@ function auditActionLabel(action: string) {
     create_order: "Orden creada",
     update_order: "Orden actualizada",
     update_step: "Etapa actualizada",
+    comment_step: "Comentario de etapa",
     revert_step: "Cambio de etapa revertido",
     close_order: "Orden cerrada",
     cancel_order: "Orden cancelada",

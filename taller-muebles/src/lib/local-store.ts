@@ -71,7 +71,7 @@ const defaultLocalUsers: AppUser[] = [
   {
     id: "local-worker-sewing",
     email: "costura@taller.local",
-    name: "Marcela Diaz",
+    name: "Marcela Díaz",
     role: "operator",
     area: "sewing",
     active: true,
@@ -305,7 +305,6 @@ export async function updateLocalProductionStep(input: {
   if (input.status === "pending") {
     step.startedAt = undefined;
     step.completedAt = undefined;
-    if (!input.reason?.trim()) step.notes = undefined;
   }
   if (input.status === "active") {
     step.startedAt = step.startedAt ?? now;
@@ -317,7 +316,6 @@ export async function updateLocalProductionStep(input: {
     const nextStep = nextPendingStep(order, step.key);
     if (nextStep) {
       nextStep.status = "pending";
-      nextStep.notes = undefined;
     }
   }
 
@@ -327,7 +325,6 @@ export async function updateLocalProductionStep(input: {
       laterStep.status = "pending";
       laterStep.startedAt = undefined;
       laterStep.completedAt = undefined;
-      laterStep.notes = undefined;
     }
   }
 
@@ -384,7 +381,6 @@ export async function moveLocalOrderToStep(input: {
         status: "pending",
         startedAt: undefined,
         completedAt: undefined,
-        notes: undefined,
       };
     }
     return {
@@ -392,7 +388,6 @@ export async function moveLocalOrderToStep(input: {
       status: "pending",
       startedAt: undefined,
       completedAt: undefined,
-      notes: undefined,
     };
   });
 
@@ -455,6 +450,23 @@ export async function createLocalOrderComment(orderId: string, author: string, b
   });
   addAudit(data, orderId, "add_comment", `${author} agregó un comentario`);
   await writeData(data);
+}
+
+export async function updateLocalProductionStepComment(
+  orderId: string,
+  stepKey: AreaKey,
+  body: string,
+  author: string,
+) {
+  const data = await readData();
+  const order = data.orders.find((item) => item.id === orderId);
+  const step = order?.steps.find((item) => item.key === stepKey);
+  if (!order || !step) return false;
+
+  step.notes = body.trim();
+  addAudit(data, orderId, "comment_step", `${author} comentó la etapa ${step.label}`);
+  await writeData(data);
+  return true;
 }
 
 export async function listLocalOrderAttachments(orderId: string): Promise<OrderAttachment[]> {

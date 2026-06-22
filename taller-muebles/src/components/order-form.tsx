@@ -72,7 +72,7 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
           <FileText className="size-5 text-stone-500" />
           <div>
             <h2 className="panel-title">Datos comerciales</h2>
-            <p className="panel-description">Informacion base de la nota de venta.</p>
+            <p className="panel-description">Información base de la nota de venta.</p>
           </div>
         </div>
 
@@ -127,12 +127,12 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
             <select {...register("priority")} className={inputClass}>
               <option value="normal">Normal</option>
               <option value="high">Alta</option>
-              <option value="critical">Critica</option>
+              <option value="critical">Crítica</option>
             </select>
           </Field>
           <label className="flex h-11 items-center gap-3 rounded-md border border-stone-200 bg-stone-50 px-3 text-sm font-medium">
             <input {...register("isWarranty")} type="checkbox" className="size-4 accent-stone-950" />
-            Es garantia
+            Es garantía
           </label>
           <Field label="Observaciones" error={errors.observations?.message} full>
             <textarea
@@ -163,7 +163,7 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
                 className="block w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-stone-800"
               />
             </Field>
-            <p className="mt-2 text-xs text-stone-500">Maximo 10 MB. Se puede dejar vacio y adjuntar despues desde el detalle de la orden.</p>
+            <p className="mt-2 text-xs text-stone-500">Máximo 10 MB. Se puede dejar vacío y adjuntar después desde el detalle de la orden.</p>
           </div>
         </section>
       ) : null}

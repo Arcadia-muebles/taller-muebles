@@ -71,7 +71,7 @@ export function UserCreateForm({
         ) : null}
         {supabaseEnabled ? (
           <Field label="Clave temporal" className="xl:col-span-2">
-            <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Minimo 8 caracteres" className={inputClass} />
+            <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" className={inputClass} />
           </Field>
         ) : null}
         <div className={supabaseEnabled ? "flex flex-col justify-end gap-2 xl:col-span-4" : "flex flex-col justify-end gap-2 xl:col-span-5"}>
@@ -112,7 +112,7 @@ function ActionFeedback({
   }
 
   if (disabled) {
-    return <p className="text-xs text-amber-700">La administracion de cuentas requiere la clave de servicio.</p>;
+    return <p className="text-xs text-amber-700">La administración de cuentas requiere la clave de servicio.</p>;
   }
 
   return (

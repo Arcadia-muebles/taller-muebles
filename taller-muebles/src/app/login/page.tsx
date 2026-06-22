@@ -15,12 +15,12 @@ export default async function LoginPage() {
             Sistema interno
           </p>
           <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl">
-            Una sola plataforma para administracion y taller.
+            Una sola plataforma para administración y taller.
           </h2>
           <p className="page-description mt-4 max-w-xl">
             Todos entran por esta pantalla. El rol de la cuenta decide si el usuario
             abre el panel administrador o la cola del taller, y los trabajadores solo
-            ven las ordenes y etapas asignadas a su usuario.
+            ven las órdenes y etapas asignadas a su usuario.
           </p>
         </section>
 

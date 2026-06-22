@@ -72,7 +72,7 @@ export function ConfirmSubmitButton({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                aria-label="Cerrar confirmacion"
+                aria-label="Cerrar confirmación"
                 className="grid size-9 shrink-0 place-items-center rounded-md border border-stone-200 bg-white text-stone-500 transition hover:bg-stone-50 hover:text-stone-950"
               >
                 <X className="size-4" />

@@ -62,7 +62,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
           <p>Administrador: admin@taller.local</p>
           <p>Supervisor: supervisor@taller.local</p>
           <p>Taller: taller@taller.local</p>
-          <p className="mt-1">El sistema abre automaticamente el panel correspondiente.</p>
+          <p className="mt-1">El sistema abre automáticamente el panel correspondiente.</p>
         </div>
       ) : null}
 
@@ -88,7 +88,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
 
       <p className="mt-4 text-xs leading-5 text-stone-500">
         {supabaseEnabled
-          ? "Acceso protegido. Tu perfil determina automaticamente los modulos y acciones disponibles."
+          ? "Acceso protegido. Tu perfil determina automáticamente los módulos y acciones disponibles."
           : "Modo local de desarrollo: usa una cuenta demo o una cuenta creada por un administrador. La clave puede ser cualquier texto."}
       </p>
     </form>

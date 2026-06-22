@@ -31,7 +31,7 @@ export default async function AdminPage() {
       <header className="page-header">
         <div>
           <p className="page-kicker">ARCADIA</p>
-          <h1 className="page-title">Control de produccion</h1>
+          <h1 className="page-title">Control de producción</h1>
           <p className="page-description">
             Vista diaria simple para revisar atrasos, calidad, despacho y avance del taller.
           </p>
@@ -48,10 +48,10 @@ export default async function AdminPage() {
       </header>
 
       <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Activas" value={String(active.length)} helper="Ordenes abiertas." icon={ClipboardCheck} />
+        <StatCard label="Activas" value={String(active.length)} helper="Órdenes abiertas." icon={ClipboardCheck} />
         <StatCard label="Atrasadas" value={String(overdue.length)} helper="Fuera de plazo." icon={CalendarDays} tone={overdue.length ? "rose" : "neutral"} />
         <StatCard label="Detenidas" value={String(blocked.length)} helper="Bloqueos o decisiones." icon={AlertTriangle} tone={blocked.length ? "rose" : "neutral"} />
-        <StatCard label="Calidad" value={String(waitingQuality.length)} helper="Esperando aprobacion." icon={ShieldCheck} tone={waitingQuality.length ? "amber" : "neutral"} />
+        <StatCard label="Calidad" value={String(waitingQuality.length)} helper="Esperando aprobación." icon={ShieldCheck} tone={waitingQuality.length ? "amber" : "neutral"} />
         <StatCard label="Despacho" value={String(dispatching.length)} helper="Listas para salida." icon={Truck} tone={dispatching.length ? "emerald" : "neutral"} />
       </section>
 

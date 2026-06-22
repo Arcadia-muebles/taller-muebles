@@ -17,7 +17,7 @@ const orderConfig: Record<
     icon: Clock,
   },
   in_production: {
-    label: "En produccion",
+    label: "En producción",
     className: "border-stone-300 bg-stone-50 text-stone-800",
     icon: Clock,
   },
@@ -37,7 +37,7 @@ const orderConfig: Record<
     icon: CheckCircle2,
   },
   completed: {
-    label: "Terminada",
+    label: "Despachada",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700",
     icon: CheckCircle2,
   },

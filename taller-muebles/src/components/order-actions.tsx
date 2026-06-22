@@ -16,7 +16,7 @@ export function OrderActions({ orderId, canClose }: { orderId: string; canClose:
         <input type="hidden" name="orderId" value={orderId} />
         <ConfirmSubmitButton
           title="Cancelar orden"
-          description="La orden saldra de la vista activa y quedara disponible en historial para trazabilidad."
+          description="La orden saldrá de la vista activa y quedará disponible en historial para trazabilidad."
           confirmLabel="Cancelar orden"
           pendingLabel="Cancelando..."
           triggerClassName="inline-flex h-10 items-center gap-2 rounded-md border border-rose-200 bg-white px-3 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
@@ -27,12 +27,12 @@ export function OrderActions({ orderId, canClose }: { orderId: string; canClose:
         <input type="hidden" name="orderId" value={orderId} />
         <ConfirmSubmitButton
           title="Cerrar orden"
-          description="Todas las etapas quedaran marcadas como terminadas y la orden pasara al historial operacional."
+          description="Todas las etapas quedarán marcadas como terminadas y la orden pasará al historial operacional."
           confirmLabel="Cerrar orden"
           pendingLabel="Cerrando..."
           disabled={!canClose}
           tone="neutral"
-          triggerTitle={canClose ? "Cerrar orden" : "Completa la revision de calidad antes de cerrar"}
+          triggerTitle={canClose ? "Cerrar orden" : "Completa la revisión de calidad antes de cerrar"}
           triggerClassName="inline-flex h-10 items-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
           trigger={<><CheckCircle2 className="size-4" />Cerrar orden</>}
         />
