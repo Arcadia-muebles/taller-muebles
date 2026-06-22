@@ -21,8 +21,8 @@ import {
   listOrderAudit,
 } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
-import { deliveryLabel, durationLabel, formatDate, formatDateTime } from "@/lib/utils";
-import { canWorkerSeeOrder } from "@/lib/workshop-access";
+import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel } from "@/lib/utils";
+import { canWorkerSeeOrder, filterWorkerFutureOrders } from "@/lib/workshop-access";
 
 export default async function WorkshopOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession(["operator"]);
@@ -34,7 +34,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
     getSystemSettings(),
   ]);
   if (!order || order.status === "cancelled") notFound();
-  if (!canWorkerSeeOrder(user, order)) notFound();
+  if (!canWorkerSeeOrder(user, order) && !filterWorkerFutureOrders(user, [order]).length) notFound();
 
   const progress = completionPercent(order);
 
@@ -71,7 +71,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
 
       <section className="mt-5 grid gap-3 md:grid-cols-4">
         <Info icon={CalendarDays} label="Entrega" value={`${formatDate(order.deliveryDate)} · ${deliveryLabel(order.deliveryDate, false)}`} />
-        <Info label="Prioridad" value={priorityLabel(order.priority)} />
+        <Info label="Urgencia" value={priorityLabel(order.priority)} />
         <Info label="Cliente" value={order.client} />
         <Info label="Responsable" value={order.assignedTo} />
       </section>
@@ -86,6 +86,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
         </div>
         <div className="grid gap-3 p-4 md:grid-cols-3">
           <Info label="Producto" value={order.product} />
+          <Info label="Pedido" value={order.groupCode} />
           <Info label="Material" value={order.material} />
           <Info label="Color" value={order.color} />
           <Info label="Tienda" value={order.store} />
@@ -201,15 +202,6 @@ function Info({ icon: Icon, label, value }: { icon?: React.ElementType; label: s
       <p className="mt-3 text-sm font-semibold text-stone-900">{value}</p>
     </div>
   );
-}
-
-function priorityLabel(priority: string) {
-  const labels: Record<string, string> = {
-    normal: "Normal",
-    high: "Alta",
-    critical: "Crítica",
-  };
-  return labels[priority] ?? priority;
 }
 
 function auditActionLabel(action: string) {

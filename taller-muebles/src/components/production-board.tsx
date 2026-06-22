@@ -10,6 +10,7 @@ import {
   Clock,
   GripVertical,
   MessageSquareText,
+  MessageSquareWarning,
   PackageOpen,
   PauseCircle,
   Truck,
@@ -21,7 +22,7 @@ import { useMemo, useState, useTransition } from "react";
 import { closeOrder, moveOrderStage } from "@/app/admin/orders/actions";
 import { updateProductionStep } from "@/app/taller/actions";
 import type { AreaKey, Order, ProductionStep, SystemSettings } from "@/lib/types";
-import { cn, daysUntil, deliveryLabel, durationLabel, formatDate } from "@/lib/utils";
+import { cn, daysUntil, deliveryLabel, durationLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
 import { ConfirmSubmitButton } from "./confirm-submit-button";
 import { StatusBadge } from "./status-badge";
 
@@ -41,6 +42,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
   const [selectedId, setSelectedId] = useState<string | null>(orders[0]?.id ?? null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverStep, setHoverStep] = useState<AreaKey | null>(null);
+  const [groupFilter, setGroupFilter] = useState("all");
   const [stageOverrides, setStageOverrides] = useState<Record<string, AreaKey>>({});
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -54,11 +56,19 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
       }),
     [orders, stageOverrides],
   );
+  const groupOptions = useMemo(
+    () => Array.from(new Set(boardOrders.map((order) => order.groupCode).filter(Boolean))).sort(),
+    [boardOrders],
+  );
+  const visibleBoardOrders = useMemo(
+    () => boardOrders.filter((order) => groupFilter === "all" || order.groupCode === groupFilter),
+    [boardOrders, groupFilter],
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<AreaKey, Order[]>();
     for (const step of enabledSteps) map.set(step.key, []);
-    for (const order of boardOrders) {
+    for (const order of visibleBoardOrders) {
       const current = currentStep(order);
       if (!current) continue;
       const list = map.get(current.key);
@@ -68,9 +78,9 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
       list.sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
     }
     return map;
-  }, [boardOrders, enabledSteps]);
+  }, [enabledSteps, visibleBoardOrders]);
 
-  const selected = boardOrders.find((order) => order.id === selectedId) ?? boardOrders[0];
+  const selected = visibleBoardOrders.find((order) => order.id === selectedId) ?? visibleBoardOrders[0];
 
   function move(orderId: string, stepKey: AreaKey) {
     const order = boardOrders.find((item) => item.id === orderId);
@@ -123,6 +133,12 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
                 </button>
               </div>
             ) : null}
+            <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)} className="control h-8 min-w-0 bg-white py-1 text-xs text-stone-700">
+              <option value="all">Todos los pedidos</option>
+              {groupOptions.map((group) => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+            </select>
             {!detailOpen ? (
               <button type="button" onClick={() => setDetailOpen(true)} className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-950">
                 <ChevronLeft className="size-4" />
@@ -258,9 +274,15 @@ function ProductCard({
           <p className="truncate font-mono text-xs font-semibold text-stone-500" title={order.code}>{order.code}</p>
           <h4 className="mt-2 line-clamp-2 text-sm font-semibold text-stone-950">{order.product}</h4>
         </div>
-        {draggable ? <GripVertical className="absolute right-0 top-0 size-4 text-stone-300" /> : null}
+        <div className="absolute right-0 top-0 flex items-center gap-1">
+          {hasMeaningfulObservations(order.observations) ? (
+            <MessageSquareWarning className="size-4 text-amber-600" aria-label="Tiene observaciones" />
+          ) : null}
+          {draggable ? <GripVertical className="size-4 text-stone-300" /> : null}
+        </div>
       </div>
       <p className="mt-2 truncate text-xs font-medium text-stone-700">{order.client}</p>
+      <p className="mt-1 truncate font-mono text-[11px] font-semibold text-stone-500">Pedido {order.groupCode}</p>
       <p className="mt-1 line-clamp-2 text-xs text-stone-500">{order.material} / {order.color}</p>
 
       <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">

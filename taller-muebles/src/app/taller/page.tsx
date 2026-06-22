@@ -4,15 +4,12 @@ import { WorkerQueue } from "@/components/worker-queue";
 import { requireSession, roleLabel } from "@/lib/auth";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
-import { filterWorkerOrders, workerAreas } from "@/lib/workshop-access";
+import { workerAreas } from "@/lib/workshop-access";
 
 export default async function WorkshopPage() {
   const user = await requireSession(["operator"]);
   const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
-  const visibleOrders = filterWorkerOrders(
-    user,
-    orders.filter((order) => order.status !== "cancelled"),
-  );
+  const workshopOrders = orders.filter((order) => order.status !== "cancelled");
   const stepLabel = workerAreas(user)
     .map((area) => settings.production.steps.find((step) => step.key === area)?.label ?? area)
     .join(", ") || "Sin etapa asignada";
@@ -41,7 +38,7 @@ export default async function WorkshopPage() {
 
       <div className="mt-5">
         <WorkerQueue
-          orders={visibleOrders}
+          orders={workshopOrders}
           user={user}
           areaLabels={Object.fromEntries(settings.production.steps.map((step) => [step.key, step.label]))}
           permissions={{

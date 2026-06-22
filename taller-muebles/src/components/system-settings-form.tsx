@@ -273,8 +273,11 @@ function OrdersSection({ settings, setSettings, disabled }: SectionProps) {
   const update = (patch: Partial<SystemSettings["orders"]>) => setSettings({ ...settings, orders: { ...settings.orders, ...patch } });
   return <div className="space-y-6">
     <div className="grid gap-4 md:grid-cols-2">
-      <Field label="Prioridad por defecto"><select disabled={disabled} value={settings.orders.defaultPriority} onChange={(event) => update({ defaultPriority: event.target.value as SystemSettings["orders"]["defaultPriority"] })} className={inputClass}><option value="normal">Normal</option><option value="high">Alta</option><option value="critical">Crítica</option></select></Field>
       <Field label="Archivar terminadas después de" hint="Usa 0 para archivar inmediatamente."><NumberInput disabled={disabled} value={settings.orders.archiveCompletedAfterDays} suffix="días" onChange={(value) => update({ archiveCompletedAfterDays: value })} /></Field>
+      <div className="rounded-md border border-stone-200 bg-stone-50 p-3">
+        <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">Urgencia</p>
+        <p className="mt-1 text-sm text-stone-600">Se calcula solo desde la fecha de entrega usando las ventanas de alertas.</p>
+      </div>
     </div>
     <div className="grid gap-3">
       <RuleRow title="Exigir responsable asignado" description="No permite crear órdenes sin una persona responsable." checked={settings.orders.requireAssignedPerson} disabled={disabled} onChange={(value) => update({ requireAssignedPerson: value })} />

@@ -8,12 +8,12 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Eye, MoreHorizontal, Paperclip, Pencil, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowUpDown, Eye, MessageSquareWarning, MoreHorizontal, Paperclip, Pencil, Search, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { completionPercent } from "@/lib/metrics";
 import type { Order } from "@/lib/types";
-import { cn, deliveryLabel, formatDate } from "@/lib/utils";
+import { cn, deliveryLabel, formatDate, hasMeaningfulObservations, priorityLabel } from "@/lib/utils";
 import { StatusBadge } from "./status-badge";
 
 type OrderTableProps = {
@@ -22,12 +22,6 @@ type OrderTableProps = {
   title?: string;
   description?: string;
   emptyText?: string;
-};
-
-const priorityLabel = {
-  normal: "Normal",
-  high: "Alta",
-  critical: "Crítica",
 };
 
 export function OrderTable({
@@ -40,14 +34,20 @@ export function OrderTable({
   const [globalFilter, setGlobalFilter] = useState("");
   const [storeFilter, setStoreFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const groupOptions = useMemo(
+    () => Array.from(new Set(orders.map((order) => order.groupCode).filter(Boolean))).sort(),
+    [orders],
+  );
   const filteredOrders = useMemo(
     () =>
       orders.filter(
         (order) =>
           (storeFilter === "all" || order.store === storeFilter) &&
-          (priorityFilter === "all" || order.priority === priorityFilter),
+          (priorityFilter === "all" || order.priority === priorityFilter) &&
+          (groupFilter === "all" || order.groupCode === groupFilter),
       ),
-    [orders, priorityFilter, storeFilter],
+    [groupFilter, orders, priorityFilter, storeFilter],
   );
 
   const columns = useMemo<ColumnDef<Order>[]>(
@@ -66,7 +66,19 @@ export function OrderTable({
               {row.original.code}
             </Link>
             {row.original.isWarranty ? <ShieldCheck className="size-4 shrink-0 text-violet-600" /> : null}
+            {hasMeaningfulObservations(row.original.observations) ? (
+              <MessageSquareWarning className="size-4 shrink-0 text-amber-600" aria-label="Tiene observaciones" />
+            ) : null}
           </div>
+        ),
+      },
+      {
+        accessorKey: "groupCode",
+        header: "Pedido",
+        cell: ({ row }) => (
+          <span className="inline-flex max-w-full rounded-md border border-stone-200 bg-stone-50 px-2 py-1 font-mono text-xs font-semibold text-stone-700">
+            <span className="truncate">{row.original.groupCode}</span>
+          </span>
         ),
       },
       {
@@ -215,10 +227,16 @@ export function OrderTable({
             <option value="LR">La Reina</option>
           </select>
           <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="control min-w-0 bg-white text-stone-700">
-            <option value="all">Toda prioridad</option>
+            <option value="all">Toda urgencia</option>
             <option value="critical">Crítica</option>
             <option value="high">Alta</option>
             <option value="normal">Normal</option>
+          </select>
+          <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)} className="control min-w-0 bg-white text-stone-700">
+            <option value="all">Todos los pedidos</option>
+            {groupOptions.map((group) => (
+              <option key={group} value={group}>{group}</option>
+            ))}
           </select>
           <label className="relative w-full md:w-72">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
@@ -229,13 +247,14 @@ export function OrderTable({
               className="control pl-9"
             />
           </label>
-          {globalFilter || storeFilter !== "all" || priorityFilter !== "all" ? (
+          {globalFilter || storeFilter !== "all" || priorityFilter !== "all" || groupFilter !== "all" ? (
             <button
               type="button"
               onClick={() => {
                 setGlobalFilter("");
                 setStoreFilter("all");
                 setPriorityFilter("all");
+                setGroupFilter("all");
               }}
               className="btn btn-secondary"
             >
@@ -290,10 +309,10 @@ export function OrderTable({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-stone-200 px-4 py-3 text-xs text-stone-500">
-        <span>Prioridad:</span>
-        {Object.entries(priorityLabel).map(([key, label]) => (
+        <span>Urgencia calculada por entrega:</span>
+        {(["critical", "high", "normal"] as const).map((key) => (
           <span key={key} className="rounded-full border border-stone-200 bg-stone-50 px-2 py-1">
-            {label}
+            {priorityLabel(key)}
           </span>
         ))}
       </div>
@@ -314,8 +333,12 @@ function OrderCard({ order, canEditOrders }: { order: Order; canEditOrders: bool
               {order.code}
             </Link>
             {order.isWarranty ? <ShieldCheck className="size-4 shrink-0 text-violet-600" /> : null}
+            {hasMeaningfulObservations(order.observations) ? (
+              <MessageSquareWarning className="size-4 shrink-0 text-amber-600" aria-label="Tiene observaciones" />
+            ) : null}
           </div>
           <p className="mt-2 truncate text-sm font-semibold text-stone-950">{order.client}</p>
+          <p className="mt-1 truncate font-mono text-xs font-semibold text-stone-500">Pedido {order.groupCode}</p>
           <p className="mt-1 line-clamp-2 text-sm text-stone-600">{order.product}</p>
           <p className="mt-1 truncate text-xs text-stone-500">
             {order.material} / {order.color}

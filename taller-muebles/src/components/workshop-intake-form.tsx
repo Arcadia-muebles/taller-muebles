@@ -3,13 +3,12 @@
 import { CheckCircle2, ClipboardPlus, XCircle } from "lucide-react";
 import { useActionState, useRef } from "react";
 import { createWorkshopOrder, type WorkshopOrderState } from "@/app/taller/actions";
-import type { Order } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
 
 const initialState: WorkshopOrderState = { status: "idle", message: "" };
 const inputClass = "control";
 
-export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order["priority"] }) {
+export function WorkshopIntakeForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const [state, action] = useActionState(async (_state: WorkshopOrderState, formData: FormData) => {
     const result = await createWorkshopOrder(_state, formData);
@@ -36,13 +35,6 @@ export function WorkshopIntakeForm({ defaultPriority }: { defaultPriority: Order
           <select name="store" defaultValue="LH" className={inputClass}>
             <option value="LH">Leather House</option>
             <option value="LR">La Reina</option>
-          </select>
-        </Field>
-        <Field label="Prioridad">
-          <select name="priority" defaultValue={defaultPriority} className={inputClass}>
-            <option value="normal">Normal</option>
-            <option value="high">Alta</option>
-            <option value="critical">Crítica</option>
           </select>
         </Field>
         <Field label="Producto" className="sm:col-span-2">

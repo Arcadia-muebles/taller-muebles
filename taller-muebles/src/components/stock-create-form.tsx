@@ -22,7 +22,7 @@ export function StockCreateForm() {
       <p className="panel-description">
         Las cantidades disponible y mínima se registran usando la misma unidad de medida.
       </p>
-      <div className="mt-4 grid gap-3 md:grid-cols-6">
+      <div className="mt-4 grid gap-3 md:grid-cols-7">
         <Field label="Material" className="md:col-span-2">
           <input name="name" required placeholder="Ej. Cuero negro" className={inputClass} />
         </Field>
@@ -47,13 +47,19 @@ export function StockCreateForm() {
           <input name="minimum" required type="number" min="0" step="1" placeholder="0" className={inputClass} />
         </Field>
         <Field label="Ubicación">
+          <select name="location" defaultValue="warehouse" className={inputClass}>
+            <option value="warehouse">Bodega</option>
+            <option value="workshop">Taller</option>
+          </select>
+        </Field>
+        <Field label="Tienda">
           <select name="store" defaultValue="general" className={inputClass}>
             <option value="general">General</option>
             <option value="LH">LH</option>
             <option value="LR">LR</option>
           </select>
         </Field>
-        <div className="flex flex-col justify-end gap-2 md:col-span-5">
+        <div className="flex flex-col justify-end gap-2 md:col-span-6">
           <ActionFeedback state={state} />
         </div>
         <div className="flex items-end">

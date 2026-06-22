@@ -6,8 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import { updateProductionStep } from "@/app/taller/actions";
 import type { AreaKey, Order, ProductionStep, Role, StepStatus } from "@/lib/types";
 import { deliveryLabel, formatDate, formatDateTime } from "@/lib/utils";
-import { filterWorkerOrders, workerActionStep } from "@/lib/workshop-access";
-import { workerAreas } from "@/lib/workshop-access";
+import { filterWorkerFutureOrders, filterWorkerOrders, workerActionStep, workerAreas } from "@/lib/workshop-access";
 import { StatusBadge } from "./status-badge";
 
 type WorkerQueueProps = {
@@ -54,6 +53,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
   );
 
   const visible = useMemo(() => filterWorkerOrders(user, workingOrders), [user, workingOrders]);
+  const future = useMemo(() => filterWorkerFutureOrders(user, workingOrders), [user, workingOrders]);
   const areaName = workerAreas(user)
     .map((area) => areaLabels[area] ?? visible[0]?.steps.find((step) => step.key === area)?.label ?? area)
     .join(", ") || "Sin etapa";
@@ -257,6 +257,42 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
               : "Tu usuario no tiene una etapa asignada. Pide al administrador que configure tu perfil."}
           </div>
         ) : null}
+      </div>
+
+      <div className="border-t border-stone-200 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-stone-950">Próximos trabajos</h3>
+            <p className="text-sm text-stone-500">Carga futura para planificar materiales y semana.</p>
+          </div>
+          <span className="inline-flex h-8 w-fit items-center rounded-full border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600">
+            {future.length} futuros
+          </span>
+        </div>
+        <div className="mt-3 grid gap-2">
+          {future.slice(0, 8).map((order) => {
+            const futureStep = order.steps.find((step) => workerAreas(user).includes(step.key) && step.status === "pending");
+            return (
+              <Link key={order.id} href={`/taller/orders/${order.id}`} className="flex min-w-0 flex-col gap-2 rounded-md border border-stone-200 bg-stone-50 px-3 py-3 transition hover:border-stone-300 hover:bg-white sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-sm font-semibold">{order.code}</p>
+                  <p className="mt-1 truncate text-sm font-medium text-stone-800">{order.product}</p>
+                  <p className="mt-1 truncate text-xs text-stone-500">{order.material} / {order.color}</p>
+                </div>
+                <div className="shrink-0 sm:text-right">
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">{futureStep?.label ?? "Etapa futura"}</p>
+                  <p className="mt-1 text-sm font-semibold text-stone-900">{formatDate(order.deliveryDate)}</p>
+                  <p className="text-xs font-semibold text-stone-500">{deliveryLabel(order.deliveryDate, false)}</p>
+                </div>
+              </Link>
+            );
+          })}
+          {!future.length ? (
+            <p className="rounded-md border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">
+              No hay trabajos futuros para tu etapa.
+            </p>
+          ) : null}
+        </div>
       </div>
     </section>
   );

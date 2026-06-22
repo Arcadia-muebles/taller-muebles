@@ -122,6 +122,7 @@ export async function listStockItems(): Promise<StockItem[]> {
     available: Number(item.current_quantity),
     minimum: Number(item.minimum_quantity),
     store: "general",
+    location: item.location ?? "warehouse",
   }));
 }
 
@@ -272,6 +273,7 @@ function mapOrderRecord(record: OrderRecord): Order {
   return {
     id: record.id,
     code: record.internal_code,
+    groupCode: record.group_code ?? record.internal_code,
     store: (record.stores?.code ?? "LH") as StoreCode,
     client: record.client_name,
     product: record.product_name,
@@ -283,6 +285,7 @@ function mapOrderRecord(record: OrderRecord): Order {
     isWarranty: record.is_warranty,
     entryDate: record.entry_date,
     deliveryDate: record.delivery_date ?? record.entry_date,
+    completedAt: record.completed_at ?? undefined,
     assignedTo: record.assigned_profile?.full_name ?? "Sin asignar",
     observations: record.observations ?? "Sin observaciones.",
     steps,

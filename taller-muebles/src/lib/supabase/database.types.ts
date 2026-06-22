@@ -95,6 +95,7 @@ export type Database = {
           created_at: string
           current_quantity: number
           id: string
+          location: Database["public"]["Enums"]["stock_location"]
           minimum_quantity: number
           name: string
           store_id: string | null
@@ -107,6 +108,7 @@ export type Database = {
           created_at?: string
           current_quantity?: number
           id?: string
+          location?: Database["public"]["Enums"]["stock_location"]
           minimum_quantity?: number
           name: string
           store_id?: string | null
@@ -119,6 +121,7 @@ export type Database = {
           created_at?: string
           current_quantity?: number
           id?: string
+          location?: Database["public"]["Enums"]["stock_location"]
           minimum_quantity?: number
           name?: string
           store_id?: string | null
@@ -234,6 +237,7 @@ export type Database = {
           delivery_date: string | null
           entry_date: string
           id: string
+          group_code: string
           internal_code: string
           is_warranty: boolean
           material: string | null
@@ -256,6 +260,7 @@ export type Database = {
           delivery_date?: string | null
           entry_date?: string
           id?: string
+          group_code?: string
           internal_code: string
           is_warranty?: boolean
           material?: string | null
@@ -278,6 +283,7 @@ export type Database = {
           delivery_date?: string | null
           entry_date?: string
           id?: string
+          group_code?: string
           internal_code?: string
           is_warranty?: boolean
           material?: string | null
@@ -571,6 +577,7 @@ export type Database = {
       priority_level: "normal" | "high" | "critical"
       step_status: "pending" | "active" | "done" | "blocked"
       stock_movement_type: "in" | "out" | "adjustment" | "reserved" | "released"
+      stock_location: "warehouse" | "workshop"
       store_code: "LH" | "LR"
       user_role: "admin" | "manager" | "operator" | "viewer"
     }
@@ -724,6 +731,7 @@ export const Constants = {
       priority_level: ["normal", "high", "critical"],
       step_status: ["pending", "active", "done", "blocked"],
       stock_movement_type: ["in", "out", "adjustment", "reserved", "released"],
+      stock_location: ["warehouse", "workshop"],
       store_code: ["LH", "LR"],
       user_role: ["admin", "manager", "operator", "viewer"],
     },

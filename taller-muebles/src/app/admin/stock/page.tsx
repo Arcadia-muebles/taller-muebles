@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/auth";
 import { listStockItems, listStockMovements } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import type { StockItem, StockMovement } from "@/lib/types";
+import { stockLocationLabel } from "@/lib/utils";
 
 export default async function StockPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
@@ -40,10 +41,10 @@ export default async function StockPage() {
           <p className="mt-3 text-3xl font-semibold">{items.length}</p>
           <p className="mt-1 text-sm text-stone-500">Materiales activos</p>
         </div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <TriangleAlert className="size-5 text-amber-700" />
-          <p className="mt-3 text-3xl font-semibold text-amber-950">{critical.length}</p>
-          <p className="mt-1 text-sm text-amber-800">Bajo mínimo</p>
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+          <TriangleAlert className="size-5 text-rose-700" />
+          <p className="mt-3 text-3xl font-semibold text-rose-950">{critical.length}</p>
+          <p className="mt-1 text-sm text-rose-800">Bajo mínimo</p>
         </div>
       </section>
 
@@ -68,6 +69,7 @@ export default async function StockPage() {
                 <th className="px-3 py-3">Mínimo</th>
                 <th className="px-3 py-3">Unidad</th>
                 <th className="px-3 py-3">Ubicación</th>
+                <th className="px-3 py-3">Tienda</th>
                 {canEdit ? <th className="px-3 py-3">Acción</th> : null}
               </tr>
             </thead>
@@ -79,6 +81,7 @@ export default async function StockPage() {
                   <td className="px-3 py-3 text-sm font-semibold">{item.available}</td>
                   <td className="px-3 py-3 text-sm text-stone-600">{item.minimum}</td>
                   <td className="px-3 py-3 text-sm text-stone-600"><span className="block truncate">{item.unit}</span></td>
+                  <td className="px-3 py-3 text-sm text-stone-600">{stockLocationLabel(item.location)}</td>
                   <td className="px-3 py-3 text-sm text-stone-600">{item.store}</td>
                   {canEdit ? (
                     <td className="px-3 py-3">
@@ -92,7 +95,7 @@ export default async function StockPage() {
               ))}
               {!items.length ? (
                 <tr>
-                  <td colSpan={canEdit ? 7 : 6} className="px-4 py-10 text-center text-sm text-stone-500">No hay materiales registrados.</td>
+                  <td colSpan={canEdit ? 8 : 7} className="px-4 py-10 text-center text-sm text-stone-500">No hay materiales registrados.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -120,13 +123,13 @@ function StockCard({ item, canEdit }: { item: StockItem; canEdit: boolean }) {
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-stone-950">{item.name}</p>
-          <p className="mt-1 truncate text-xs text-stone-500">{item.category} · {item.store}</p>
+          <p className="mt-1 truncate text-xs text-stone-500">{item.category} · {stockLocationLabel(item.location)}</p>
         </div>
         <p className="text-sm font-semibold">{item.available} <span className="text-xs font-medium text-stone-500">{item.unit}</span></p>
       </div>
       <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
         <Info label="Alerta bajo" value={String(item.minimum)} />
-        <Info label="Ubicación" value={item.store} />
+        <Info label="Ubicación" value={stockLocationLabel(item.location)} />
       </div>
       {canEdit ? (
         <div className="mt-3 flex flex-wrap gap-2">

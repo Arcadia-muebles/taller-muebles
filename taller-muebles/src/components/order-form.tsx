@@ -27,7 +27,6 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
     resolver: zodResolver(orderSchema),
     defaultValues: initialValues ?? {
       store: "LH",
-      priority: "normal",
       isWarranty: false,
       entryDate: new Date().toISOString().slice(0, 10),
     },
@@ -83,11 +82,18 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
               <option value="LR">La Reina</option>
             </select>
           </Field>
-          <Field label="Nota de venta" error={errors.salesNoteNumber?.message}>
-            <input {...register("salesNoteNumber")} className={inputClass} placeholder="NV-2026-001" />
+          <Field label="Código venta" error={errors.salesNoteNumber?.message}>
+            {orderId ? (
+              <input {...register("salesNoteNumber")} className={inputClass} readOnly />
+            ) : (
+              <input className={inputClass} value="Se genera automáticamente" readOnly />
+            )}
+          </Field>
+          <Field label="Código pedido común" error={errors.groupCode?.message}>
+            <input {...register("groupCode")} className={inputClass} placeholder="Opcional, ej. LH2101" />
           </Field>
           <Field label="Cliente" error={errors.clientName?.message}>
-            <input {...register("clientName")} className={inputClass} placeholder="Nombre cliente" />
+            <input {...register("clientName")} className={inputClass} placeholder="Persona o empresa" />
           </Field>
           <Field label="Responsable inicial" error={errors.assignedTo?.message}>
             <select {...register("assignedTo")} className={inputClass}>
@@ -123,13 +129,10 @@ export function OrderForm({ orderId, initialValues, assignees }: { orderId?: str
           <Field label="Fecha entrega" error={errors.deliveryDate?.message}>
             <input {...register("deliveryDate")} type="date" className={inputClass} />
           </Field>
-          <Field label="Prioridad" error={errors.priority?.message}>
-            <select {...register("priority")} className={inputClass}>
-              <option value="normal">Normal</option>
-              <option value="high">Alta</option>
-              <option value="critical">Crítica</option>
-            </select>
-          </Field>
+          <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2">
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">Prioridad</p>
+            <p className="mt-1 text-sm font-semibold text-stone-800">Se calcula por fecha de entrega</p>
+          </div>
           <label className="flex h-11 items-center gap-3 rounded-md border border-stone-200 bg-stone-50 px-3 text-sm font-medium">
             <input {...register("isWarranty")} type="checkbox" className="size-4 accent-stone-950" />
             Es garantía

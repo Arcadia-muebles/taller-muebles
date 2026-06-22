@@ -4,6 +4,8 @@
 
 Construir una plataforma web interna para Leather House y La Reina que mantenga la logica operativa de la planilla actual, pero con datos trazables, permisos, control de produccion, stock inicial, reportes y una base preparada para IA.
 
+Ultima definicion con Rodrigo: 2026-06-22. Ver `docs/reunion-rodrigo-2026-06-22.md`.
+
 ## Personas
 
 ### Administrador
@@ -44,21 +46,29 @@ Entidad central del sistema.
 Campos base:
 
 - Tienda: LH o LR.
+- Codigo comun de pedido para agrupar multiples productos de una misma venta.
 - Codigo interno.
-- Nota de venta.
-- Cliente.
+- Nota de venta o presupuesto generado de forma automatica y correlativa por serie.
+- Cliente libre: persona o empresa.
 - Producto/modelo.
 - Material.
 - Color.
 - Fecha de ingreso.
 - Fecha de entrega.
-- Prioridad.
+- Prioridad calculada desde fecha de entrega, sin prioridad manual paralela.
 - Estado general.
 - Condicion.
 - Garantia.
 - Responsable actual.
 - Observaciones.
 - Adjuntos.
+
+Reglas acordadas:
+
+- Un pedido puede tener varios productos asociados al mismo codigo comun, manteniendo avance individual por articulo.
+- Las observaciones importantes deben activar un indicador visual discreto en tarjetas y tablas.
+- Se conserva la marca de garantia para diferenciar reingresos por falla de ventas nuevas.
+- Debe existir flexibilidad para medidas, materiales y productos personalizados.
 
 ### 2. Produccion
 
@@ -89,8 +99,11 @@ Control inicial de materiales criticos.
 - Stock actual.
 - Stock minimo.
 - Tienda o stock general.
+- Ubicacion fisica: bodega o taller.
 - Movimientos de entrada/salida.
 - Relacion opcional con orden de produccion.
+
+Los materiales bajo minimo deben destacarse con alerta roja para reposicion inmediata.
 
 ### 4. Reportes
 
@@ -103,6 +116,7 @@ Primera version:
 - Carga por proceso.
 - Stock bajo.
 - Proximas entregas.
+- Historial de despachos con filtro por mes y ultimos 30 dias.
 
 Segunda version:
 
@@ -110,6 +124,7 @@ Segunda version:
 - Produccion por responsable.
 - Atrasos recurrentes.
 - Materiales con mayor consumo.
+- Cuellos de botella recurrentes con asistencia de IA cuando existan datos suficientes.
 
 ### 5. IA
 
@@ -129,8 +144,8 @@ Casos realistas:
 ### Crear nota de venta
 
 1. Admin crea orden.
-2. Define tienda, cliente, producto, fechas y prioridad.
-3. Sistema genera codigo interno.
+2. Define tienda, cliente libre, producto, material, medidas y fechas.
+3. Sistema genera codigo correlativo y codigo interno.
 4. Orden queda programada o activa.
 
 ### Actualizar produccion
@@ -149,6 +164,8 @@ Casos realistas:
 3. Orden se marca terminada.
 4. Sale de produccion activa.
 5. Queda disponible en historial.
+
+El panel principal debe mostrar solo productos activos o listos para coordinar despacho. No debe acumular historiales de despacho.
 
 ### Bloquear orden
 
@@ -174,9 +191,11 @@ Casos realistas:
 - La tabla es el centro de operacion.
 - El admin ve contexto completo.
 - El taller ve solo lo necesario para ejecutar.
+- El taller tambien debe ver trabajos futuros para planificar la semana y abastecimiento.
 - Nada critico se borra; se archiva o queda en historial.
 - Cada cambio relevante debe ser trazable.
 - La IA no reemplaza los flujos; mejora decisiones sobre datos confiables.
+- La prioridad operativa sale de la fecha de entrega, no de una seleccion manual.
 
 ## Pendientes Para La Siguiente Iteracion
 
@@ -184,6 +203,9 @@ Casos realistas:
 - Aplicar la migracion validada y cargar variables de produccion.
 - Crear los usuarios reales y revisar permisos con Rodrigo.
 - Validar columnas, reglas de stock y flujo final contra la planilla real.
+- Incorporar decisiones de la reunion 2026-06-22: agrupacion por pedido, cliente libre, prioridad por fecha, ubicacion de stock, filtros de historial, etiquetas y trabajos futuros.
+- Recibir y modelar ejemplo real de etiqueta de producto.
+- Disenar regla editable para conversion de medidas internas en modelos especiales como Chesterfield.
 - Verificar despliegue, tabletas del taller y recuperacion de acceso.
 - Agregar funciones de IA solo despues de acumular datos operativos confiables.
 
@@ -208,4 +230,5 @@ Casos realistas:
 - Vincular el repositorio al proyecto Supabase definitivo.
 - Aplicar la migracion y volver a generar tipos desde ese proyecto.
 - Repetir pruebas RLS y flujos completos con usuarios reales.
+- Ajustar modelo y UI segun la reunion del 2026-06-22 antes de cargar datos reales en produccion.
 - Configurar variables y despliegue de produccion en Vercel.

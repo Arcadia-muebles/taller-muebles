@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { createLocalOrder, updateLocalProductionStep } from "@/lib/local-store";
+import { createLocalOrder, nextLocalOrderCode, updateLocalProductionStep } from "@/lib/local-store";
 import { getOrder, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { priorityFromDeliveryDate } from "@/lib/utils";
 import { updateStepSchema, type UpdateStepInput } from "@/lib/validation/production";
 import { canWorkerUseStep } from "@/lib/workshop-access";
 
@@ -30,7 +31,6 @@ const workshopOrderSchema = z.object({
   material: z.string().trim().max(80).optional(),
   color: z.string().trim().max(60).optional(),
   deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ingresa una fecha valida."),
-  priority: z.enum(["normal", "high", "critical"]),
   observations: z.string().trim().max(500).optional(),
 });
 
@@ -47,7 +47,6 @@ export async function createWorkshopOrder(
     material: formData.get("material")?.toString() || undefined,
     color: formData.get("color")?.toString() || undefined,
     deliveryDate: formData.get("deliveryDate"),
-    priority: formData.get("priority"),
     observations: formData.get("observations")?.toString() || undefined,
   });
 
@@ -55,8 +54,12 @@ export async function createWorkshopOrder(
     return { status: "error", message: parsed.error.issues[0]?.message ?? "Revisa los datos del producto." };
   }
 
-  const salesNoteNumber = `TALLER-${Date.now().toString(36).toUpperCase()}`;
+  const salesNoteNumber = await nextWorkshopOrderCode(parsed.data.store);
   const entryDate = new Date().toISOString().slice(0, 10);
+  const priority = priorityFromDeliveryDate(parsed.data.deliveryDate, {
+    urgentDays: settings.alerts.urgentDeliveryDays,
+    upcomingDays: settings.alerts.upcomingDeliveryDays,
+  });
   const input = {
     store: parsed.data.store,
     salesNoteNumber,
@@ -66,7 +69,8 @@ export async function createWorkshopOrder(
     color: parsed.data.color || "Por definir",
     entryDate,
     deliveryDate: parsed.data.deliveryDate,
-    priority: parsed.data.priority,
+    groupCode: salesNoteNumber,
+    priority,
     assignedTo: user.name,
     observations: parsed.data.observations || "Ingresado desde panel de taller.",
     isWarranty: false,
@@ -101,6 +105,7 @@ export async function createWorkshopOrder(
       store_id: store.id,
       internal_code: input.salesNoteNumber,
       sales_note_number: input.salesNoteNumber,
+      group_code: input.groupCode,
       client_name: input.clientName,
       product_name: input.productName,
       material: input.material,
@@ -449,4 +454,20 @@ function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
     }
   }
   return map;
+}
+
+async function nextWorkshopOrderCode(store: z.infer<typeof workshopOrderSchema>["store"]) {
+  if (!hasSupabaseConfig()) return nextLocalOrderCode(store);
+  const max = (await getOrderCodes()).reduce((current, code) => {
+    const match = new RegExp(`^${store}(\\d+)$`).exec(code);
+    if (!match) return current;
+    return Math.max(current, Number(match[1]));
+  }, 0);
+  return `${store}${String(max + 1).padStart(2, "0")}`;
+}
+
+async function getOrderCodes() {
+  const supabase = await createClient();
+  const { data } = await supabase.from("orders").select("internal_code");
+  return data?.map((order) => order.internal_code) ?? [];
 }

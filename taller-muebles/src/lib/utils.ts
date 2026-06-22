@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { Order, StockLocation } from "./types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -54,6 +55,37 @@ export function deliveryLabel(value: string | undefined | null, completed: boole
   if (days === 0) return "Hoy";
   if (days === 1) return "Mañana";
   return `${days}d`;
+}
+
+export function priorityFromDeliveryDate(
+  value: string | undefined | null,
+  options: { urgentDays?: number; upcomingDays?: number } = {},
+): Order["priority"] {
+  const days = daysUntil(value);
+  if (!Number.isFinite(days)) return "normal";
+  const urgentDays = options.urgentDays ?? 2;
+  const upcomingDays = options.upcomingDays ?? 7;
+  if (days <= urgentDays) return "critical";
+  if (days <= upcomingDays) return "high";
+  return "normal";
+}
+
+export function priorityLabel(priority: Order["priority"]) {
+  const labels: Record<Order["priority"], string> = {
+    normal: "Normal",
+    high: "Alta",
+    critical: "Crítica",
+  };
+  return labels[priority];
+}
+
+export function hasMeaningfulObservations(value?: string | null) {
+  const normalized = value?.trim().toLowerCase();
+  return Boolean(normalized && normalized !== "sin observaciones.");
+}
+
+export function stockLocationLabel(location: StockLocation) {
+  return location === "warehouse" ? "Bodega" : "Taller";
 }
 
 function parseDate(value?: string | null) {

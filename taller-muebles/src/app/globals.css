@@ -152,6 +152,32 @@ select {
 }
 
 @media print {
+  body.printing-label * {
+    visibility: hidden;
+  }
+
+  body.printing-label .label-print-area,
+  body.printing-label .label-print-area * {
+    visibility: visible;
+  }
+
+  body.printing-label .label-print-area {
+    display: block !important;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    padding: 0;
+  }
+
+  body.printing-label .label-card {
+    width: 100mm;
+    min-height: 65mm;
+    border: 2px solid #000000;
+    padding: 8mm;
+    color: #000000;
+    background: #ffffff;
+  }
+
   aside,
   button,
   form,

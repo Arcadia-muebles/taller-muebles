@@ -15,6 +15,7 @@ const stockSchema = z.object({
   available: z.coerce.number().int().min(0),
   minimum: z.coerce.number().int().min(0),
   store: z.enum(["LH", "LR", "general"]),
+  location: z.enum(["warehouse", "workshop"]),
 });
 
 const movementSchema = z.object({
@@ -38,6 +39,7 @@ export async function createStockItem(formData: FormData) {
     available: formData.get("available"),
     minimum: formData.get("minimum"),
     store: formData.get("store"),
+    location: formData.get("location"),
   });
 
   if (!parsed.success) {
@@ -59,6 +61,7 @@ export async function createStockItem(formData: FormData) {
         unit: parsed.data.unit,
         current_quantity: parsed.data.available,
         minimum_quantity: parsed.data.minimum,
+        location: parsed.data.location,
       });
       if (error) return { ok: false, message: `No fue posible crear el material: ${error.message}` };
     }

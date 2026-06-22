@@ -33,6 +33,21 @@ export function filterWorkerOrders(user: WorkshopUser, orders: Order[]) {
   return user.role === "operator" ? orders.filter((order) => canWorkerSeeOrder(user, order)) : orders;
 }
 
+export function filterWorkerFutureOrders(user: WorkshopUser, orders: Order[]) {
+  if (user.role !== "operator") return [];
+  const areas = workerAreas(user);
+  return orders.filter((order) => {
+    if (order.status === "cancelled" || order.status === "completed") return false;
+    if (canWorkerSeeOrder(user, order)) return false;
+    const next = nextWorkStep(order);
+    return order.steps.some((step) => (
+      areas.includes(step.key) &&
+      step.status === "pending" &&
+      step.key !== next?.key
+    ));
+  });
+}
+
 export function workerActionStep(user: WorkshopUser, order: Order) {
   const current = nextWorkStep(order);
   if (current && workerAreas(user).includes(current.key)) return current;

@@ -39,6 +39,7 @@ export type AppUser = {
 export type Order = {
   id: string;
   code: string;
+  groupCode: string;
   store: StoreCode;
   client: string;
   product: string;
@@ -55,10 +56,13 @@ export type Order = {
   isWarranty: boolean;
   entryDate: string;
   deliveryDate: string;
+  completedAt?: string;
   assignedTo: string;
   observations: string;
   steps: ProductionStep[];
 };
+
+export type StockLocation = "warehouse" | "workshop";
 
 export type StockItem = {
   id: string;
@@ -68,6 +72,7 @@ export type StockItem = {
   available: number;
   minimum: number;
   store: StoreCode | "general";
+  location: StockLocation;
   active?: boolean;
 };
 

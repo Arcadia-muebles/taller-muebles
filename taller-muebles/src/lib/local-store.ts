@@ -165,6 +165,7 @@ export async function getLocalOrder(id: string) {
 export async function createLocalOrder(input: {
   store: Order["store"];
   salesNoteNumber: string;
+  groupCode?: string;
   clientName: string;
   productName: string;
   material: string;
@@ -197,6 +198,7 @@ export async function createLocalOrder(input: {
   const order: Order = {
     id,
     code: input.salesNoteNumber,
+    groupCode: input.groupCode?.trim() || input.salesNoteNumber,
     store: input.store,
     client: input.clientName,
     product: input.productName,
@@ -221,7 +223,8 @@ export async function createLocalOrder(input: {
 
 export async function updateLocalOrder(id: string, input: {
   store: Order["store"];
-  salesNoteNumber: string;
+  salesNoteNumber?: string;
+  groupCode?: string;
   clientName: string;
   productName: string;
   material: string;
@@ -238,7 +241,8 @@ export async function updateLocalOrder(id: string, input: {
   if (!order) return false;
 
   order.store = input.store;
-  order.code = input.salesNoteNumber;
+  order.code = input.salesNoteNumber?.trim() || order.code;
+  order.groupCode = input.groupCode?.trim() || order.code;
   order.client = input.clientName;
   order.product = input.productName;
   order.material = input.material;
@@ -272,6 +276,7 @@ export async function closeLocalOrder(id: string) {
 
   order.status = "completed";
   order.condition = "Entregado";
+  order.completedAt = nowIso();
   order.steps = order.steps.map((step) => ({
     ...step,
     status: "done",
@@ -636,6 +641,14 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
   }
 
   for (const order of data.orders) {
+    if (!order.groupCode) {
+      order.groupCode = order.code;
+      changed = true;
+    }
+    if (!order.priority) {
+      order.priority = "normal";
+      changed = true;
+    }
     for (const step of order.steps) {
       if (step.owner === step.label || step.owner === stepDefinitions.find((item) => item.key === step.key)?.ownerFallback) {
         const nextOwner = pickLocalStepOwner(data, step.key, step.owner);
@@ -647,7 +660,19 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
     }
   }
 
+  for (const item of data.stockItems) {
+    if (!item.location) {
+      item.location = "warehouse";
+      changed = true;
+    }
+  }
+
   return { data, changed };
+}
+
+export async function nextLocalOrderCode(store: Order["store"]) {
+  const data = await readData();
+  return nextCodeForStore(store, data.orders.map((order) => order.code));
 }
 
 function pickLocalStepOwner(data: LocalData, area: AreaKey, fallback: string) {
@@ -667,4 +692,13 @@ function parseAreas(value?: string | null) {
 
 function userAreas(user: AppUser) {
   return user.areas?.length ? user.areas : parseAreas(user.area);
+}
+
+function nextCodeForStore(store: Order["store"], codes: string[]) {
+  const max = codes.reduce((current, code) => {
+    const match = new RegExp(`^${store}(\\d+)$`).exec(code);
+    if (!match) return current;
+    return Math.max(current, Number(match[1]));
+  }, 0);
+  return `${store}${String(max + 1).padStart(2, "0")}`;
 }

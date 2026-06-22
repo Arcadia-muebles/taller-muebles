@@ -5,11 +5,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, updateLocalOrder } from "@/lib/local-store";
+import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder } from "@/lib/local-store";
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
+import { priorityFromDeliveryDate } from "@/lib/utils";
 
 export type CreateOrderState = {
   status: "idle" | "success" | "error";
@@ -35,14 +36,14 @@ export async function createOrder(
   }
   const parsed = orderSchema.safeParse({
     store: formData.get("store"),
-    salesNoteNumber: formData.get("salesNoteNumber"),
+    salesNoteNumber: formData.get("salesNoteNumber")?.toString() || undefined,
+    groupCode: formData.get("groupCode")?.toString() || undefined,
     clientName: formData.get("clientName"),
     productName: formData.get("productName"),
     material: formData.get("material"),
     color: formData.get("color"),
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
-    priority: formData.get("priority"),
     assignedTo: formData.get("assignedTo"),
     observations: formData.get("observations")?.toString() ?? "",
     isWarranty: parseBooleanFormValue(formData.get("isWarranty")),
@@ -56,10 +57,19 @@ export async function createOrder(
   }
   const ruleError = await validateOrderRules(parsed.data, settings);
   if (ruleError) return { status: "error", message: ruleError };
+  const generatedCode = await nextOrderCode(parsed.data.store);
+  const orderPriority = priorityFromDeliveryDate(parsed.data.deliveryDate, {
+    urgentDays: settings.alerts.urgentDeliveryDays,
+    upcomingDays: settings.alerts.upcomingDeliveryDays,
+  });
+  const groupCode = parsed.data.groupCode?.trim() || generatedCode;
 
   if (!hasSupabaseConfig()) {
     const order = await createLocalOrder({
       ...parsed.data,
+      salesNoteNumber: generatedCode,
+      groupCode,
+      priority: orderPriority,
       steps: settings.production.steps,
     });
     const attachmentResult = await saveInitialAttachment({
@@ -106,15 +116,16 @@ export async function createOrder(
     .from("orders")
     .insert({
       store_id: store.id,
-      internal_code: parsed.data.salesNoteNumber,
-      sales_note_number: parsed.data.salesNoteNumber,
+      internal_code: generatedCode,
+      sales_note_number: generatedCode,
+      group_code: groupCode,
       client_name: parsed.data.clientName,
       product_name: parsed.data.productName,
       material: parsed.data.material,
       color: parsed.data.color,
       status: "in_production",
       condition: "none",
-      priority: parsed.data.priority,
+      priority: orderPriority,
       is_warranty: parsed.data.isWarranty,
       entry_date: parsed.data.entryDate,
       delivery_date: parsed.data.deliveryDate,
@@ -164,7 +175,7 @@ export async function createOrder(
     entity: "orders",
     entity_id: order.id,
     profile_id: profileId,
-    new_value: parsed.data.salesNoteNumber,
+    new_value: generatedCode,
   });
 
   const attachmentResult = await saveInitialAttachment({
@@ -199,14 +210,14 @@ export async function updateOrder(
   }
   const parsed = orderSchema.safeParse({
     store: formData.get("store"),
-    salesNoteNumber: formData.get("salesNoteNumber"),
+    salesNoteNumber: formData.get("salesNoteNumber")?.toString() || undefined,
+    groupCode: formData.get("groupCode")?.toString() || undefined,
     clientName: formData.get("clientName"),
     productName: formData.get("productName"),
     material: formData.get("material"),
     color: formData.get("color"),
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
-    priority: formData.get("priority"),
     assignedTo: formData.get("assignedTo"),
     observations: formData.get("observations")?.toString() ?? "",
     isWarranty: parseBooleanFormValue(formData.get("isWarranty")),
@@ -214,9 +225,16 @@ export async function updateOrder(
   if (!parsed.success) return { status: "error", message: formatZodError(parsed.error) };
   const ruleError = await validateOrderRules(parsed.data, settings, orderId);
   if (ruleError) return { status: "error", message: ruleError };
+  const orderPriority = priorityFromDeliveryDate(parsed.data.deliveryDate, {
+    urgentDays: settings.alerts.urgentDeliveryDays,
+    upcomingDays: settings.alerts.upcomingDeliveryDays,
+  });
 
   if (!hasSupabaseConfig()) {
-    const updated = await updateLocalOrder(orderId, parsed.data);
+    const updated = await updateLocalOrder(orderId, {
+      ...parsed.data,
+      priority: orderPriority,
+    });
     if (!updated) return { status: "error", message: "No se encontró la orden." };
   } else {
     const supabase = await createClient();
@@ -232,13 +250,12 @@ export async function updateOrder(
     if (!store) return { status: "error", message: "No se encontró la tienda." };
     const { error } = await supabase.from("orders").update({
       store_id: store.id,
-      internal_code: parsed.data.salesNoteNumber,
-      sales_note_number: parsed.data.salesNoteNumber,
       client_name: parsed.data.clientName,
       product_name: parsed.data.productName,
       material: parsed.data.material,
       color: parsed.data.color,
-      priority: parsed.data.priority,
+      group_code: parsed.data.groupCode?.trim() || parsed.data.salesNoteNumber,
+      priority: orderPriority,
       is_warranty: parsed.data.isWarranty,
       entry_date: parsed.data.entryDate,
       delivery_date: parsed.data.deliveryDate,
@@ -252,7 +269,7 @@ export async function updateOrder(
       entity: "orders",
       entity_id: orderId,
       profile_id: profileId,
-      new_value: parsed.data.salesNoteNumber,
+      new_value: parsed.data.groupCode?.trim() || undefined,
     });
   }
 
@@ -522,13 +539,27 @@ async function validateOrderRules(
   if (settings.orders.requireObservationsForWarranty && input.isWarranty && !input.observations?.trim()) {
     return "Las órdenes de garantía requieren observaciones.";
   }
-  if (settings.orders.enforceUniqueSalesNote) {
+  if (settings.orders.enforceUniqueSalesNote && input.salesNoteNumber) {
     const duplicate = (await listOrders()).some(
       (order) => order.id !== currentOrderId && order.store === input.store && order.code === input.salesNoteNumber,
     );
     if (duplicate) return "Ya existe una orden con esta nota de venta en la tienda seleccionada.";
   }
   return null;
+}
+
+async function nextOrderCode(store: z.infer<typeof orderSchema>["store"]) {
+  if (!hasSupabaseConfig()) return nextLocalOrderCode(store);
+  return nextCodeForStore(store, (await listOrders()).map((order) => order.code));
+}
+
+function nextCodeForStore(store: z.infer<typeof orderSchema>["store"], codes: string[]) {
+  const max = codes.reduce((current, code) => {
+    const match = new RegExp(`^${store}(\\d+)$`).exec(code);
+    if (!match) return current;
+    return Math.max(current, Number(match[1]));
+  }, 0);
+  return `${store}${String(max + 1).padStart(2, "0")}`;
 }
 
 function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {

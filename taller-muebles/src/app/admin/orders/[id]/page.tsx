@@ -12,6 +12,7 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { OrderActions } from "@/components/order-actions";
 import { OrderCollaboration } from "@/components/order-collaboration";
+import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { ProductionStepControls } from "@/components/production-step-controls";
 import { StepCommentButton } from "@/components/step-comment-button";
 import { StatusBadge } from "@/components/status-badge";
@@ -19,7 +20,7 @@ import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getOrder, listOrderAttachments, listOrderAudit } from "@/lib/repositories/production";
-import { deliveryLabel, durationLabel, formatDate, formatDateTime } from "@/lib/utils";
+import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel } from "@/lib/utils";
 
 type OrderDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -73,9 +74,10 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           </p>
         </div>
 
-        {canEditOrder ? (
-          <OrderActions orderId={order.id} canClose={canClose} />
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <OrderLabelPrintButton order={order} />
+          {canEditOrder ? <OrderActions orderId={order.id} canClose={canClose} /> : null}
+        </div>
       </header>
 
       <section className="mt-5 grid gap-5 xl:grid-cols-[1fr_380px]">
@@ -91,12 +93,13 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             <div className="grid gap-4 p-4 md:grid-cols-2">
               <Info label="Cliente" value={order.client} />
               <Info label="Tienda" value={order.store} />
+              <Info label="Pedido común" value={order.groupCode} />
               <Info label="Producto" value={order.product} />
               <Info label="Material" value={order.material} />
               <Info label="Color" value={order.color} />
               <Info label="Responsable" value={order.assignedTo} />
               <Info label="Condicion" value={order.condition} />
-              <Info label="Prioridad" value={order.priority} />
+              <Info label="Urgencia por fecha" value={priorityLabel(order.priority)} />
             </div>
           </section>
 
