@@ -293,16 +293,41 @@ export async function updateLocalProductionStep(input: {
   const step = order?.steps.find((item) => item.key === input.stepKey);
   if (!order || !step) return false;
 
+  const previousStatus = step.status;
+  const isReversal =
+    (previousStatus === "active" && input.status === "pending") ||
+    (previousStatus === "done" && input.status === "active") ||
+    (previousStatus === "blocked" && input.status === "pending");
+  const now = nowIso();
   step.status = input.status;
   if (input.reason?.trim()) step.notes = input.reason.trim();
   if (input.status === "blocked") step.notes = input.reason;
-  if (input.status === "active") step.startedAt = nowIso();
+  if (input.status === "pending") {
+    step.startedAt = undefined;
+    step.completedAt = undefined;
+    if (!input.reason?.trim()) step.notes = undefined;
+  }
+  if (input.status === "active") {
+    step.startedAt = step.startedAt ?? now;
+    step.completedAt = undefined;
+  }
   if (input.status === "done") {
-    step.completedAt = nowIso();
+    step.startedAt = step.startedAt ?? now;
+    step.completedAt = now;
     const nextStep = nextPendingStep(order, step.key);
     if (nextStep) {
       nextStep.status = "pending";
       nextStep.notes = undefined;
+    }
+  }
+
+  if (isReversal) {
+    const currentIndex = order.steps.findIndex((item) => item.key === step.key);
+    for (const laterStep of order.steps.slice(currentIndex + 1)) {
+      laterStep.status = "pending";
+      laterStep.startedAt = undefined;
+      laterStep.completedAt = undefined;
+      laterStep.notes = undefined;
     }
   }
 
@@ -313,11 +338,20 @@ export async function updateLocalProductionStep(input: {
     order.condition = "Entregado";
   } else if (order.steps.find((item) => item.key === "quality")?.status === "active") {
     order.status = "quality_control";
+    order.condition = "Control de calidad";
   } else {
     order.status = order.priority === "critical" ? "urgent" : "in_production";
+    if (order.condition === "Entregado" || order.condition === "Control de calidad") {
+      order.condition = "Sin condicion";
+    }
   }
 
-  addAudit(data, order.id, "update_step", `${step.label}: ${input.status}${input.reason ? ` · ${input.reason}` : ""}`);
+  addAudit(
+    data,
+    order.id,
+    isReversal ? "revert_step" : "update_step",
+    `${step.label}: ${previousStatus} -> ${input.status}${input.reason ? ` · ${input.reason}` : ""}`,
+  );
   await writeData(data);
   return true;
 }
@@ -339,6 +373,7 @@ export async function moveLocalOrderToStep(input: {
       return {
         ...step,
         status: "done",
+        startedAt: step.startedAt ?? step.completedAt ?? now,
         completedAt: step.completedAt ?? now,
       };
     }
@@ -366,6 +401,9 @@ export async function moveLocalOrderToStep(input: {
       ? "urgent"
       : "in_production";
   order.condition = input.stepKey === "quality" ? "Control de calidad" : order.condition;
+  if (input.stepKey !== "quality" && order.condition === "Entregado") {
+    order.condition = "Sin condicion";
+  }
 
   const target = order.steps[targetIndex];
   addAudit(data, order.id, "move_step", `${input.actorName} movio la orden a ${target.label}`);

@@ -234,6 +234,7 @@ function auditActionLabel(action: string) {
     create_order: "Orden creada",
     update_order: "Orden actualizada",
     update_step: "Etapa actualizada",
+    revert_step: "Cambio de etapa revertido",
     close_order: "Orden cerrada",
     cancel_order: "Orden cancelada",
   };

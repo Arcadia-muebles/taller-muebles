@@ -1,12 +1,12 @@
 "use client";
 
-import { Check, ChevronRight, MessageSquare, Play, X } from "lucide-react";
+import { Check, ChevronRight, MessageSquare, Play, RotateCcw, Undo2, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { updateProductionStep } from "@/app/taller/actions";
 import type { AreaKey, Order, ProductionStep, Role, StepStatus } from "@/lib/types";
 import { deliveryLabel, formatDate, formatDateTime } from "@/lib/utils";
-import { filterWorkerOrders, nextWorkStep } from "@/lib/workshop-access";
+import { filterWorkerOrders, workerActionStep } from "@/lib/workshop-access";
 import { workerAreas } from "@/lib/workshop-access";
 import { StatusBadge } from "./status-badge";
 
@@ -37,10 +37,17 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
     () =>
       orders.map((order) => ({
         ...order,
-        steps: order.steps.map((step) => ({
-          ...step,
-          status: overrides[`${order.id}:${step.key}`] ?? step.status,
-        })),
+        steps: order.steps.map((step) => {
+          const status = overrides[`${order.id}:${step.key}`] ?? step.status;
+          return {
+            ...step,
+            status,
+            startedAt: status === "pending" ? undefined : step.startedAt,
+            completedAt: status === "done"
+              ? step.completedAt ?? new Date().toISOString()
+              : undefined,
+          };
+        }),
       })),
     [orders, overrides],
   );
@@ -86,7 +93,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
             <p className="panel-description">Etapa asignada: {areaName}</p>
           </div>
           <span className="inline-flex h-8 items-center rounded-full border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600">
-            {visible.length} pendientes
+            {visible.length} trabajos
           </span>
         </div>
         {feedback ? (
@@ -101,10 +108,13 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
 
       <div className="grid gap-3 p-4">
         {visible.map((order) => {
-          const step = nextWorkStep(order);
+          const step = workerActionStep(user, order);
           if (!step) return null;
           const canStart = permissions.canStart && (step.status === "pending" || step.status === "blocked");
           const canFinish = permissions.canComplete && step.status === "active";
+          const canUndoStart = permissions.canStart && step.status === "active";
+          const canUndoFinish = permissions.canComplete && step.status === "done";
+          const canUndoBlock = permissions.canBlock && step.status === "blocked";
           const isPendingForOrder = pendingAction && pendingTarget?.orderId === order.id;
           return (
             <article key={order.id} className="rounded-lg border border-stone-200 bg-white p-4">
@@ -134,6 +144,12 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                 <p className="mt-3 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-600">{step.notes}</p>
               ) : null}
 
+              {step.status === "done" ? (
+                <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                  Etapa terminada. Puedes reabrirla durante 30 minutos si fue un error, siempre que la etapa siguiente no haya comenzado.
+                </p>
+              ) : null}
+
               <label className="mt-4 block">
                 <span className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.14em] text-stone-500">
                   <MessageSquare className="size-3.5" />
@@ -148,7 +164,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                 />
               </label>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
                 {canStart ? (
                   <button
                     type="button"
@@ -171,7 +187,40 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                     {isPendingForOrder && pendingTarget?.status === "done" ? "Terminando..." : "Terminar"}
                   </button>
                 ) : null}
-                {!canStart && !canFinish ? (
+                {canUndoStart ? (
+                  <button
+                    type="button"
+                    onClick={() => updateStep(order, step, "pending")}
+                    disabled={pendingAction}
+                    className="btn btn-secondary h-12 text-sm"
+                  >
+                    <Undo2 className="size-4" />
+                    Deshacer inicio
+                  </button>
+                ) : null}
+                {canUndoFinish ? (
+                  <button
+                    type="button"
+                    onClick={() => updateStep(order, step, "active")}
+                    disabled={pendingAction}
+                    className="btn h-12 border border-amber-200 bg-amber-50 text-sm text-amber-800 hover:bg-amber-100"
+                  >
+                    <RotateCcw className="size-4" />
+                    Reabrir etapa
+                  </button>
+                ) : null}
+                {canUndoBlock ? (
+                  <button
+                    type="button"
+                    onClick={() => updateStep(order, step, "pending")}
+                    disabled={pendingAction}
+                    className="btn btn-secondary h-12 text-sm"
+                  >
+                    <Undo2 className="size-4" />
+                    Quitar bloqueo
+                  </button>
+                ) : null}
+                {!canStart && !canFinish && !canUndoStart && !canUndoFinish && !canUndoBlock ? (
                   <div className="flex h-12 items-center rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-500 sm:col-span-2">
                     Esperando movimiento anterior.
                   </div>

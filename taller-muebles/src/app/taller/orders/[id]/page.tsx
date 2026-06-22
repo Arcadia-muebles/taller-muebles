@@ -35,7 +35,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
     listOrderAttachments(id),
     getSystemSettings(),
   ]);
-  if (!order || ["completed", "cancelled"].includes(order.status)) notFound();
+  if (!order || order.status === "cancelled") notFound();
   if (!canWorkerSeeOrder(user, order)) notFound();
 
   const progress = completionPercent(order);
@@ -220,6 +220,7 @@ function auditActionLabel(action: string) {
     create_workshop_order: "Ingreso desde taller",
     update_order: "Orden actualizada",
     update_step: "Etapa actualizada",
+    revert_step: "Cambio de etapa revertido",
     add_comment: "Comentario agregado",
     add_attachment: "Adjunto agregado",
     close_order: "Orden cerrada",

@@ -172,6 +172,10 @@ export async function updateProductionStep(
     return { status: "error", message: "La etapa cambio de estado. Actualiza la vista e intenta nuevamente." };
   }
 
+  const currentStepIndex = currentOrder.steps.findIndex((step) => step.key === parsed.data.stepKey);
+  const laterSteps = currentOrder.steps.slice(currentStepIndex + 1);
+  const isReversal = isReverseTransition(currentStep.status, parsed.data.status);
+
   const settings = await getSystemSettings();
   if (
     parsed.data.status === "blocked" &&
@@ -183,12 +187,15 @@ export async function updateProductionStep(
 
   if (user.role === "operator") {
     const permissions = settings.permissions;
-    const allowed =
-      (parsed.data.status === "active" && permissions.operatorsCanStartSteps) ||
-      (parsed.data.status === "done" && permissions.operatorsCanCompleteSteps) ||
-      (parsed.data.status === "blocked" && permissions.operatorsCanBlockSteps);
+    const allowed = isOperatorTransitionAllowed(currentStep.status, parsed.data.status, permissions);
     if (!allowed) return { status: "error", message: "Esta acción está deshabilitada para operarios." };
     if (!canWorkerUseStep(user, currentStep)) return { status: "error", message: "No puedes operar esta etapa." };
+    if (isReversal && laterSteps.some(hasRecordedWork)) {
+      return {
+        status: "error",
+        message: "Una etapa posterior ya tiene actividad. Pide a un administrador que haga la correccion.",
+      };
+    }
   }
 
   if (!hasSupabaseConfig()) {
@@ -210,7 +217,7 @@ export async function updateProductionStep(
 
     return {
       status: "success",
-      message: "Etapa actualizada.",
+      message: isReversal ? "Cambio revertido y tiempos corregidos." : "Etapa actualizada.",
     };
   }
 
@@ -223,15 +230,17 @@ export async function updateProductionStep(
     .eq("user_id", auth.user?.id ?? "")
     .maybeSingle();
   if (!profile) return { status: "error", message: "No se pudo identificar tu perfil." };
+  if (user.role === "operator" && !hasSupabaseAdminConfig()) {
+    return { status: "error", message: "Falta configurar el servicio seguro para actualizar el estado de la orden." };
+  }
 
-  const patch = {
-    status: parsed.data.status,
-    blocked_reason: parsed.data.status === "blocked" ? parsed.data.reason : null,
-    notes: parsed.data.reason?.trim() || (parsed.data.status === "blocked" ? parsed.data.reason : null),
-    started_at: parsed.data.status === "active" ? now : undefined,
-    completed_at: parsed.data.status === "done" ? now : undefined,
-    updated_by: profile.id,
-  };
+  const patch = stepPatch({
+    currentStep,
+    nextStatus: parsed.data.status,
+    reason: parsed.data.reason,
+    now,
+    profileId: profile.id,
+  });
 
   const updateQuery = supabase
     .from("production_steps")
@@ -258,6 +267,7 @@ export async function updateProductionStep(
       .update({
         status: "pending",
         started_at: null,
+        completed_at: null,
         blocked_reason: null,
         notes: null,
         updated_by: profile.id,
@@ -269,30 +279,62 @@ export async function updateProductionStep(
     }
   }
 
-  const nextOrderStatus =
-    parsed.data.status === "blocked"
-      ? "blocked"
-      : parsed.data.status === "done" && !nextStep
-        ? "completed"
-        : nextStep?.key === "quality"
-          ? "quality_control"
-          : currentOrder.priority === "critical"
-            ? "urgent"
-            : "in_production";
+  if (isReversal && laterSteps.length) {
+    const { error: downstreamError } = await supabase
+      .from("production_steps")
+      .update({
+        status: "pending",
+        started_at: null,
+        completed_at: null,
+        blocked_reason: null,
+        notes: null,
+        updated_by: profile.id,
+      })
+      .eq("order_id", parsed.data.orderId)
+      .in("step", laterSteps.map((step) => step.key));
+    if (downstreamError) {
+      return {
+        status: "error",
+        message: `La etapa cambio, pero no se pudieron corregir las etapas posteriores: ${downstreamError.message}`,
+      };
+    }
+  }
 
-  await supabase
+  const effectiveSteps = currentOrder.steps.map((step, index) => {
+    if (step.key === parsed.data.stepKey) return { ...step, status: parsed.data.status };
+    if (isReversal && index > currentStepIndex) {
+      return { ...step, status: "pending" as const, startedAt: undefined, completedAt: undefined };
+    }
+    return step;
+  });
+  const nextOrderStatus = orderStatusAfterStepChange(currentOrder.priority, effectiveSteps);
+  const orderClient = user.role === "operator" && hasSupabaseAdminConfig()
+    ? getSupabaseAdmin()
+    : supabase;
+
+  const { error: orderStatusError } = await orderClient
     .from("orders")
     .update({
       status: nextOrderStatus,
-      condition: nextOrderStatus === "completed" ? "delivered" : undefined,
-      completed_at: nextOrderStatus === "completed" ? now : undefined,
+      condition: nextOrderStatus === "completed"
+        ? "delivered"
+        : nextOrderStatus === "quality_control"
+          ? "quality_control"
+          : "none",
+      completed_at: nextOrderStatus === "completed" ? now : null,
     })
     .eq("id", parsed.data.orderId);
+  if (orderStatusError) {
+    return {
+      status: "error",
+      message: `La etapa cambio, pero no se pudo actualizar el estado de la orden: ${orderStatusError.message}`,
+    };
+  }
 
   if (
     parsed.data.stepKey === "quality" &&
     parsed.data.status === "done" &&
-    !nextStep &&
+    nextOrderStatus === "completed" &&
     settings.production.autoCompleteAfterQuality
   ) {
     if (!hasSupabaseAdminConfig()) {
@@ -307,10 +349,11 @@ export async function updateProductionStep(
 
   const { error: auditError } = await supabase.from("audit_logs").insert({
     order_id: parsed.data.orderId,
-    action: "update_step",
+    action: isReversal ? "revert_step" : "update_step",
     entity: "production_steps",
     profile_id: profile.id,
     field_name: "status",
+    old_value: currentStep.status,
     new_value: parsed.data.reason
       ? `${parsed.data.status}: ${parsed.data.reason}`
       : parsed.data.status,
@@ -324,21 +367,85 @@ export async function updateProductionStep(
 
   return {
     status: "success",
-    message: "Etapa actualizada.",
+    message: isReversal ? "Cambio revertido y tiempos corregidos." : "Etapa actualizada.",
   };
 }
 
 function isAllowedTransition(current: UpdateStepInput["status"], next: UpdateStepInput["status"]) {
   if (current === "pending") return next === "active" || next === "blocked";
-  if (current === "active") return next === "done" || next === "blocked";
-  if (current === "blocked") return next === "active";
-  return false;
+  if (current === "active") return next === "done" || next === "blocked" || next === "pending";
+  if (current === "blocked") return next === "active" || next === "pending";
+  return current === "done" && next === "active";
 }
 
 function nextPendingStep(order: NonNullable<Awaited<ReturnType<typeof getOrder>>>, currentStepKey: string) {
   const currentIndex = order.steps.findIndex((step) => step.key === currentStepKey);
   if (currentIndex < 0) return undefined;
   return order.steps.slice(currentIndex + 1).find((step) => step.status === "pending");
+}
+
+function isReverseTransition(current: UpdateStepInput["status"], next: UpdateStepInput["status"]) {
+  return (
+    (current === "active" && next === "pending") ||
+    (current === "done" && next === "active") ||
+    (current === "blocked" && next === "pending")
+  );
+}
+
+function isOperatorTransitionAllowed(
+  current: UpdateStepInput["status"],
+  next: UpdateStepInput["status"],
+  permissions: Awaited<ReturnType<typeof getSystemSettings>>["permissions"],
+) {
+  if (current === "active" && next === "pending") return permissions.operatorsCanStartSteps;
+  if (current === "done" && next === "active") return permissions.operatorsCanCompleteSteps;
+  if (current === "blocked" && next === "pending") return permissions.operatorsCanBlockSteps;
+  if (next === "active") return permissions.operatorsCanStartSteps;
+  if (next === "done") return permissions.operatorsCanCompleteSteps;
+  if (next === "blocked") return permissions.operatorsCanBlockSteps;
+  return false;
+}
+
+function hasRecordedWork(step: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"][number]) {
+  return step.status !== "pending" || Boolean(step.startedAt || step.completedAt);
+}
+
+function stepPatch({
+  currentStep,
+  nextStatus,
+  reason,
+  now,
+  profileId,
+}: {
+  currentStep: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"][number];
+  nextStatus: UpdateStepInput["status"];
+  reason?: string;
+  now: string;
+  profileId: string;
+}) {
+  return {
+    status: nextStatus,
+    blocked_reason: nextStatus === "blocked" ? reason?.trim() || null : null,
+    notes: reason?.trim() || (nextStatus === "pending" ? null : currentStep.notes ?? null),
+    started_at:
+      nextStatus === "pending"
+        ? null
+        : nextStatus === "active" || nextStatus === "done"
+          ? currentStep.startedAt ?? now
+          : currentStep.startedAt ?? null,
+    completed_at: nextStatus === "done" ? now : null,
+    updated_by: profileId,
+  };
+}
+
+function orderStatusAfterStepChange(
+  priority: NonNullable<Awaited<ReturnType<typeof getOrder>>>["priority"],
+  steps: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"],
+) {
+  if (steps.some((step) => step.status === "blocked")) return "blocked" as const;
+  if (steps.every((step) => step.status === "done")) return "completed" as const;
+  if (steps.find((step) => step.key === "quality")?.status === "active") return "quality_control" as const;
+  return priority === "critical" ? "urgent" as const : "in_production" as const;
 }
 
 async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createClient>>) {

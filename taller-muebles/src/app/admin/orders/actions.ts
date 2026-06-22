@@ -375,6 +375,7 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
         index < targetIndex
           ? {
               status: "done" as const,
+              started_at: step.startedAt ?? step.completedAt ?? now,
               completed_at: step.completedAt ?? now,
               updated_by: profileId,
             }
@@ -414,7 +415,8 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
       .from("orders")
       .update({
         status: nextStatus,
-        condition: parsed.data.stepKey === "quality" ? "quality_control" : undefined,
+        condition: parsed.data.stepKey === "quality" ? "quality_control" : "none",
+        completed_at: null,
       })
       .eq("id", parsed.data.orderId);
 

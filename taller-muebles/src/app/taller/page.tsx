@@ -2,7 +2,6 @@ import { Route, UserRound } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { WorkerQueue } from "@/components/worker-queue";
 import { requireSession, roleLabel } from "@/lib/auth";
-import { activeOrders } from "@/lib/metrics";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { filterWorkerOrders, workerAreas } from "@/lib/workshop-access";
@@ -10,7 +9,10 @@ import { filterWorkerOrders, workerAreas } from "@/lib/workshop-access";
 export default async function WorkshopPage() {
   const user = await requireSession(["operator"]);
   const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
-  const active = filterWorkerOrders(user, activeOrders(orders));
+  const visibleOrders = filterWorkerOrders(
+    user,
+    orders.filter((order) => order.status !== "cancelled"),
+  );
   const stepLabel = workerAreas(user)
     .map((area) => settings.production.steps.find((step) => step.key === area)?.label ?? area)
     .join(", ") || "Sin etapa asignada";
@@ -39,7 +41,7 @@ export default async function WorkshopPage() {
 
       <div className="mt-5">
         <WorkerQueue
-          orders={active}
+          orders={visibleOrders}
           user={user}
           permissions={{
             canStart: settings.permissions.operatorsCanStartSteps,
