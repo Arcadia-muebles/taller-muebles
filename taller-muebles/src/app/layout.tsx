@@ -13,8 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Control de Producción | Leather House",
+  title: "ARCADIA | Muebles en cuero",
   description: "Sistema interno para producción, stock y seguimiento de taller.",
+  icons: {
+    icon: [{ url: "/arcadia-icon.png", type: "image/png" }],
+    shortcut: "/arcadia-icon.png",
+  },
 };
 
 export default function RootLayout({

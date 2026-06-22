@@ -134,8 +134,8 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
 
         <div className="overflow-x-auto p-4">
           <div
-            className="grid min-w-[1400px] gap-3 xl:min-w-0"
-            style={{ gridTemplateColumns: `repeat(${enabledSteps.length}, minmax(0, 1fr))` }}
+            className="grid w-full gap-3"
+            style={{ gridTemplateColumns: `repeat(${enabledSteps.length}, minmax(168px, 1fr))` }}
           >
             {enabledSteps.map((step) => {
               const columnOrders = grouped.get(step.key) ?? [];

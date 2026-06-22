@@ -1,4 +1,5 @@
 import { LogIn } from "lucide-react";
+import Image from "next/image";
 import { logout } from "@/app/login/actions";
 import { roleLabel } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
@@ -25,12 +26,10 @@ export function AppShell({ active, user, children }: AppShellProps) {
       sidebar={(
         <>
         <div className="flex items-center gap-3 border-b border-stone-200 pb-5">
-          <div className="grid size-10 place-items-center rounded-lg bg-stone-950 text-sm font-semibold text-white">
-            LH
-          </div>
+          <Image src="/arcadia-icon.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg" priority />
           <div>
-            <p className="text-sm font-semibold">Control Producción</p>
-            <p className="text-xs text-stone-500">Leather House / La Reina</p>
+            <p className="text-sm font-semibold">ARCADIA</p>
+            <p className="text-xs text-stone-500">Muebles en cuero</p>
           </div>
         </div>
         {localMode ? (

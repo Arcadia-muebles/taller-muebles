@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { KeyRound, Mail } from "lucide-react";
+import Image from "next/image";
 import { requestLogin, type LoginState } from "@/app/login/actions";
 
 const initialState: LoginState = {
@@ -15,12 +16,10 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
   return (
     <form action={formAction} className="panel-pad min-w-0 p-5 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="grid size-10 place-items-center rounded-lg bg-stone-950 text-white">
-          <ShieldCheck className="size-5" />
-        </div>
+        <Image src="/arcadia-icon.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg" priority />
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Acceso interno</h1>
-          <p className="text-sm text-stone-500">Leather House / La Reina</p>
+          <p className="text-sm text-stone-500">ARCADIA · Muebles en cuero</p>
         </div>
       </div>
 

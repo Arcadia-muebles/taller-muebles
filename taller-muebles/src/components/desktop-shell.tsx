@@ -42,12 +42,7 @@ export function DesktopShell({ sidebar, children }: DesktopShellProps) {
       </aside>
 
       <main className={cn("min-w-0 transition-[padding] duration-200", sidebarOpen ? "lg:pl-64" : "lg:pl-14")}>
-        <div
-          className={cn(
-            "mx-auto flex min-h-screen w-full min-w-0 flex-col px-4 py-4 sm:px-6 lg:px-8",
-            sidebarOpen ? "max-w-[1500px]" : "max-w-none",
-          )}
-        >
+        <div className="flex min-h-screen w-full min-w-0 flex-col px-4 py-4 sm:px-6 lg:px-8">
           {children}
         </div>
       </main>
