@@ -23,10 +23,6 @@ body {
   overflow-x: hidden;
 }
 
-* {
-  min-width: 0;
-}
-
 button,
 a,
 input,
