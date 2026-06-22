@@ -5,13 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(value: string) {
-  const normalized = value.includes("T") ? value : `${value}T00:00:00`;
+export function formatDate(value?: string | null) {
+  const date = parseDate(value);
+  if (!date) return "Sin fecha";
   return new Intl.DateTimeFormat("es-CL", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date(normalized));
+  }).format(date);
 }
 
 export function formatDateTime(value?: string) {
@@ -37,18 +38,27 @@ export function durationLabel(start?: string, end?: string) {
   return restHours ? `${days}d ${restHours}h` : `${days}d`;
 }
 
-export function daysUntil(value: string) {
-  const target = new Date(`${value}T00:00:00`);
+export function daysUntil(value?: string | null) {
+  const target = parseDate(value);
+  if (!target) return Number.POSITIVE_INFINITY;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return Math.round((target.getTime() - today.getTime()) / 86400000);
 }
 
-export function deliveryLabel(value: string, completed: boolean) {
+export function deliveryLabel(value: string | undefined | null, completed: boolean) {
   if (completed) return "Listo";
   const days = daysUntil(value);
+  if (!Number.isFinite(days)) return "Sin fecha";
   if (days < 0) return `Vencido ${Math.abs(days)}d`;
   if (days === 0) return "Hoy";
   if (days === 1) return "Mañana";
   return `${days}d`;
+}
+
+function parseDate(value?: string | null) {
+  if (!value) return null;
+  const normalized = value.includes("T") ? value : `${value}T00:00:00`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
 }

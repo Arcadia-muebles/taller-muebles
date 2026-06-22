@@ -43,11 +43,12 @@ export default async function WorkshopPage() {
         <WorkerQueue
           orders={visibleOrders}
           user={user}
+          areaLabels={Object.fromEntries(settings.production.steps.map((step) => [step.key, step.label]))}
           permissions={{
             canStart: settings.permissions.operatorsCanStartSteps,
             canComplete: settings.permissions.operatorsCanCompleteSteps,
-            canBlock: false,
-            requireBlockReason: false,
+            canBlock: settings.permissions.operatorsCanBlockSteps,
+            requireBlockReason: settings.permissions.requireBlockReason,
           }}
         />
       </div>

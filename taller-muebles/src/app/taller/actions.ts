@@ -173,10 +173,29 @@ export async function updateProductionStep(
   }
 
   const currentStepIndex = currentOrder.steps.findIndex((step) => step.key === parsed.data.stepKey);
+  const previousSteps = currentOrder.steps.slice(0, currentStepIndex);
   const laterSteps = currentOrder.steps.slice(currentStepIndex + 1);
   const isReversal = isReverseTransition(currentStep.status, parsed.data.status);
 
   const settings = await getSystemSettings();
+  const enteringPendingStep =
+    currentStep.status === "pending" &&
+    (parsed.data.status === "active" || parsed.data.status === "blocked");
+  if (
+    !settings.production.allowParallelSteps &&
+    enteringPendingStep &&
+    previousSteps.some((step) => step.status !== "done")
+  ) {
+    return { status: "error", message: "Termina las etapas anteriores antes de operar esta etapa." };
+  }
+  if (
+    !settings.production.allowParallelSteps &&
+    parsed.data.status === "active" &&
+    !isReversal &&
+    currentOrder.steps.some((step) => step.key !== currentStep.key && step.status === "active")
+  ) {
+    return { status: "error", message: "Ya existe otra etapa activa en esta orden." };
+  }
   if (
     parsed.data.status === "blocked" &&
     settings.permissions.requireBlockReason &&
@@ -233,6 +252,7 @@ export async function updateProductionStep(
   if (user.role === "operator" && !hasSupabaseAdminConfig()) {
     return { status: "error", message: "Falta configurar el servicio seguro para actualizar el estado de la orden." };
   }
+  const mutationClient = user.role === "operator" ? getSupabaseAdmin() : supabase;
 
   const patch = stepPatch({
     currentStep,
@@ -242,7 +262,7 @@ export async function updateProductionStep(
     profileId: profile.id,
   });
 
-  const updateQuery = supabase
+  const updateQuery = mutationClient
     .from("production_steps")
     .update(patch)
     .eq("order_id", parsed.data.orderId)
@@ -257,30 +277,8 @@ export async function updateProductionStep(
     };
   }
 
-  const nextStep = parsed.data.status === "done"
-    ? nextPendingStep(currentOrder, parsed.data.stepKey)
-    : undefined;
-
-  if (nextStep) {
-    const { error: nextError } = await supabase
-      .from("production_steps")
-      .update({
-        status: "pending",
-        started_at: null,
-        completed_at: null,
-        blocked_reason: null,
-        notes: null,
-        updated_by: profile.id,
-      })
-      .eq("order_id", parsed.data.orderId)
-      .eq("step", nextStep.key);
-    if (nextError) {
-      return { status: "error", message: `La etapa se completó, pero no se pudo iniciar la siguiente: ${nextError.message}` };
-    }
-  }
-
-  if (isReversal && laterSteps.length) {
-    const { error: downstreamError } = await supabase
+  if (isReversal && laterSteps.some(hasRecordedWork)) {
+    const { error: downstreamError } = await mutationClient
       .from("production_steps")
       .update({
         status: "pending",
@@ -307,12 +305,12 @@ export async function updateProductionStep(
     }
     return step;
   });
-  const nextOrderStatus = orderStatusAfterStepChange(currentOrder.priority, effectiveSteps);
-  const orderClient = user.role === "operator" && hasSupabaseAdminConfig()
-    ? getSupabaseAdmin()
-    : supabase;
-
-  const { error: orderStatusError } = await orderClient
+  const nextOrderStatus = orderStatusAfterStepChange(
+    currentOrder.priority,
+    effectiveSteps,
+    settings.production.autoCompleteAfterQuality,
+  );
+  const { error: orderStatusError } = await mutationClient
     .from("orders")
     .update({
       status: nextOrderStatus,
@@ -331,23 +329,7 @@ export async function updateProductionStep(
     };
   }
 
-  if (
-    parsed.data.stepKey === "quality" &&
-    parsed.data.status === "done" &&
-    nextOrderStatus === "completed" &&
-    settings.production.autoCompleteAfterQuality
-  ) {
-    if (!hasSupabaseAdminConfig()) {
-      return { status: "error", message: "La etapa se completo, pero falta configurar la clave de servicio para cerrar la orden." };
-    }
-    const { error: closeError } = await getSupabaseAdmin()
-      .from("orders")
-      .update({ status: "completed", condition: "delivered", completed_at: now })
-      .eq("id", parsed.data.orderId);
-    if (closeError) return { status: "error", message: `La etapa se completo, pero no se pudo cerrar la orden: ${closeError.message}` };
-  }
-
-  const { error: auditError } = await supabase.from("audit_logs").insert({
+  const { error: auditError } = await mutationClient.from("audit_logs").insert({
     order_id: parsed.data.orderId,
     action: isReversal ? "revert_step" : "update_step",
     entity: "production_steps",
@@ -376,12 +358,6 @@ function isAllowedTransition(current: UpdateStepInput["status"], next: UpdateSte
   if (current === "active") return next === "done" || next === "blocked" || next === "pending";
   if (current === "blocked") return next === "active" || next === "pending";
   return current === "done" && next === "active";
-}
-
-function nextPendingStep(order: NonNullable<Awaited<ReturnType<typeof getOrder>>>, currentStepKey: string) {
-  const currentIndex = order.steps.findIndex((step) => step.key === currentStepKey);
-  if (currentIndex < 0) return undefined;
-  return order.steps.slice(currentIndex + 1).find((step) => step.status === "pending");
 }
 
 function isReverseTransition(current: UpdateStepInput["status"], next: UpdateStepInput["status"]) {
@@ -441,9 +417,13 @@ function stepPatch({
 function orderStatusAfterStepChange(
   priority: NonNullable<Awaited<ReturnType<typeof getOrder>>>["priority"],
   steps: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"],
+  autoCompleteAfterQuality: boolean,
 ) {
   if (steps.some((step) => step.status === "blocked")) return "blocked" as const;
-  if (steps.every((step) => step.status === "done")) return "completed" as const;
+  if (steps.every((step) => step.status === "done")) {
+    if (steps.at(-1)?.key === "quality" && !autoCompleteAfterQuality) return "quality_control" as const;
+    return "completed" as const;
+  }
   if (steps.find((step) => step.key === "quality")?.status === "active") return "quality_control" as const;
   return priority === "critical" ? "urgent" as const : "in_production" as const;
 }

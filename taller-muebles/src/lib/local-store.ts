@@ -334,8 +334,9 @@ export async function updateLocalProductionStep(input: {
   if (order.steps.some((item) => item.status === "blocked")) {
     order.status = "blocked";
   } else if (order.steps.every((item) => item.status === "done")) {
-    order.status = "completed";
-    order.condition = "Entregado";
+    const waitsForManualClose = step.key === "quality" && input.autoCompleteAfterQuality === false;
+    order.status = waitsForManualClose ? "quality_control" : "completed";
+    order.condition = waitsForManualClose ? "Control de calidad" : "Entregado";
   } else if (order.steps.find((item) => item.key === "quality")?.status === "active") {
     order.status = "quality_control";
     order.condition = "Control de calidad";

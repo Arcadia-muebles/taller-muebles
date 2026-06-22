@@ -150,6 +150,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
         <WorkerQueue
           orders={[order]}
           user={user}
+          areaLabels={Object.fromEntries(settings.production.steps.map((step) => [step.key, step.label]))}
           permissions={{
             canStart: settings.permissions.operatorsCanStartSteps,
             canComplete: settings.permissions.operatorsCanCompleteSteps,
@@ -187,6 +188,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
           comments={comments}
           attachments={attachments}
           canUpload
+          canComment
         />
       </div>
     </AppShell>

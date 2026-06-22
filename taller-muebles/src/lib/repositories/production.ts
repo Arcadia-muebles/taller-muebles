@@ -187,8 +187,8 @@ export async function listUsers(): Promise<AppUser[]> {
     return listLocalUsers();
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const profileClient = hasSupabaseAdminConfig() ? getSupabaseAdmin() : await createClient();
+  const { data, error } = await profileClient
     .from("profiles")
     .select("id, user_id, full_name, role, area, active")
     .order("full_name");

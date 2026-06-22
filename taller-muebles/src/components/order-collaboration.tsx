@@ -17,11 +17,13 @@ export function OrderCollaboration({
   comments,
   attachments,
   canUpload,
+  canComment,
 }: {
   orderId: string;
   comments: OrderComment[];
   attachments: OrderAttachment[];
   canUpload: boolean;
+  canComment: boolean;
 }) {
   const commentFormRef = useRef<HTMLFormElement>(null);
   const uploadFormRef = useRef<HTMLFormElement>(null);
@@ -52,7 +54,7 @@ export function OrderCollaboration({
             <p className="text-sm text-stone-500">Coordinación y decisiones sobre la orden.</p>
           </div>
         </div>
-        <form ref={commentFormRef} action={commentAction} className="border-b border-stone-100 p-4">
+        {canComment ? <form ref={commentFormRef} action={commentAction} className="border-b border-stone-100 p-4">
           <input type="hidden" name="orderId" value={orderId} />
           <textarea
             name="body"
@@ -68,7 +70,7 @@ export function OrderCollaboration({
               Publicar comentario
             </SubmitButton>
           </div>
-        </form>
+        </form> : null}
         <div className="max-h-80 divide-y divide-stone-100 overflow-y-auto">
           {comments.map((comment) => (
             <article key={comment.id} className="p-4">

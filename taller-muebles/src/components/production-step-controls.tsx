@@ -9,10 +9,12 @@ export function ProductionStepControls({
   orderId,
   stepKey,
   status,
+  canActivate = true,
 }: {
   orderId: string;
   stepKey: AreaKey;
   status: StepStatus;
+  canActivate?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -28,7 +30,13 @@ export function ProductionStepControls({
   return (
     <div className="flex max-w-md flex-wrap justify-end gap-2">
       {(status === "pending" || status === "blocked") ? (
-        <button type="button" disabled={pending} onClick={() => move("active")} className="btn btn-secondary h-8 text-xs">
+        <button
+          type="button"
+          disabled={pending || !canActivate}
+          title={canActivate ? undefined : "Termina las etapas anteriores antes de iniciar esta etapa"}
+          onClick={() => move("active")}
+          className="btn btn-secondary h-8 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+        >
           <Play className="size-3.5" />
           Empezar
         </button>

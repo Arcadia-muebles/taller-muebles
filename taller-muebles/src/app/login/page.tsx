@@ -1,7 +1,12 @@
+import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
+import { dashboardPathForRole, getSessionUser } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const user = await getSessionUser();
+  if (user) redirect(dashboardPathForRole(user.role));
+
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-6 text-stone-950">
       <div className="mx-auto grid min-h-[calc(100vh-48px)] w-full max-w-5xl items-center gap-8 lg:grid-cols-[1fr_420px]">

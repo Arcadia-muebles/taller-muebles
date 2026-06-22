@@ -142,7 +142,15 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                         {durationLabel(step.startedAt, step.completedAt)}
                       </p>
                       {canEditOrder ? (
-                        <ProductionStepControls orderId={order.id} stepKey={step.key} status={step.status} />
+                        <ProductionStepControls
+                          orderId={order.id}
+                          stepKey={step.key}
+                          status={step.status}
+                          canActivate={
+                            settings.production.allowParallelSteps ||
+                            order.steps.slice(0, index).every((previousStep) => previousStep.status === "done")
+                          }
+                        />
                       ) : null}
                     </div>
                   </div>
@@ -212,6 +220,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           comments={comments}
           attachments={attachments}
           canUpload={canEditOrder}
+          canComment={user.role !== "viewer"}
         />
       </div>
     </AppShell>

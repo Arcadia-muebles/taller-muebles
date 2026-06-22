@@ -12,6 +12,10 @@ const sessionCookie = "tm_session";
 
 export type SessionUser = Pick<AppUser, "id" | "email" | "name" | "role" | "area" | "areas">;
 
+export function dashboardPathForRole(role: Role) {
+  return role === "operator" ? "/taller" : "/admin";
+}
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   if (hasSupabaseConfig()) {
     const supabase = await createClient();
@@ -90,7 +94,7 @@ export async function requireSession(allowedRoles?: Role[]) {
   if (!user) redirect("/login");
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    redirect(user.role === "operator" ? "/taller" : "/admin");
+    redirect(dashboardPathForRole(user.role));
   }
 
   return user;

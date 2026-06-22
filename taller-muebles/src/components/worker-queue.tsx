@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronRight, MessageSquare, Play, RotateCcw, Undo2, X } from "lucide-react";
+import { Ban, Check, ChevronRight, MessageSquare, Play, RotateCcw, Undo2, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { updateProductionStep } from "@/app/taller/actions";
@@ -24,9 +24,10 @@ type WorkerQueueProps = {
     canBlock: boolean;
     requireBlockReason: boolean;
   };
+  areaLabels?: Record<string, string>;
 };
 
-export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
+export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: WorkerQueueProps) {
   const [overrides, setOverrides] = useState<Record<string, StepStatus>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -54,11 +55,15 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
 
   const visible = useMemo(() => filterWorkerOrders(user, workingOrders), [user, workingOrders]);
   const areaName = workerAreas(user)
-    .map((area) => visible[0]?.steps.find((step) => step.key === area)?.label ?? area)
+    .map((area) => areaLabels[area] ?? visible[0]?.steps.find((step) => step.key === area)?.label ?? area)
     .join(", ") || "Sin etapa";
 
   function updateStep(order: Order, step: ProductionStep, status: StepStatus) {
     const comment = comments[order.id]?.trim();
+    if (status === "blocked" && permissions.requireBlockReason && (!comment || comment.length < 5)) {
+      setFeedback({ tone: "error", text: `${order.code}: escribe un motivo de bloqueo de al menos 5 caracteres.` });
+      return;
+    }
     setPendingTarget({ orderId: order.id, status });
     startTransition(async () => {
       const result = await updateProductionStep({
@@ -112,6 +117,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
           if (!step) return null;
           const canStart = permissions.canStart && (step.status === "pending" || step.status === "blocked");
           const canFinish = permissions.canComplete && step.status === "active";
+          const canBlock = permissions.canBlock && (step.status === "pending" || step.status === "active");
           const canUndoStart = permissions.canStart && step.status === "active";
           const canUndoFinish = permissions.canComplete && step.status === "done";
           const canUndoBlock = permissions.canBlock && step.status === "blocked";
@@ -153,13 +159,13 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
               <label className="mt-4 block">
                 <span className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.14em] text-stone-500">
                   <MessageSquare className="size-3.5" />
-                  Comentario opcional
+                  {permissions.canBlock ? "Comentario o motivo de bloqueo" : "Comentario opcional"}
                 </span>
                 <textarea
                   value={comments[order.id] ?? ""}
                   onChange={(event) => setComments((current) => ({ ...current, [order.id]: event.target.value }))}
                   maxLength={500}
-                  placeholder="Ej. se termino costura sin observaciones"
+                  placeholder="Ej. falta material para continuar"
                   className="textarea-control mt-2 min-h-20 bg-white"
                 />
               </label>
@@ -185,6 +191,17 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                   >
                     <Check className="size-5" />
                     {isPendingForOrder && pendingTarget?.status === "done" ? "Terminando..." : "Terminar"}
+                  </button>
+                ) : null}
+                {canBlock ? (
+                  <button
+                    type="button"
+                    onClick={() => updateStep(order, step, "blocked")}
+                    disabled={pendingAction}
+                    className="btn h-12 border border-rose-200 bg-rose-50 text-sm text-rose-800 hover:bg-rose-100"
+                  >
+                    <Ban className="size-4" />
+                    {isPendingForOrder && pendingTarget?.status === "blocked" ? "Bloqueando..." : "Bloquear"}
                   </button>
                 ) : null}
                 {canUndoStart ? (
@@ -220,7 +237,7 @@ export function WorkerQueue({ orders, user, permissions }: WorkerQueueProps) {
                     Quitar bloqueo
                   </button>
                 ) : null}
-                {!canStart && !canFinish && !canUndoStart && !canUndoFinish && !canUndoBlock ? (
+                {!canStart && !canFinish && !canBlock && !canUndoStart && !canUndoFinish && !canUndoBlock ? (
                   <div className="flex h-12 items-center rounded-md border border-stone-200 bg-stone-50 px-3 text-sm text-stone-500 sm:col-span-2">
                     Esperando movimiento anterior.
                   </div>

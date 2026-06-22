@@ -5,7 +5,9 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { createLocalOrderAttachment, createLocalOrderComment } from "@/lib/local-store";
+import { getOrder } from "@/lib/repositories/production";
 import { createClient } from "@/lib/supabase/server";
+import { canWorkerSeeOrder } from "@/lib/workshop-access";
 
 const maxAttachmentSize = 10 * 1024 * 1024;
 
@@ -20,13 +22,16 @@ export type CollaborationActionResult = {
 };
 
 export async function addOrderComment(formData: FormData) {
-  const user = await requireSession(["admin", "manager", "viewer", "operator"]);
+  const user = await requireSession(["admin", "manager", "operator"]);
   const parsed = commentSchema.safeParse({
     orderId: formData.get("orderId"),
     body: formData.get("body"),
   });
   if (!parsed.success) {
     return { ok: false, message: "Escribe un comentario de al menos 2 caracteres." };
+  }
+  if (!(await canAccessOrder(user, parsed.data.orderId))) {
+    return { ok: false, message: "No tienes acceso a esta orden." };
   }
 
   if (!hasSupabaseConfig()) {
@@ -59,7 +64,7 @@ export async function addOrderComment(formData: FormData) {
 }
 
 export async function uploadOrderAttachment(formData: FormData) {
-  await requireSession(["admin", "manager", "operator"]);
+  const user = await requireSession(["admin", "manager", "operator"]);
   const orderId = formData.get("orderId")?.toString();
   const file = formData.get("file");
   if (!orderId || !(file instanceof File) || file.size === 0) {
@@ -67,6 +72,9 @@ export async function uploadOrderAttachment(formData: FormData) {
   }
   if (file.size > maxAttachmentSize) {
     return { ok: false, message: "El archivo supera el máximo de 10 MB." };
+  }
+  if (!(await canAccessOrder(user, orderId))) {
+    return { ok: false, message: "No tienes acceso a esta orden." };
   }
 
   if (!hasSupabaseConfig()) {
@@ -120,4 +128,13 @@ async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createCli
     .eq("active", true)
     .maybeSingle();
   return profile?.id ?? null;
+}
+
+async function canAccessOrder(
+  user: Awaited<ReturnType<typeof requireSession>>,
+  orderId: string,
+) {
+  const order = await getOrder(orderId);
+  if (!order) return false;
+  return user.role !== "operator" || canWorkerSeeOrder(user, order);
 }
