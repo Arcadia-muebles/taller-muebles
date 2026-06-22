@@ -86,13 +86,13 @@ export function StatusBadge(props: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium",
+        "inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium",
         config.className,
         props.className,
       )}
     >
-      <Icon className="size-3.5" />
-      {config.label}
+      <Icon className="size-3.5 shrink-0" />
+      <span className="truncate">{config.label}</span>
     </span>
   );
 }

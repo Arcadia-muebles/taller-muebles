@@ -116,7 +116,7 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
         </div>
 
         <div className="overflow-x-auto p-4">
-          <div className="grid min-w-[1180px] grid-cols-7 gap-3">
+          <div className="grid min-w-[1400px] grid-cols-7 gap-3">
             {enabledSteps.map((step) => {
               const columnOrders = grouped.get(step.key) ?? [];
               const isHover = hoverStep === step.key;
@@ -223,31 +223,31 @@ function ProductCard({
       onDragEnd={onDragEnd}
       onClick={onSelect}
       className={cn(
-        "cursor-pointer rounded-lg border bg-white p-3 transition",
+        "min-w-0 cursor-pointer overflow-hidden rounded-lg border bg-white p-3 transition",
         selected ? "border-stone-950 shadow-sm" : "border-stone-200 hover:border-stone-400",
         dragging ? "opacity-50" : "",
         isBlocked ? "border-rose-200 bg-rose-50" : "",
       )}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="relative min-w-0 pr-6">
         <div className="min-w-0">
-          <p className="font-mono text-xs font-semibold text-stone-500">{order.code}</p>
+          <p className="truncate font-mono text-xs font-semibold text-stone-500" title={order.code}>{order.code}</p>
           <h4 className="mt-2 line-clamp-2 text-sm font-semibold text-stone-950">{order.product}</h4>
         </div>
-        {draggable ? <GripVertical className="size-4 shrink-0 text-stone-300" /> : null}
+        {draggable ? <GripVertical className="absolute right-0 top-0 size-4 text-stone-300" /> : null}
       </div>
       <p className="mt-2 truncate text-xs font-medium text-stone-700">{order.client}</p>
       <p className="mt-1 line-clamp-2 text-xs text-stone-500">{order.material} / {order.color}</p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {step ? <StatusBadge type="step" value={step.status} className="h-6" /> : null}
+      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
+        {step ? <StatusBadge type="step" value={step.status} className="h-6 max-w-full px-2 text-[11px]" /> : null}
         {isLate || isToday ? (
           <span className={cn(
-            "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold",
+            "inline-flex h-6 max-w-full min-w-0 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold",
             isLate ? "border-rose-200 bg-rose-50 text-rose-700" : "border-amber-200 bg-amber-50 text-amber-800",
           )}>
-            <AlertTriangle className="size-3" />
-            {deliveryLabel(order.deliveryDate, false)}
+            <AlertTriangle className="size-3 shrink-0" />
+            <span className="truncate">{deliveryLabel(order.deliveryDate, false)}</span>
           </span>
         ) : null}
       </div>
