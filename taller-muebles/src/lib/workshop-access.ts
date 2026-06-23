@@ -17,7 +17,7 @@ export function nextWorkStep(order: Order) {
 
 export function canWorkerSeeOrder(user: WorkshopUser, order: Order) {
   if (user.role !== "operator") return true;
-  if (order.status === "cancelled") return false;
+  if (order.status === "cancelled" || order.status === "completed") return false;
   const step = nextWorkStep(order);
   return Boolean(
     (step && workerAreas(user).includes(step.key)) ||
@@ -46,6 +46,14 @@ export function filterWorkerFutureOrders(user: WorkshopUser, orders: Order[]) {
       step.key !== next?.key
     ));
   });
+}
+
+export function filterWorkerHistoryOrders(user: WorkshopUser, orders: Order[]) {
+  if (user.role !== "operator") return [];
+  const areas = workerAreas(user);
+  return orders.filter((order) => (
+    order.steps.some((step) => areas.includes(step.key) && step.status === "done")
+  ));
 }
 
 export function workerActionStep(user: WorkshopUser, order: Order) {
