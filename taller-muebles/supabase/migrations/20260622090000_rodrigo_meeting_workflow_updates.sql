@@ -1,6 +1,9 @@
 alter table public.orders
 add column if not exists group_code text;
 
+alter table public.orders
+drop constraint if exists orders_store_id_internal_code_key;
+
 update public.orders
 set group_code = internal_code
 where group_code is null;
@@ -11,6 +14,9 @@ alter column group_code set default '';
 
 create index if not exists orders_group_code_idx
 on public.orders (group_code);
+
+create index if not exists orders_store_internal_code_idx
+on public.orders (store_id, internal_code);
 
 do $$
 begin

@@ -173,7 +173,7 @@ export async function createLocalOrder(input: {
   entryDate: string;
   deliveryDate: string;
   priority: Order["priority"];
-  assignedTo: string;
+  assignedTo?: string;
   observations?: string;
   isWarranty: boolean;
   steps?: SystemSettings["production"]["steps"];
@@ -190,10 +190,11 @@ export async function createLocalOrder(input: {
   const steps: ProductionStep[] = enabledSteps.map((step, index) => ({
     key: step.key,
     label: step.label,
-    owner: index === 0 ? input.assignedTo : pickLocalStepOwner(data, step.key, step.label),
+    owner: input.assignedTo?.trim() || pickLocalStepOwner(data, step.key, step.label),
     status: index === 0 ? "active" : "pending",
     startedAt: index === 0 ? nowIso() : undefined,
   }));
+  const assignedTo = input.assignedTo?.trim() || steps[0]?.owner || "Equipo Taller";
 
   const order: Order = {
     id,
@@ -210,7 +211,7 @@ export async function createLocalOrder(input: {
     isWarranty: input.isWarranty,
     entryDate: input.entryDate,
     deliveryDate: input.deliveryDate,
-    assignedTo: input.assignedTo,
+    assignedTo,
     observations: input.observations?.trim() || "Sin observaciones.",
     steps,
   };
@@ -232,7 +233,7 @@ export async function updateLocalOrder(id: string, input: {
   entryDate: string;
   deliveryDate: string;
   priority: Order["priority"];
-  assignedTo: string;
+  assignedTo?: string;
   observations?: string;
   isWarranty: boolean;
 }) {
@@ -250,7 +251,7 @@ export async function updateLocalOrder(id: string, input: {
   order.entryDate = input.entryDate;
   order.deliveryDate = input.deliveryDate;
   order.priority = input.priority;
-  order.assignedTo = input.assignedTo;
+  order.assignedTo = input.assignedTo?.trim() || order.assignedTo;
   order.observations = input.observations?.trim() || "Sin observaciones.";
   order.isWarranty = input.isWarranty;
   addAudit(data, order.id, "update_order", "Datos comerciales y planificación actualizados");
@@ -696,9 +697,9 @@ function userAreas(user: AppUser) {
 
 function nextCodeForStore(store: Order["store"], codes: string[]) {
   const max = codes.reduce((current, code) => {
-    const match = new RegExp(`^${store}(\\d+)$`).exec(code);
+    const match = new RegExp(`^${store}-?(\\d+)$`).exec(code);
     if (!match) return current;
     return Math.max(current, Number(match[1]));
   }, 0);
-  return `${store}${String(max + 1).padStart(2, "0")}`;
+  return `${store}-${String(max + 1).padStart(2, "0")}`;
 }

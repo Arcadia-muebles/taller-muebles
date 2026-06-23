@@ -111,7 +111,124 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
         ) : null}
       </div>
 
-      <div className="grid gap-3 p-4">
+      <div className="hidden overflow-x-auto p-4 md:block">
+        <table className="w-full min-w-[980px] border-collapse">
+          <thead>
+            <tr className="border-b border-stone-200 bg-stone-50">
+              <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Codigo</th>
+              <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Cliente / producto</th>
+              <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Material</th>
+              <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Etapa</th>
+              <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Entrega</th>
+              <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Comentario</th>
+              <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((order) => {
+              const step = workerActionStep(user, order);
+              if (!step) return null;
+              const canStart = permissions.canStart && (step.status === "pending" || step.status === "blocked");
+              const canFinish = permissions.canComplete && step.status === "active";
+              const canBlock = permissions.canBlock && (step.status === "pending" || step.status === "active");
+              const canUndoStart = permissions.canStart && step.status === "active";
+              const canUndoFinish = permissions.canComplete && step.status === "done";
+              const canUndoBlock = permissions.canBlock && step.status === "blocked";
+              const isPendingForOrder = pendingAction && pendingTarget?.orderId === order.id;
+              return (
+                <tr key={order.id} className={`border-b border-stone-100 last:border-0 ${rowTone(order, step)}`}>
+                  <td className="px-3 py-3 align-top">
+                    <Link href={`/taller/orders/${order.id}`} className="font-mono text-sm font-semibold underline-offset-4 hover:underline">
+                      {order.code}
+                    </Link>
+                    <p className="mt-1 font-mono text-xs text-stone-500">{order.groupCode}</p>
+                  </td>
+                  <td className="max-w-[260px] px-3 py-3 align-top">
+                    <p className="truncate text-sm font-semibold text-stone-950">{order.client}</p>
+                    <p className="mt-1 line-clamp-2 text-sm text-stone-700">{order.product}</p>
+                  </td>
+                  <td className="max-w-[180px] px-3 py-3 align-top text-sm text-stone-600">
+                    <p className="truncate">{order.material}</p>
+                    <p className="mt-1 truncate text-xs text-stone-500">{order.color}</p>
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    <StatusBadge type="step" value={step.status} />
+                    <p className="mt-2 text-xs font-medium text-stone-600">{step.label}</p>
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    <p className="text-sm font-semibold text-stone-900">{formatDate(order.deliveryDate)}</p>
+                    <p className="mt-1 text-xs font-semibold text-rose-600">{deliveryLabel(order.deliveryDate, false)}</p>
+                  </td>
+                  <td className="w-[220px] px-3 py-3 align-top">
+                    <textarea
+                      value={comments[order.id] ?? ""}
+                      onChange={(event) => setComments((current) => ({ ...current, [order.id]: event.target.value }))}
+                      maxLength={500}
+                      placeholder="Motivo o nota"
+                      className="textarea-control min-h-16 bg-white text-sm"
+                    />
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    <div className="flex flex-wrap gap-2">
+                      {canStart ? (
+                        <button type="button" onClick={() => updateStep(order, step, "active")} disabled={pendingAction} className="btn h-9 bg-stone-950 text-white hover:bg-stone-800">
+                          <Play className="size-4" />
+                          {isPendingForOrder && pendingTarget?.status === "active" ? "..." : "Empezar"}
+                        </button>
+                      ) : null}
+                      {canFinish ? (
+                        <button type="button" onClick={() => updateStep(order, step, "done")} disabled={pendingAction} className="btn h-9 border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100">
+                          <Check className="size-4" />
+                          {isPendingForOrder && pendingTarget?.status === "done" ? "..." : "Terminar"}
+                        </button>
+                      ) : null}
+                      {canBlock ? (
+                        <button type="button" onClick={() => updateStep(order, step, "blocked")} disabled={pendingAction} className="btn h-9 border border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100">
+                          <Ban className="size-4" />
+                          Bloquear
+                        </button>
+                      ) : null}
+                      {canUndoStart ? (
+                        <button type="button" onClick={() => updateStep(order, step, "pending")} disabled={pendingAction} className="btn btn-secondary h-9">
+                          <Undo2 className="size-4" />
+                          Deshacer
+                        </button>
+                      ) : null}
+                      {canUndoFinish ? (
+                        <button type="button" onClick={() => updateStep(order, step, "active")} disabled={pendingAction} className="btn h-9 border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100">
+                          <RotateCcw className="size-4" />
+                          Reabrir
+                        </button>
+                      ) : null}
+                      {canUndoBlock ? (
+                        <button type="button" onClick={() => updateStep(order, step, "pending")} disabled={pendingAction} className="btn btn-secondary h-9">
+                          <Undo2 className="size-4" />
+                          Quitar bloqueo
+                        </button>
+                      ) : null}
+                      <Link href={`/taller/orders/${order.id}`} className="btn btn-secondary h-9">
+                        Detalle
+                        <ChevronRight className="size-4" />
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {!visible.length ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-10 text-center text-sm text-stone-500">
+                  {workerAreas(user).length
+                    ? "No hay trabajos activos para tu etapa en este momento."
+                    : "Tu usuario no tiene una etapa asignada. Pide al administrador que configure tu perfil."}
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid gap-3 p-4 md:hidden">
         {visible.map((order) => {
           const step = workerActionStep(user, order);
           if (!step) return null;
@@ -305,4 +422,11 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-sm font-semibold text-stone-900">{value}</p>
     </div>
   );
+}
+
+function rowTone(order: Order, step: ProductionStep) {
+  if (step.status === "done" || order.status === "completed") return "bg-emerald-50/70";
+  if (step.status === "active") return "bg-sky-50/70";
+  if (step.status === "blocked" || deliveryLabel(order.deliveryDate, false).startsWith("Vencido")) return "bg-rose-50/70";
+  return "bg-white";
 }

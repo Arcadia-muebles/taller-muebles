@@ -9,7 +9,7 @@ import { workerAreas } from "@/lib/workshop-access";
 export default async function WorkshopPage() {
   const user = await requireSession(["operator"]);
   const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
-  const workshopOrders = orders.filter((order) => order.status !== "cancelled");
+  const workshopOrders = orders.filter((order) => !["completed", "cancelled"].includes(order.status));
   const stepLabel = workerAreas(user)
     .map((area) => settings.production.steps.find((step) => step.key === area)?.label ?? area)
     .join(", ") || "Sin etapa asignada";

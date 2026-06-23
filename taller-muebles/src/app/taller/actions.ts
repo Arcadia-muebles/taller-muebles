@@ -459,11 +459,11 @@ function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
 async function nextWorkshopOrderCode(store: z.infer<typeof workshopOrderSchema>["store"]) {
   if (!hasSupabaseConfig()) return nextLocalOrderCode(store);
   const max = (await getOrderCodes()).reduce((current, code) => {
-    const match = new RegExp(`^${store}(\\d+)$`).exec(code);
+    const match = new RegExp(`^${store}-?(\\d+)$`).exec(code);
     if (!match) return current;
     return Math.max(current, Number(match[1]));
   }, 0);
-  return `${store}${String(max + 1).padStart(2, "0")}`;
+  return `${store}-${String(max + 1).padStart(2, "0")}`;
 }
 
 async function getOrderCodes() {

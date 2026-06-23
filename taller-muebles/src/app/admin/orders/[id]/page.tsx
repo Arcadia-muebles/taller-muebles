@@ -19,7 +19,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
 import { getSystemSettings } from "@/lib/repositories/settings";
-import { getOrder, listOrderAttachments, listOrderAudit } from "@/lib/repositories/production";
+import { getOrder, listOrderAttachments, listOrderAudit, listOrders } from "@/lib/repositories/production";
 import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel } from "@/lib/utils";
 
 type OrderDetailPageProps = {
@@ -29,11 +29,12 @@ type OrderDetailPageProps = {
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const { id } = await params;
-  const [order, audit, attachments, settings] = await Promise.all([
+  const [order, audit, attachments, settings, orders] = await Promise.all([
     getOrder(id),
     listOrderAudit(id),
     listOrderAttachments(id),
     getSystemSettings(),
+    listOrders(),
   ]);
 
   if (!order) {
@@ -44,6 +45,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
   const canEditOrder = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
   const canCommentOnSteps = user.role === "admin" || user.role === "manager";
   const canClose = order.steps.every((step) => step.status === "done");
+  const groupOrders = orders.filter((item) => item.groupCode === order.groupCode);
 
   return (
     <AppShell active="admin" user={user}>
@@ -75,7 +77,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <OrderLabelPrintButton order={order} />
+          <OrderLabelPrintButton order={order} groupOrders={groupOrders} />
           {canEditOrder ? <OrderActions orderId={order.id} canClose={canClose} /> : null}
         </div>
       </header>

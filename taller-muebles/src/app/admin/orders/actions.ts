@@ -9,7 +9,7 @@ import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAt
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
-import { orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
+import { orderProductsSchema, orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
 import { priorityFromDeliveryDate } from "@/lib/utils";
 
 export type CreateOrderState = {
@@ -34,14 +34,19 @@ export async function createOrder(
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
     return { status: "error", message: "Tu perfil no tiene permiso para crear órdenes." };
   }
+  const productItems = parseProductItems(formData);
+  if (!productItems.success) {
+    return { status: "error", message: formatZodError(productItems.error) };
+  }
+  const firstProduct = productItems.data[0];
   const parsed = orderSchema.safeParse({
     store: formData.get("store"),
     salesNoteNumber: formData.get("salesNoteNumber")?.toString() || undefined,
     groupCode: formData.get("groupCode")?.toString() || undefined,
     clientName: formData.get("clientName"),
-    productName: formData.get("productName"),
-    material: formData.get("material"),
-    color: formData.get("color"),
+    productName: firstProduct.productName,
+    material: firstProduct.material,
+    color: firstProduct.color,
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
     assignedTo: formData.get("assignedTo"),
@@ -65,13 +70,18 @@ export async function createOrder(
   const groupCode = parsed.data.groupCode?.trim() || generatedCode;
 
   if (!hasSupabaseConfig()) {
-    const order = await createLocalOrder({
-      ...parsed.data,
-      salesNoteNumber: generatedCode,
-      groupCode,
-      priority: orderPriority,
-      steps: settings.production.steps,
-    });
+    const createdOrders = [];
+    for (const product of productItems.data) {
+      createdOrders.push(await createLocalOrder({
+        ...parsed.data,
+        ...product,
+        salesNoteNumber: generatedCode,
+        groupCode,
+        priority: orderPriority,
+        steps: settings.production.steps,
+      }));
+    }
+    const order = createdOrders[0];
     const attachmentResult = await saveInitialAttachment({
       formData,
       orderId: order.id,
@@ -93,12 +103,14 @@ export async function createOrder(
   const supabase = await createClient();
   const profileId = await getCurrentProfileId(supabase);
   if (!profileId) return { status: "error", message: "No se pudo identificar tu perfil." };
-  const { data: assignee } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("full_name", parsed.data.assignedTo)
-    .eq("active", true)
-    .maybeSingle();
+  const { data: assignee } = parsed.data.assignedTo
+    ? await supabase
+      .from("profiles")
+      .select("id")
+      .eq("full_name", parsed.data.assignedTo)
+      .eq("active", true)
+      .maybeSingle()
+    : { data: null };
   const { data: store, error: storeError } = await supabase
     .from("stores")
     .select("id")
@@ -112,17 +124,17 @@ export async function createOrder(
     };
   }
 
-  const { data: order, error: orderError } = await supabase
+  const { data: createdOrders, error: orderError } = await supabase
     .from("orders")
-    .insert({
+    .insert(productItems.data.map((product) => ({
       store_id: store.id,
       internal_code: generatedCode,
       sales_note_number: generatedCode,
       group_code: groupCode,
       client_name: parsed.data.clientName,
-      product_name: parsed.data.productName,
-      material: parsed.data.material,
-      color: parsed.data.color,
+      product_name: product.productName,
+      material: product.material,
+      color: product.color,
       status: "in_production",
       condition: "none",
       priority: orderPriority,
@@ -132,11 +144,10 @@ export async function createOrder(
       observations: parsed.data.observations,
       assigned_to: assignee?.id ?? null,
       created_by: profileId,
-    })
-    .select("id")
-    .single();
+    })))
+    .select("id");
 
-  if (orderError || !order) {
+  if (orderError || !createdOrders?.length) {
     return {
       status: "error",
       message: orderError?.message ?? "No se pudo crear la orden.",
@@ -146,23 +157,19 @@ export async function createOrder(
   const enabledSteps = settings.production.steps.filter((step) => step.enabled);
   const operatorByArea = operatorMapByArea(await listUsers());
   const { error: stepsError } = await supabase.from("production_steps").insert(
-    enabledSteps.map((step, index) => ({
+    createdOrders.flatMap((order) => enabledSteps.map((step, index) => ({
       order_id: order.id,
       step: step.key,
       step_label: step.label,
       sort_order: index + 1,
       status: index === 0 ? "active" : "pending",
       started_at: index === 0 ? new Date().toISOString() : null,
-      notes:
-        index === 0
-          ? `Responsable inicial sugerido: ${parsed.data.assignedTo}`
-          : null,
       assigned_to: index === 0 ? assignee?.id ?? operatorByArea.get(step.key) ?? null : operatorByArea.get(step.key) ?? null,
-    })),
+    }))),
   );
 
   if (stepsError) {
-    await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id);
+    await supabase.from("orders").update({ status: "cancelled" }).in("id", createdOrders.map((order) => order.id));
     return {
       status: "error",
       message: stepsError.message,
@@ -170,31 +177,31 @@ export async function createOrder(
   }
 
   await supabase.from("audit_logs").insert({
-    order_id: order.id,
+    order_id: createdOrders[0].id,
     action: "create_order",
     entity: "orders",
-    entity_id: order.id,
+    entity_id: createdOrders[0].id,
     profile_id: profileId,
     new_value: generatedCode,
   });
 
   const attachmentResult = await saveInitialAttachment({
     formData,
-    orderId: order.id,
+    orderId: createdOrders[0].id,
     profileId,
     supabase,
   });
 
   revalidatePath("/admin");
   revalidatePath("/taller");
-  revalidatePath(`/admin/orders/${order.id}`);
+  revalidatePath(`/admin/orders/${createdOrders[0].id}`);
 
   return {
     status: "success",
     message: attachmentResult.message
       ? `Orden creada y etapas productivas generadas. ${attachmentResult.message}`
       : "Orden creada y etapas productivas generadas.",
-    orderId: order.id,
+    orderId: createdOrders[0].id,
   };
 }
 
@@ -240,12 +247,14 @@ export async function updateOrder(
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
     if (!profileId) return { status: "error", message: "No se pudo identificar tu perfil." };
-    const { data: assignee } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("full_name", parsed.data.assignedTo)
-      .eq("active", true)
-      .maybeSingle();
+    const { data: assignee } = parsed.data.assignedTo
+      ? await supabase
+        .from("profiles")
+        .select("id")
+        .eq("full_name", parsed.data.assignedTo)
+        .eq("active", true)
+        .maybeSingle()
+      : { data: null };
     const { data: store } = await supabase.from("stores").select("id").eq("code", parsed.data.store).maybeSingle();
     if (!store) return { status: "error", message: "No se encontró la tienda." };
     const { error } = await supabase.from("orders").update({
@@ -466,6 +475,25 @@ function formatZodError(error: z.ZodError) {
   return error.issues.map((issue) => issue.message).join(" ");
 }
 
+function parseProductItems(formData: FormData) {
+  const raw = formData.get("productItems")?.toString();
+  if (raw) {
+    try {
+      return orderProductsSchema.safeParse(JSON.parse(raw));
+    } catch {
+      return orderProductsSchema.safeParse([]);
+    }
+  }
+
+  return orderProductsSchema.safeParse([
+    {
+      productName: formData.get("productName"),
+      material: formData.get("material"),
+      color: formData.get("color"),
+    },
+  ]);
+}
+
 async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return null;
@@ -555,11 +583,11 @@ async function nextOrderCode(store: z.infer<typeof orderSchema>["store"]) {
 
 function nextCodeForStore(store: z.infer<typeof orderSchema>["store"], codes: string[]) {
   const max = codes.reduce((current, code) => {
-    const match = new RegExp(`^${store}(\\d+)$`).exec(code);
+    const match = new RegExp(`^${store}-?(\\d+)$`).exec(code);
     if (!match) return current;
     return Math.max(current, Number(match[1]));
   }, 0);
-  return `${store}${String(max + 1).padStart(2, "0")}`;
+  return `${store}-${String(max + 1).padStart(2, "0")}`;
 }
 
 function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
