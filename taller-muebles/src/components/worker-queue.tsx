@@ -7,6 +7,7 @@ import { updateProductionStep } from "@/app/taller/actions";
 import type { AreaKey, Order, ProductionStep, Role, StepStatus } from "@/lib/types";
 import { deliveryLabel, formatDate, formatDateTime } from "@/lib/utils";
 import { filterWorkerFutureOrders, filterWorkerOrders, workerActionStep, workerAreas } from "@/lib/workshop-access";
+import { OrderLabelPrintButton } from "./order-label-print-button";
 import { StatusBadge } from "./status-badge";
 
 type WorkerQueueProps = {
@@ -210,6 +211,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
                         Detalle
                         <ChevronRight className="size-4" />
                       </Link>
+                      <OrderLabelPrintButton order={order} groupOrders={groupOrders(workingOrders, order)} className="h-9" />
                     </div>
                   </td>
                 </tr>
@@ -363,6 +365,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
                   Detalle
                   <ChevronRight className="size-4" />
                 </Link>
+                <OrderLabelPrintButton order={order} groupOrders={groupOrders(workingOrders, order)} className="h-12 justify-center" />
               </div>
             </article>
           );
@@ -429,4 +432,8 @@ function rowTone(order: Order, step: ProductionStep) {
   if (step.status === "active") return "bg-sky-50/70";
   if (step.status === "blocked" || deliveryLabel(order.deliveryDate, false).startsWith("Vencido")) return "bg-rose-50/70";
   return "bg-white";
+}
+
+function groupOrders(orders: Order[], order: Order) {
+  return orders.filter((item) => item.status !== "cancelled" && item.groupCode === order.groupCode);
 }

@@ -9,7 +9,6 @@ import {
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { ProductionBoard } from "@/components/production-board";
-import { PrintButton } from "@/components/print-button";
 import { StatCard } from "@/components/stat-card";
 import { requireSession } from "@/lib/auth";
 import { activeOrders, blockedOrders, overdueOrders } from "@/lib/metrics";
@@ -37,7 +36,6 @@ export default async function AdminPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <PrintButton />
           {canEditOrders ? (
             <Link href="/admin/orders/new" className="btn btn-primary">
               <Plus className="size-4" />

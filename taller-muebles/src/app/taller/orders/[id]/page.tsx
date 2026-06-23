@@ -11,12 +11,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { OrderCollaboration } from "@/components/order-collaboration";
+import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { StatusBadge } from "@/components/status-badge";
 import { WorkerQueue } from "@/components/worker-queue";
 import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
 import {
   getOrder,
+  listOrders,
   listOrderAttachments,
   listOrderAudit,
 } from "@/lib/repositories/production";
@@ -27,16 +29,18 @@ import { canWorkerSeeOrder, filterWorkerFutureOrders } from "@/lib/workshop-acce
 export default async function WorkshopOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession(["operator"]);
   const { id } = await params;
-  const [order, audit, attachments, settings] = await Promise.all([
+  const [order, audit, attachments, settings, orders] = await Promise.all([
     getOrder(id),
     listOrderAudit(id),
     listOrderAttachments(id),
     getSystemSettings(),
+    listOrders(),
   ]);
   if (!order || order.status === "cancelled") notFound();
   if (!canWorkerSeeOrder(user, order) && !filterWorkerFutureOrders(user, [order]).length) notFound();
 
   const progress = completionPercent(order);
+  const groupOrders = orders.filter((item) => item.status !== "cancelled" && item.groupCode === order.groupCode);
 
   return (
     <AppShell active="taller" user={user}>
@@ -60,12 +64,15 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
             {order.product} · {order.material} · {order.color}
           </p>
         </div>
-        <div className="rounded-lg border border-stone-200 bg-white p-4 lg:w-72">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">Avance</p>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200">
-            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
+        <div className="flex flex-col gap-2 lg:w-72">
+          <OrderLabelPrintButton order={order} groupOrders={groupOrders} className="w-full justify-center" />
+          <div className="rounded-lg border border-stone-200 bg-white p-4">
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">Avance</p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
+            </div>
+            <p className="mt-2 text-sm font-semibold text-stone-900">{progress}% completado</p>
           </div>
-          <p className="mt-2 text-sm font-semibold text-stone-900">{progress}% completado</p>
         </div>
       </header>
 

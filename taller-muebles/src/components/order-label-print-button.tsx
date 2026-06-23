@@ -35,7 +35,7 @@ export function OrderLabelPrintButton({
         )}
       >
         <Tag className="size-4" />
-        Etiqueta
+        Imprimir etiqueta
       </button>
       <section className="label-print-area hidden">
         <div className="label-card">
