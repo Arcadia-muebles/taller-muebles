@@ -178,7 +178,7 @@ select {
     background: #ffffff;
   }
 
-  aside,
+  body:not(.printing-label) aside,
   button,
   form,
   input,

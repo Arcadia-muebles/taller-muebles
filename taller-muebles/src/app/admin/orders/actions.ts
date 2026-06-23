@@ -62,20 +62,20 @@ export async function createOrder(
   }
   const ruleError = await validateOrderRules(parsed.data, settings);
   if (ruleError) return { status: "error", message: ruleError };
-  const generatedCode = await nextOrderCode(parsed.data.store);
+  const orderCode = parsed.data.salesNoteNumber?.trim() || await nextOrderCode(parsed.data.store);
   const orderPriority = priorityFromDeliveryDate(parsed.data.deliveryDate, {
     urgentDays: settings.alerts.urgentDeliveryDays,
     upcomingDays: settings.alerts.upcomingDeliveryDays,
   });
-  const groupCode = parsed.data.groupCode?.trim() || generatedCode;
+  const groupCode = parsed.data.groupCode?.trim() || orderCode;
 
   if (!hasSupabaseConfig()) {
     const createdOrders = [];
-    for (const product of productItems.data) {
-      createdOrders.push(await createLocalOrder({
+    for (const product of [...productItems.data].reverse()) {
+      createdOrders.unshift(await createLocalOrder({
         ...parsed.data,
         ...product,
-        salesNoteNumber: generatedCode,
+        salesNoteNumber: orderCode,
         groupCode,
         priority: orderPriority,
         steps: settings.production.steps,
@@ -128,8 +128,8 @@ export async function createOrder(
     .from("orders")
     .insert(productItems.data.map((product) => ({
       store_id: store.id,
-      internal_code: generatedCode,
-      sales_note_number: generatedCode,
+      internal_code: orderCode,
+      sales_note_number: orderCode,
       group_code: groupCode,
       client_name: parsed.data.clientName,
       product_name: product.productName,
@@ -182,7 +182,7 @@ export async function createOrder(
     entity: "orders",
     entity_id: createdOrders[0].id,
     profile_id: profileId,
-    new_value: generatedCode,
+    new_value: orderCode,
   });
 
   const attachmentResult = await saveInitialAttachment({

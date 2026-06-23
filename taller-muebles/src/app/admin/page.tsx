@@ -55,7 +55,7 @@ export default async function AdminPage() {
         <StatCard label="Despacho" value={String(dispatching.length)} helper="Listas para salida." icon={Truck} tone={dispatching.length ? "emerald" : "neutral"} />
       </section>
 
-      <ProductionBoard orders={active} steps={settings.production.steps} canMove={canEditOrders} />
+      <ProductionBoard orders={active} allOrders={orders} steps={settings.production.steps} canMove={canEditOrders} />
     </AppShell>
   );
 }

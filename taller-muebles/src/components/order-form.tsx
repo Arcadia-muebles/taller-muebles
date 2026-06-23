@@ -3,9 +3,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, CalendarDays, CheckCircle2, FileText, PackagePlus, Paperclip, Save, Trash2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useTransition } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
+import type { StoreCode } from "@/lib/types";
 import { newOrderSchema, orderSchema, type NewOrderFormValues, type OrderFormValues } from "@/lib/validation/order";
 
 const inputClass = "control-lg bg-white";
@@ -17,19 +18,32 @@ const initialState: CreateOrderState = {
 
 type FormValues = OrderFormValues | NewOrderFormValues;
 
-export function OrderForm({ orderId, initialValues }: { orderId?: string; initialValues?: OrderFormValues; assignees?: string[] }) {
+export function OrderForm({
+  orderId,
+  initialValues,
+  nextCodes = { LH: "LH-01", LR: "LR-01" },
+}: {
+  orderId?: string;
+  initialValues?: OrderFormValues;
+  assignees?: string[];
+  nextCodes?: Record<StoreCode, string>;
+}) {
   const action = orderId ? updateOrder.bind(null, orderId) : createOrder;
   const [state, formAction, actionPending] = useActionState(action, initialState);
   const [formPending, startTransition] = useTransition();
+  const lastAutoCode = useRef<string | null>(null);
   const {
     register,
     handleSubmit,
     control,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(orderId ? orderSchema : newOrderSchema),
     defaultValues: initialValues ?? {
       store: "LH",
+      salesNoteNumber: nextCodes.LH,
       isWarranty: false,
       entryDate: new Date().toISOString().slice(0, 10),
       products: [{ productName: "", material: "", color: "" }],
@@ -39,8 +53,21 @@ export function OrderForm({ orderId, initialValues }: { orderId?: string; initia
     control,
     name: "products",
   });
+  const store = useWatch({ control, name: "store" });
   const products = useWatch({ control, name: "products" }) ?? [];
   const pending = actionPending || formPending;
+
+  useEffect(() => {
+    if (orderId) return;
+    const nextCode = nextCodes[store as StoreCode];
+    const currentCode = getValues("salesNoteNumber")?.trim();
+    if (!nextCode) return;
+    if (!currentCode || currentCode === lastAutoCode.current) {
+      setValue("salesNoteNumber", nextCode, { shouldDirty: false, shouldValidate: true });
+      lastAutoCode.current = nextCode;
+    }
+  }, [getValues, nextCodes, orderId, setValue, store]);
+
   const submit = handleSubmit((_values, event) => {
     if (!(event?.target instanceof HTMLFormElement)) return;
     const formData = new FormData(event.target);
@@ -96,7 +123,7 @@ export function OrderForm({ orderId, initialValues }: { orderId?: string; initia
             {orderId ? (
               <input {...register("salesNoteNumber")} className={inputClass} readOnly />
             ) : (
-              <input className={inputClass} value="Se genera automáticamente" readOnly />
+              <input {...register("salesNoteNumber")} className={inputClass} placeholder="Ej. LH-023" />
             )}
           </Field>
           <Field label="Código pedido común" error={errors.groupCode?.message}>

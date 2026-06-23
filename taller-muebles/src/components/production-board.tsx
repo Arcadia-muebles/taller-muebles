@@ -24,10 +24,12 @@ import { updateProductionStep } from "@/app/taller/actions";
 import type { AreaKey, Order, ProductionStep, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, durationLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
 import { ConfirmSubmitButton } from "./confirm-submit-button";
+import { OrderLabelPrintButton } from "./order-label-print-button";
 import { StatusBadge } from "./status-badge";
 
 type ProductionBoardProps = {
   orders: Order[];
+  allOrders?: Order[];
   steps: SystemSettings["production"]["steps"];
   canMove: boolean;
 };
@@ -37,7 +39,7 @@ type Feedback = {
   message: string;
 };
 
-export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps) {
+export function ProductionBoard({ orders, allOrders = orders, steps, canMove }: ProductionBoardProps) {
   const enabledSteps = steps.filter((step) => step.enabled);
   const [selectedId, setSelectedId] = useState<string | null>(orders[0]?.id ?? null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -226,7 +228,14 @@ export function ProductionBoard({ orders, steps, canMove }: ProductionBoardProps
         </div>
       </div>
 
-      {detailOpen ? <OrderDetailDrawer order={selected} canMove={canMove} onClose={() => setDetailOpen(false)} /> : null}
+      {detailOpen ? (
+        <OrderDetailDrawer
+          order={selected}
+          groupOrders={allOrders.filter((item) => item.status !== "cancelled" && item.groupCode === selected?.groupCode)}
+          canMove={canMove}
+          onClose={() => setDetailOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -306,7 +315,17 @@ function ProductCard({
   );
 }
 
-function OrderDetailDrawer({ order, canMove, onClose }: { order?: Order; canMove: boolean; onClose: () => void }) {
+function OrderDetailDrawer({
+  order,
+  groupOrders,
+  canMove,
+  onClose,
+}: {
+  order?: Order;
+  groupOrders: Order[];
+  canMove: boolean;
+  onClose: () => void;
+}) {
   if (!order) {
     return (
       <aside className="panel-pad hidden self-start 2xl:block">
@@ -352,6 +371,7 @@ function OrderDetailDrawer({ order, canMove, onClose }: { order?: Order; canMove
       </div>
 
       <div className="space-y-4 p-4">
+        <OrderLabelPrintButton order={order} groupOrders={groupOrders} className="w-full justify-center" />
         <DetailBlock icon={UserRound} label="Cliente" value={order.client} />
         <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
           <DetailBlock icon={PackageOpen} label="Material" value={`${order.material} / ${order.color}`} />
