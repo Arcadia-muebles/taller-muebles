@@ -152,6 +152,11 @@ select {
 }
 
 @media print {
+  @page {
+    size: 150mm 95mm;
+    margin: 0;
+  }
+
   body.printing-label * {
     visibility: hidden;
   }
@@ -165,17 +170,271 @@ select {
     display: block !important;
     position: absolute;
     inset: 0 auto auto 0;
-    width: 100%;
+    width: 150mm;
+    min-height: 95mm;
     padding: 0;
   }
 
   body.printing-label .label-card {
-    width: 100mm;
-    min-height: 65mm;
-    border: 2px solid #000000;
-    padding: 8mm;
+    display: grid;
+    grid-template-columns: 48mm 1fr;
+    width: 150mm;
+    height: 95mm;
+    overflow: hidden;
+    border: 0.55mm solid #000000;
+    border-radius: 3.5mm;
     color: #000000;
     background: #ffffff;
+    font-family: var(--font-geist-sans), Arial, sans-serif;
+    line-height: 1;
+  }
+
+  body.printing-label .label-brand-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-right: 0.35mm solid #000000;
+    padding: 5mm 3.5mm;
+    text-align: center;
+  }
+
+  body.printing-label .label-brand {
+    width: 100%;
+  }
+
+  body.printing-label .label-brand-mark {
+    display: grid;
+    grid-template-columns: repeat(3, 7mm);
+    justify-content: center;
+    align-items: end;
+    gap: 0.6mm;
+    height: 9mm;
+    margin-bottom: 2mm;
+  }
+
+  body.printing-label .label-brand-mark span {
+    display: block;
+    width: 0;
+    height: 0;
+    border-right: 3.5mm solid transparent;
+    border-left: 3.5mm solid transparent;
+    border-bottom: 7mm solid #000000;
+  }
+
+  body.printing-label .label-brand-mark span:nth-child(2) {
+    transform: translateY(-2mm);
+  }
+
+  body.printing-label .label-brand-name {
+    font-size: 8mm;
+    font-weight: 500;
+    letter-spacing: 1.2mm;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  body.printing-label .label-brand-subtitle {
+    margin-top: 1.6mm;
+    font-size: 2.3mm;
+    font-weight: 800;
+    letter-spacing: 1.2mm;
+    text-transform: uppercase;
+  }
+
+  body.printing-label .label-divider {
+    width: 100%;
+    height: 0.3mm;
+    margin: 5mm 0;
+    background: #000000;
+  }
+
+  body.printing-label .label-code {
+    width: 100%;
+    overflow: hidden;
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    font-size: 22mm;
+    font-weight: 950;
+    letter-spacing: -1mm;
+    text-align: center;
+    text-transform: uppercase;
+    transform: scaleX(0.58);
+    white-space: nowrap;
+  }
+
+  body.printing-label .label-qr {
+    width: 31mm !important;
+    height: 31mm !important;
+    margin-top: auto;
+  }
+
+  body.printing-label .label-detail-panel {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    padding: 4.5mm 4.5mm 3.5mm 6mm;
+  }
+
+  body.printing-label .label-section {
+    border-bottom: 0.3mm solid #000000;
+    padding: 0 0 3.2mm;
+  }
+
+  body.printing-label .label-section + .label-section {
+    padding-top: 3.6mm;
+  }
+
+  body.printing-label .label-section-client {
+    padding-bottom: 3.4mm;
+  }
+
+  body.printing-label .label-kicker {
+    margin-bottom: 1.4mm;
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    font-size: 3.6mm;
+    font-weight: 700;
+    letter-spacing: 0.8mm;
+    text-transform: uppercase;
+  }
+
+  body.printing-label .label-client {
+    overflow: hidden;
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    font-size: 9mm;
+    font-weight: 950;
+    text-transform: uppercase;
+    transform: scaleX(0.82);
+    transform-origin: left center;
+    white-space: nowrap;
+  }
+
+  body.printing-label .label-product-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22mm;
+    align-items: start;
+    gap: 4mm;
+    border-bottom-style: dashed;
+  }
+
+  body.printing-label .label-product {
+    overflow: hidden;
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    font-size: 6mm;
+    font-weight: 950;
+    text-transform: uppercase;
+    transform: scaleX(0.86);
+    transform-origin: left center;
+    white-space: nowrap;
+  }
+
+  body.printing-label .label-count {
+    padding-top: 4.4mm;
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    font-size: 4.6mm;
+    font-weight: 900;
+    text-align: right;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  body.printing-label .label-color {
+    overflow: hidden;
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    font-size: 6.4mm;
+    font-weight: 950;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  body.printing-label .label-date-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 0.3mm solid #000000;
+  }
+
+  body.printing-label .label-date-grid > div {
+    padding: 3mm 0;
+  }
+
+  body.printing-label .label-date-grid > div + div {
+    border-left: 0.3mm solid #000000;
+    padding-left: 10mm;
+  }
+
+  body.printing-label .label-date {
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    font-size: 5.3mm;
+    font-weight: 950;
+  }
+
+  body.printing-label .label-observations {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    align-items: end;
+    gap: 3mm;
+    border-bottom: 0.3mm solid #000000;
+    padding: 2.8mm 0 2.2mm;
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    text-transform: uppercase;
+  }
+
+  body.printing-label .label-observations span {
+    font-size: 3mm;
+    font-weight: 800;
+    letter-spacing: 0.5mm;
+  }
+
+  body.printing-label .label-observations p {
+    min-height: 4.2mm;
+    overflow: hidden;
+    border-bottom: 0.25mm solid #000000;
+    font-size: 3.2mm;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  body.printing-label .label-status-row {
+    display: grid;
+    grid-template-columns: 13mm 1fr;
+    align-items: center;
+    gap: 3.5mm;
+    padding-top: 2.8mm;
+  }
+
+  body.printing-label .label-status-icon {
+    display: grid;
+    width: 12.5mm;
+    height: 12.5mm;
+    place-items: center;
+    border-radius: 999px;
+    background: #000000;
+    color: #ffffff;
+    font-size: 7mm;
+    font-weight: 950;
+  }
+
+  body.printing-label .label-status {
+    display: inline-block;
+    border-bottom: 0.6mm solid #000000;
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    font-size: 8.8mm;
+    font-weight: 950;
+    letter-spacing: 0.4mm;
+    text-transform: uppercase;
+    transform: scaleX(0.9);
+    transform-origin: left center;
+    white-space: nowrap;
+  }
+
+  body.printing-label .label-footer-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 4mm;
+    margin-top: auto;
+    font-family: var(--font-geist-mono), "Arial Narrow", Arial, sans-serif;
+    font-size: 2.2mm;
+    font-weight: 700;
+    letter-spacing: 0.3mm;
+    text-transform: uppercase;
   }
 
   body:not(.printing-label) aside,

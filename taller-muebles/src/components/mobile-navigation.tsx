@@ -1,6 +1,7 @@
 "use client";
 
 import { Archive, BarChart3, Boxes, FileText, Home, LogOut, Menu, Settings, Users, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -23,7 +24,7 @@ export function MobileNavigation({
     <div className="sticky top-0 z-40 -mx-4 mb-4 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
       <div className="flex items-center justify-between">
         <Link href={active === "admin" ? "/admin" : "/taller"} className="flex items-center gap-2">
-          <span className="grid size-8 place-items-center rounded-md bg-stone-950 text-xs font-semibold text-white">LH</span>
+          <Image src="/arcadia-icon.png" alt="" width={32} height={32} className="size-8 shrink-0 rounded-md" priority />
           <span className="text-sm font-semibold">Control Producción</span>
         </Link>
         <button

@@ -1,8 +1,10 @@
 "use client";
 
 import { Tag } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import type { Order } from "@/lib/types";
-import { cn, formatDate } from "@/lib/utils";
+import { orderStatusLabel } from "@/lib/orders";
+import { cn } from "@/lib/utils";
 
 export function OrderLabelPrintButton({
   order,
@@ -17,6 +19,9 @@ export function OrderLabelPrintButton({
   const productIndex = Math.max(orderedGroup.findIndex((item) => item.id === order.id), 0) + 1;
   const productTotal = orderedGroup.length || 1;
   const status = productionLabel(order);
+  const brand = storeBrand(order.store);
+  const qrValue = `pedido:${order.id}|codigo:${order.code}|tienda:${order.store}`;
+  const observations = order.observations?.trim();
 
   function printLabel() {
     document.body.classList.add("printing-label");
@@ -39,21 +44,70 @@ export function OrderLabelPrintButton({
       </button>
       <section className="label-print-area hidden">
         <div className="label-card">
-          <div>
-            <div>
-              <h1 className="mt-2 font-mono text-3xl font-bold">{order.code}</h1>
-              <p className="mt-2 text-lg font-bold uppercase">{order.client}</p>
-              <p className="mt-1 font-mono text-sm font-semibold">{productIndex}/{productTotal} Producto {productIndex} de {productTotal}</p>
+          <aside className="label-brand-panel">
+            <div className="label-brand">
+              <div className="label-brand-mark" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <p className="label-brand-name">{brand.name}</p>
+              <p className="label-brand-subtitle">{brand.subtitle}</p>
+            </div>
+            <div className="label-divider" />
+            <p className="label-code">{order.code}</p>
+            <div className="label-divider" />
+            <QRCodeSVG value={qrValue} className="label-qr" level="M" marginSize={1} />
+          </aside>
+
+          <div className="label-detail-panel">
+            <div className="label-section label-section-client">
+              <p className="label-kicker">Cliente</p>
+              <p className="label-client">{order.client || "Sin cliente"}</p>
+            </div>
+
+            <div className="label-section label-product-row">
+              <div>
+                <p className="label-kicker">Producto</p>
+                <p className="label-product">{twoDigit(productIndex)} {order.product || "Sin producto"}</p>
+              </div>
+              <p className="label-count">{productIndex} de {productTotal}</p>
+            </div>
+
+            <div className="label-section">
+              <p className="label-kicker">Color</p>
+              <p className="label-color">{order.color || "Sin color"}</p>
+            </div>
+
+            <div className="label-date-grid">
+              <div>
+                <p className="label-kicker">Fecha ingreso</p>
+                <p className="label-date">{formatShortDate(order.entryDate)}</p>
+              </div>
+              <div>
+                <p className="label-kicker">Fecha entrega</p>
+                <p className="label-date">{formatShortDate(order.deliveryDate)}</p>
+              </div>
+            </div>
+
+            <div className="label-observations">
+              <span>Observaciones</span>
+              <p>{observations || "\u00a0"}</p>
+            </div>
+
+            <div className="label-status-row">
+              <div className="label-status-icon" aria-hidden="true">✓</div>
+              <div>
+                <p className="label-kicker">Estado</p>
+                <p className="label-status">{status}</p>
+              </div>
+            </div>
+
+            <div className="label-footer-meta">
+              <span>{order.material || "Sin material"}</span>
+              <span>{order.isWarranty ? "Garantia" : orderStatusLabel(order.status)}</span>
             </div>
           </div>
-          <div className="mt-5 border-t border-black pt-4">
-            <p className="text-xl font-bold">{order.product}</p>
-            <p className="mt-2 text-base">COLOR: {order.color}</p>
-            <p className="mt-2 text-base">FECHA INGRESO: {formatDate(order.entryDate)}</p>
-            <p className="mt-2 text-base">FECHA ENTREGA: {formatDate(order.deliveryDate)}</p>
-            <p className="mt-2 text-base font-bold">ESTADO: {status}</p>
-          </div>
-          {order.isWarranty ? <p className="mt-4 inline-block border border-black px-2 py-1 text-sm font-bold">GARANTIA</p> : null}
         </div>
       </section>
     </>
@@ -61,6 +115,7 @@ export function OrderLabelPrintButton({
 }
 
 function productionLabel(order: Order) {
+  if (order.status === "cancelled") return "CANCELADO";
   if (order.status === "completed" || order.steps.every((step) => step.status === "done")) return "TERMINADO";
   const current =
     order.steps.find((step) => step.status === "active") ??
@@ -68,8 +123,12 @@ function productionLabel(order: Order) {
     order.steps.find((step) => step.status === "pending");
 
   if (!current) return "PENDIENTE";
+  if (order.status === "blocked" || current.status === "blocked") return "BLOQUEADO";
+  if (current.status === "pending") return "PENDIENTE";
 
   const labels: Record<string, string> = {
+    structure: "EN ESTRUCTURA",
+    en_blanco: "EN BLANCO",
     cutting: "EN CORTE",
     sewing: "EN COSTURA",
     upholstery: "EN TAPICERÍA",
@@ -78,4 +137,21 @@ function productionLabel(order: Order) {
   };
 
   return labels[current.key] ?? (current.status === "done" ? "TERMINADO" : "PENDIENTE");
+}
+
+function storeBrand(store: Order["store"]) {
+  if (store === "LR") return { name: "La Reina", subtitle: "Muebles en cuero" };
+  return { name: "Leather House", subtitle: "Muebles en cuero" };
+}
+
+function twoDigit(value: number) {
+  return value.toString().padStart(2, "0");
+}
+
+function formatShortDate(value?: string | null) {
+  if (!value) return "S/F";
+  const normalized = value.includes("T") ? value : `${value}T00:00:00`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return "S/F";
+  return `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear().toString().slice(-2)}`;
 }

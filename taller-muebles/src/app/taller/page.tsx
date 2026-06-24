@@ -9,7 +9,6 @@ import { workerAreas } from "@/lib/workshop-access";
 export default async function WorkshopPage() {
   const user = await requireSession(["operator"]);
   const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
-  const workshopOrders = orders.filter((order) => !["completed", "cancelled"].includes(order.status));
   const stepLabel = workerAreas(user)
     .map((area) => settings.production.steps.find((step) => step.key === area)?.label ?? area)
     .join(", ") || "Sin etapa asignada";
@@ -38,7 +37,7 @@ export default async function WorkshopPage() {
 
       <div className="mt-5">
         <WorkerQueue
-          orders={workshopOrders}
+          orders={orders}
           user={user}
           areaLabels={Object.fromEntries(settings.production.steps.map((step) => [step.key, step.label]))}
           permissions={{

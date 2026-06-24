@@ -1,12 +1,12 @@
 "use client";
 
-import { Ban, Check, ChevronRight, MessageSquare, Play, RotateCcw, Undo2, X } from "lucide-react";
+import { Archive, Ban, Check, ChevronRight, MessageSquare, Play, RotateCcw, Search, Undo2, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { updateProductionStep } from "@/app/taller/actions";
 import type { AreaKey, Order, ProductionStep, Role, StepStatus } from "@/lib/types";
 import { deliveryLabel, formatDate, formatDateTime } from "@/lib/utils";
-import { filterWorkerFutureOrders, filterWorkerOrders, workerActionStep, workerAreas } from "@/lib/workshop-access";
+import { filterWorkerFutureOrders, filterWorkerHistoryOrders, filterWorkerOrders, nextWorkStep, workerActionStep, workerAreas } from "@/lib/workshop-access";
 import { OrderLabelPrintButton } from "./order-label-print-button";
 import { StatusBadge } from "./status-badge";
 
@@ -32,6 +32,10 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
   const [comments, setComments] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [pendingTarget, setPendingTarget] = useState<{ orderId: string; status: StepStatus } | null>(null);
+  const [planningQuery, setPlanningQuery] = useState("");
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [planningLimit, setPlanningLimit] = useState(20);
+  const [historyLimit, setHistoryLimit] = useState(20);
   const [pendingAction, startTransition] = useTransition();
 
   const workingOrders = useMemo(
@@ -55,6 +59,9 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
 
   const visible = useMemo(() => filterWorkerOrders(user, workingOrders), [user, workingOrders]);
   const future = useMemo(() => filterWorkerFutureOrders(user, workingOrders), [user, workingOrders]);
+  const history = useMemo(() => sortByWorkerCompletedAt(filterWorkerHistoryOrders(user, workingOrders), user), [user, workingOrders]);
+  const filteredFuture = useMemo(() => filterOrders(future, planningQuery), [future, planningQuery]);
+  const filteredHistory = useMemo(() => filterOrders(history, historyQuery), [history, historyQuery]);
   const areaName = workerAreas(user)
     .map((area) => areaLabels[area] ?? visible[0]?.steps.find((step) => step.key === area)?.label ?? area)
     .join(", ") || "Sin etapa";
@@ -379,42 +386,124 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
         ) : null}
       </div>
 
-      <div className="border-t border-stone-200 p-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-stone-950">Próximos trabajos</h3>
-            <p className="text-sm text-stone-500">Carga futura para planificar materiales y semana.</p>
+      <div className="grid border-t border-stone-200 lg:grid-cols-2">
+        <div className="border-b border-stone-200 p-4 lg:border-r lg:border-b-0">
+          <QueueListHeader
+            title="Planificación"
+            description="Productos que vienen de etapas previas."
+            count={`${filteredFuture.length} por venir`}
+          />
+          <SearchField
+            value={planningQuery}
+            onChange={setPlanningQuery}
+            placeholder="Buscar por código, cliente, producto o material"
+          />
+          <div className="mt-3 grid gap-2">
+            {filteredFuture.slice(0, planningLimit).map((order) => {
+              const futureStep = workerFutureStep(user, order);
+              const current = nextWorkStep(order);
+              return (
+                <Link key={order.id} href={`/taller/orders/${order.id}`} className="flex min-w-0 flex-col gap-2 rounded-md border border-stone-200 bg-stone-50 px-3 py-3 transition hover:border-stone-300 hover:bg-white sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-sm font-semibold">{order.code}</p>
+                    <p className="mt-1 truncate text-sm font-medium text-stone-800">{order.product}</p>
+                    <p className="mt-1 truncate text-xs text-stone-500">{order.material} / {order.color}</p>
+                  </div>
+                  <div className="shrink-0 sm:text-right">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">Ahora: {current?.label ?? "Sin etapa"}</p>
+                    <p className="mt-1 text-sm font-semibold text-stone-900">Luego: {futureStep?.label ?? "Mi etapa"}</p>
+                    <p className="text-xs font-semibold text-stone-500">{formatDate(order.deliveryDate)} · {deliveryLabel(order.deliveryDate, false)}</p>
+                  </div>
+                </Link>
+              );
+            })}
+            {!filteredFuture.length ? (
+              <p className="rounded-md border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">
+                No hay productos pendientes en etapas previas para tu proceso.
+              </p>
+            ) : null}
           </div>
-          <span className="inline-flex h-8 w-fit items-center rounded-full border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600">
-            {future.length} futuros
-          </span>
+          {filteredFuture.length > planningLimit ? (
+            <button type="button" onClick={() => setPlanningLimit((value) => value + 20)} className="btn btn-secondary mt-3 h-9 w-full">
+              Ver 20 más
+            </button>
+          ) : null}
         </div>
-        <div className="mt-3 grid gap-2">
-          {future.slice(0, 8).map((order) => {
-            const futureStep = order.steps.find((step) => workerAreas(user).includes(step.key) && step.status === "pending");
-            return (
-              <Link key={order.id} href={`/taller/orders/${order.id}`} className="flex min-w-0 flex-col gap-2 rounded-md border border-stone-200 bg-stone-50 px-3 py-3 transition hover:border-stone-300 hover:bg-white sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-sm font-semibold">{order.code}</p>
-                  <p className="mt-1 truncate text-sm font-medium text-stone-800">{order.product}</p>
-                  <p className="mt-1 truncate text-xs text-stone-500">{order.material} / {order.color}</p>
-                </div>
-                <div className="shrink-0 sm:text-right">
-                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">{futureStep?.label ?? "Etapa futura"}</p>
-                  <p className="mt-1 text-sm font-semibold text-stone-900">{formatDate(order.deliveryDate)}</p>
-                  <p className="text-xs font-semibold text-stone-500">{deliveryLabel(order.deliveryDate, false)}</p>
-                </div>
-              </Link>
-            );
-          })}
-          {!future.length ? (
-            <p className="rounded-md border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">
-              No hay trabajos futuros para tu etapa.
-            </p>
+
+        <div className="p-4">
+          <QueueListHeader
+            title="Historial"
+            description="Productos que ya pasaron por tu proceso."
+            count={`${filteredHistory.length} registros`}
+          />
+          <SearchField
+            value={historyQuery}
+            onChange={setHistoryQuery}
+            placeholder="Buscar historial"
+          />
+          <div className="mt-3 grid gap-2">
+            {filteredHistory.slice(0, historyLimit).map((order) => {
+              const step = latestWorkerDoneStep(user, order);
+              return (
+                <Link key={order.id} href={`/taller/orders/${order.id}`} className="flex min-w-0 flex-col gap-2 rounded-md border border-stone-200 bg-white px-3 py-3 transition hover:border-stone-300 hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Archive className="size-4 shrink-0 text-stone-400" />
+                      <p className="truncate font-mono text-sm font-semibold">{order.code}</p>
+                    </div>
+                    <p className="mt-1 truncate text-sm font-medium text-stone-800">{order.product}</p>
+                    <p className="mt-1 truncate text-xs text-stone-500">{order.client}</p>
+                  </div>
+                  <div className="shrink-0 sm:text-right">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">{step?.label ?? "Proceso"}</p>
+                    <p className="mt-1 text-sm font-semibold text-stone-900">{formatDateTime(step?.completedAt)}</p>
+                    <p className="text-xs font-semibold text-stone-500">{order.status === "completed" ? "Orden completada" : "Sigue en producción"}</p>
+                  </div>
+                </Link>
+              );
+            })}
+            {!filteredHistory.length ? (
+              <p className="rounded-md border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">
+                Todavía no hay productos terminados por tu proceso.
+              </p>
+            ) : null}
+          </div>
+          {filteredHistory.length > historyLimit ? (
+            <button type="button" onClick={() => setHistoryLimit((value) => value + 20)} className="btn btn-secondary mt-3 h-9 w-full">
+              Ver 20 más
+            </button>
           ) : null}
         </div>
       </div>
     </section>
+  );
+}
+
+function QueueListHeader({ title, description, count }: { title: string; description: string; count: string }) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 className="text-sm font-semibold text-stone-950">{title}</h3>
+        <p className="text-sm text-stone-500">{description}</p>
+      </div>
+      <span className="inline-flex h-8 w-fit items-center rounded-full border border-stone-200 bg-white px-3 text-xs font-medium text-stone-600">
+        {count}
+      </span>
+    </div>
+  );
+}
+
+function SearchField({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+  return (
+    <label className="mt-3 flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-600">
+      <Search className="size-4 shrink-0 text-stone-400" />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="min-w-0 flex-1 bg-transparent text-sm text-stone-900 outline-none placeholder:text-stone-400"
+      />
+    </label>
   );
 }
 
@@ -436,4 +525,45 @@ function rowTone(order: Order, step: ProductionStep) {
 
 function groupOrders(orders: Order[], order: Order) {
   return orders.filter((item) => item.status !== "cancelled" && item.groupCode === order.groupCode);
+}
+
+function filterOrders(orders: Order[], query: string) {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (!normalized) return orders;
+  return orders.filter((order) => (
+    [
+      order.code,
+      order.groupCode,
+      order.client,
+      order.product,
+      order.material,
+      order.color,
+    ].join(" ").toLocaleLowerCase().includes(normalized)
+  ));
+}
+
+function workerFutureStep(user: WorkerQueueProps["user"], order: Order) {
+  const areas = workerAreas(user);
+  return order.steps.find((step) => areas.includes(step.key) && step.status === "pending");
+}
+
+function latestWorkerDoneStep(user: WorkerQueueProps["user"], order: Order) {
+  const areas = workerAreas(user);
+  return [...order.steps]
+    .reverse()
+    .find((step) => areas.includes(step.key) && step.status === "done");
+}
+
+function sortByWorkerCompletedAt(orders: Order[], user: WorkerQueueProps["user"]) {
+  return [...orders].sort((left, right) => {
+    const leftTime = completedTime(latestWorkerDoneStep(user, left)?.completedAt);
+    const rightTime = completedTime(latestWorkerDoneStep(user, right)?.completedAt);
+    return rightTime - leftTime;
+  });
+}
+
+function completedTime(value?: string) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
