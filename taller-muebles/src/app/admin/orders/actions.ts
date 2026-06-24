@@ -41,17 +41,26 @@ export async function createOrder(
   const firstProduct = productItems.data[0];
   const parsed = orderSchema.safeParse({
     store: formData.get("store"),
+    documentType: normalizedDocumentType(formData),
+    documentStatus: formData.get("documentStatus")?.toString() || "issued",
     salesNoteNumber: formData.get("salesNoteNumber")?.toString() || undefined,
     groupCode: formData.get("groupCode")?.toString() || undefined,
     clientName: formData.get("clientName"),
+    customerContact: formData.get("customerContact")?.toString() || undefined,
     productName: firstProduct.productName,
-    material: firstProduct.material,
+    material: firstProduct.material || defaultMaterial(formData.get("store")?.toString()),
     color: firstProduct.color,
+    quantity: firstProduct.quantity,
+    unitPrice: firstProduct.unitPrice,
+    subtotal: formData.get("subtotal"),
+    discount: formData.get("discount"),
+    total: formData.get("total"),
+    paidAmount: formData.get("paidAmount"),
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
     assignedTo: formData.get("assignedTo"),
     observations: formData.get("observations")?.toString() ?? "",
-    isWarranty: parseBooleanFormValue(formData.get("isWarranty")),
+    isWarranty: parseBooleanFormValue(formData.get("isWarranty")) || normalizedDocumentType(formData) === "warranty",
   });
 
   if (!parsed.success) {
@@ -59,6 +68,9 @@ export async function createOrder(
       status: "error",
       message: formatZodError(parsed.error),
     };
+  }
+  if (parsed.data.store === "LR" && productItems.data.some((product) => !product.material?.trim())) {
+    return { status: "error", message: "Ingresa material en todos los productos LR." };
   }
   const ruleError = await validateOrderRules(parsed.data, settings);
   if (ruleError) return { status: "error", message: ruleError };
@@ -74,7 +86,7 @@ export async function createOrder(
     for (const product of [...productItems.data].reverse()) {
       createdOrders.unshift(await createLocalOrder({
         ...parsed.data,
-        ...product,
+        ...normalizedProductForStore(product, parsed.data.store),
         salesNoteNumber: orderCode,
         groupCode,
         priority: orderPriority,
@@ -131,10 +143,20 @@ export async function createOrder(
       internal_code: orderCode,
       sales_note_number: orderCode,
       group_code: groupCode,
+      document_type: parsed.data.documentType,
+      document_status: parsed.data.documentStatus,
       client_name: parsed.data.clientName,
+      customer_contact: parsed.data.customerContact || null,
       product_name: product.productName,
-      material: product.material,
-      color: product.color,
+      material: normalizedProductForStore(product, parsed.data.store).material,
+      color: normalizedProductForStore(product, parsed.data.store).color,
+      quantity: product.quantity ?? 1,
+      unit_price: product.unitPrice ?? null,
+      subtotal_amount: parsed.data.subtotal ?? null,
+      discount_amount: parsed.data.discount ?? 0,
+      total_amount: parsed.data.total ?? null,
+      paid_amount: parsed.data.paidAmount ?? 0,
+      balance_amount: parsed.data.total !== undefined ? Math.max(parsed.data.total - (parsed.data.paidAmount ?? 0), 0) : null,
       status: "in_production",
       condition: "none",
       priority: orderPriority,
@@ -217,17 +239,26 @@ export async function updateOrder(
   }
   const parsed = orderSchema.safeParse({
     store: formData.get("store"),
+    documentType: normalizedDocumentType(formData),
+    documentStatus: formData.get("documentStatus")?.toString() || "issued",
     salesNoteNumber: formData.get("salesNoteNumber")?.toString() || undefined,
     groupCode: formData.get("groupCode")?.toString() || undefined,
     clientName: formData.get("clientName"),
+    customerContact: formData.get("customerContact")?.toString() || undefined,
     productName: formData.get("productName"),
-    material: formData.get("material"),
+    material: formData.get("material")?.toString() || defaultMaterial(formData.get("store")?.toString()),
     color: formData.get("color"),
+    quantity: formData.get("quantity"),
+    unitPrice: formData.get("unitPrice"),
+    subtotal: formData.get("subtotal"),
+    discount: formData.get("discount"),
+    total: formData.get("total"),
+    paidAmount: formData.get("paidAmount"),
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
     assignedTo: formData.get("assignedTo"),
     observations: formData.get("observations")?.toString() ?? "",
-    isWarranty: parseBooleanFormValue(formData.get("isWarranty")),
+    isWarranty: parseBooleanFormValue(formData.get("isWarranty")) || normalizedDocumentType(formData) === "warranty",
   });
   if (!parsed.success) return { status: "error", message: formatZodError(parsed.error) };
   const ruleError = await validateOrderRules(parsed.data, settings, orderId);
@@ -240,6 +271,8 @@ export async function updateOrder(
   if (!hasSupabaseConfig()) {
     const updated = await updateLocalOrder(orderId, {
       ...parsed.data,
+      material: parsed.data.material || defaultMaterial(parsed.data.store),
+      color: parsed.data.color || "Por definir",
       priority: orderPriority,
     });
     if (!updated) return { status: "error", message: "No se encontró la orden." };
@@ -259,10 +292,20 @@ export async function updateOrder(
     if (!store) return { status: "error", message: "No se encontró la tienda." };
     const { error } = await supabase.from("orders").update({
       store_id: store.id,
+      document_type: parsed.data.documentType,
+      document_status: parsed.data.documentStatus,
       client_name: parsed.data.clientName,
+      customer_contact: parsed.data.customerContact || null,
       product_name: parsed.data.productName,
-      material: parsed.data.material,
-      color: parsed.data.color,
+      material: parsed.data.material || defaultMaterial(parsed.data.store),
+      color: parsed.data.color || "Por definir",
+      quantity: parsed.data.quantity ?? 1,
+      unit_price: parsed.data.unitPrice ?? null,
+      subtotal_amount: parsed.data.subtotal ?? null,
+      discount_amount: parsed.data.discount ?? 0,
+      total_amount: parsed.data.total ?? null,
+      paid_amount: parsed.data.paidAmount ?? 0,
+      balance_amount: parsed.data.total !== undefined ? Math.max(parsed.data.total - (parsed.data.paidAmount ?? 0), 0) : null,
       group_code: parsed.data.groupCode?.trim() || parsed.data.salesNoteNumber,
       priority: orderPriority,
       is_warranty: parsed.data.isWarranty,
@@ -492,6 +535,27 @@ function parseProductItems(formData: FormData) {
       color: formData.get("color"),
     },
   ]);
+}
+
+function normalizedDocumentType(formData: FormData) {
+  const store = formData.get("store")?.toString();
+  if (store === "LH") return "production_intake";
+  return formData.get("documentType")?.toString() || "sales_note";
+}
+
+function defaultMaterial(store?: string) {
+  return store === "LH" ? "Por definir" : "";
+}
+
+function normalizedProductForStore(
+  product: z.infer<typeof orderProductsSchema>[number],
+  store: z.infer<typeof orderSchema>["store"],
+) {
+  return {
+    ...product,
+    material: product.material?.trim() || defaultMaterial(store) || "Por definir",
+    color: product.color?.trim() || "Por definir",
+  };
 }
 
 async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createClient>>) {

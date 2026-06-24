@@ -1,10 +1,22 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, CalendarDays, CheckCircle2, FileText, PackagePlus, Paperclip, Save, Trash2, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  DollarSign,
+  Factory,
+  FileText,
+  PackagePlus,
+  Paperclip,
+  Save,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useTransition } from "react";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { useFieldArray, useForm, useWatch, type Resolver } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
 import type { StoreCode } from "@/lib/types";
 import { newOrderSchema, orderSchema, type NewOrderFormValues, type OrderFormValues } from "@/lib/validation/order";
@@ -17,6 +29,7 @@ const initialState: CreateOrderState = {
 };
 
 type FormValues = OrderFormValues | NewOrderFormValues;
+type FieldErrors = Partial<Record<keyof OrderFormValues, { message?: string }>>;
 
 export function OrderForm({
   orderId,
@@ -40,13 +53,17 @@ export function OrderForm({
     setValue,
     formState: { errors },
   } = useForm<FormValues>({
-    resolver: zodResolver(orderId ? orderSchema : newOrderSchema),
+    resolver: zodResolver(orderId ? orderSchema : newOrderSchema) as Resolver<FormValues>,
     defaultValues: initialValues ?? {
       store: "LH",
+      documentType: "production_intake",
+      documentStatus: "issued",
       salesNoteNumber: nextCodes.LH,
       isWarranty: false,
       entryDate: new Date().toISOString().slice(0, 10),
-      products: [{ productName: "", material: "", color: "" }],
+      discount: 0,
+      paidAmount: 0,
+      products: [{ productName: "", material: "", color: "", quantity: 1 }],
     },
   });
   const { fields, append, remove } = useFieldArray({
@@ -54,8 +71,20 @@ export function OrderForm({
     name: "products",
   });
   const store = useWatch({ control, name: "store" });
+  const documentType = useWatch({ control, name: "documentType" });
   const products = useWatch({ control, name: "products" }) ?? [];
+  const isLeatherHouse = store === "LH";
+  const isCommercialDocument = store === "LR";
   const pending = actionPending || formPending;
+  const typedErrors = errors as FieldErrors & {
+    products?: Array<{
+      productName?: { message?: string };
+      material?: { message?: string };
+      color?: { message?: string };
+      quantity?: { message?: string };
+      unitPrice?: { message?: string };
+    }>;
+  };
 
   useEffect(() => {
     if (orderId) return;
@@ -68,6 +97,14 @@ export function OrderForm({
     }
   }, [getValues, nextCodes, orderId, setValue, store]);
 
+  useEffect(() => {
+    if (store === "LH") {
+      setValue("documentType", "production_intake", { shouldDirty: false, shouldValidate: true });
+    } else if (documentType === "production_intake") {
+      setValue("documentType", "sales_note", { shouldDirty: false, shouldValidate: true });
+    }
+  }, [documentType, setValue, store]);
+
   const submit = handleSubmit((_values, event) => {
     if (!(event?.target instanceof HTMLFormElement)) return;
     const formData = new FormData(event.target);
@@ -76,11 +113,7 @@ export function OrderForm({
   });
 
   return (
-    <form
-      action={formAction}
-      onSubmit={submit}
-      className="space-y-5"
-    >
+    <form action={formAction} onSubmit={submit} className="space-y-5">
       {state.message ? (
         <div
           className={
@@ -105,33 +138,63 @@ export function OrderForm({
 
       <section className="panel">
         <div className="panel-header flex items-center gap-3">
-          <FileText className="size-5 text-stone-500" />
+          {isLeatherHouse ? <Factory className="size-5 text-stone-500" /> : <FileText className="size-5 text-stone-500" />}
           <div>
-            <h2 className="panel-title">Datos comerciales</h2>
-            <p className="panel-description">Información base de la nota de venta.</p>
+            <h2 className="panel-title">{isLeatherHouse ? "Ingreso Leather House" : "Documento comercial La Reina"}</h2>
+            <p className="panel-description">
+              {isLeatherHouse
+                ? "Formulario simplificado orientado exclusivamente a fabricacion."
+                : "Documento base que alimenta automaticamente la produccion."}
+            </p>
           </div>
         </div>
 
         <div className="grid gap-4 p-4 md:grid-cols-2">
-          <Field label="Tienda" error={errors.store?.message}>
+          <Field label="Flujo" error={typedErrors.store?.message}>
             <select {...register("store")} className={inputClass}>
-              <option value="LH">Leather House</option>
-              <option value="LR">La Reina</option>
+              <option value="LH">LH - ingreso de produccion</option>
+              <option value="LR">LR - documento comercial</option>
             </select>
           </Field>
-          <Field label="Código venta" error={errors.salesNoteNumber?.message}>
+          <Field label={isLeatherHouse ? "Codigo produccion" : "Numero documento"} error={typedErrors.salesNoteNumber?.message}>
             {orderId ? (
               <input {...register("salesNoteNumber")} className={inputClass} readOnly />
             ) : (
-              <input {...register("salesNoteNumber")} className={inputClass} placeholder="Ej. LH-023" />
+              <input {...register("salesNoteNumber")} className={inputClass} placeholder="Ej. LR-023" />
             )}
           </Field>
-          <Field label="Código pedido común" error={errors.groupCode?.message}>
-            <input {...register("groupCode")} className={inputClass} placeholder="Opcional, ej. LH2101" />
+          {isCommercialDocument ? (
+            <Field label="Tipo de documento" error={typedErrors.documentType?.message}>
+              <select {...register("documentType")} className={inputClass}>
+                <option value="sales_note">Nota de Venta</option>
+                <option value="quote">Cotizacion</option>
+                <option value="purchase_order">Orden de Compra</option>
+                <option value="warranty">Garantia</option>
+              </select>
+            </Field>
+          ) : (
+            <input type="hidden" {...register("documentType")} value="production_intake" />
+          )}
+          <Field label="Estado documento" error={typedErrors.documentStatus?.message}>
+            <select {...register("documentStatus")} className={inputClass}>
+              <option value="draft">Borrador</option>
+              <option value="issued">Emitido</option>
+              <option value="approved">Aprobado</option>
+              <option value="closed">Cerrado</option>
+              <option value="cancelled">Anulado</option>
+            </select>
           </Field>
-          <Field label="Cliente" error={errors.clientName?.message}>
+          <Field label="Codigo pedido comun" error={typedErrors.groupCode?.message}>
+            <input {...register("groupCode")} className={inputClass} placeholder="Opcional, ej. LR2101" />
+          </Field>
+          <Field label="Cliente" error={typedErrors.clientName?.message}>
             <input {...register("clientName")} className={inputClass} placeholder="Persona o empresa" />
           </Field>
+          {isCommercialDocument ? (
+            <Field label="Contacto / RUT" error={typedErrors.customerContact?.message}>
+              <input {...register("customerContact")} className={inputClass} placeholder="Telefono, correo o RUT" />
+            </Field>
+          ) : null}
         </div>
       </section>
 
@@ -145,15 +208,25 @@ export function OrderForm({
             </div>
           </div>
           <div className="grid gap-4 p-4 md:grid-cols-2">
-            <Field label="Producto / modelo" error={(errors as Partial<Record<keyof OrderFormValues, { message?: string }>>).productName?.message} full>
+            <Field label="Producto / modelo" error={typedErrors.productName?.message} full>
               <input {...register("productName")} className={inputClass} placeholder="Sofa Chesterfield 200x090 cm" />
             </Field>
-            <Field label="Material" error={(errors as Partial<Record<keyof OrderFormValues, { message?: string }>>).material?.message}>
-              <input {...register("material")} className={inputClass} placeholder="Cuero natural" />
+            <Field label="Material" error={typedErrors.material?.message}>
+              <input {...register("material")} className={inputClass} placeholder={isLeatherHouse ? "Opcional" : "Cuero natural"} />
             </Field>
-            <Field label="Color" error={(errors as Partial<Record<keyof OrderFormValues, { message?: string }>>).color?.message}>
+            <Field label="Color" error={typedErrors.color?.message}>
               <input {...register("color")} className={inputClass} placeholder="Riga Whisky" />
             </Field>
+            {isCommercialDocument ? (
+              <>
+                <Field label="Cantidad" error={typedErrors.quantity?.message}>
+                  <input {...register("quantity")} type="number" min="1" className={inputClass} />
+                </Field>
+                <Field label="Precio unitario" error={typedErrors.unitPrice?.message}>
+                  <input {...register("unitPrice")} type="number" min="0" step="1" className={inputClass} />
+                </Field>
+              </>
+            ) : null}
           </div>
         </section>
       ) : (
@@ -164,12 +237,16 @@ export function OrderForm({
               <PackagePlus className="size-5 text-stone-500" />
               <div>
                 <h2 className="panel-title">Productos</h2>
-                <p className="panel-description">Cada fila genera una etiqueta y avance productivo propio.</p>
+                <p className="panel-description">
+                  {isCommercialDocument
+                    ? "Cada producto queda en el documento y genera avance productivo propio."
+                    : "Cada fila genera una etiqueta y avance productivo propio."}
+                </p>
               </div>
             </div>
             <button
               type="button"
-              onClick={() => append({ productName: "", material: "", color: "" })}
+              onClick={() => append({ productName: "", material: "", color: "", quantity: 1 })}
               className="btn btn-secondary w-fit"
             >
               <PackagePlus className="size-4" />
@@ -177,13 +254,19 @@ export function OrderForm({
             </button>
           </div>
           <div className="overflow-x-auto p-4">
-            <table className="w-full min-w-[720px] border-collapse">
+            <table className="w-full min-w-[860px] border-collapse">
               <thead>
                 <tr className="border-b border-stone-200 bg-stone-50">
                   <th className="w-14 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">N</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producto</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Material</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Color</th>
+                  {isCommercialDocument ? (
+                    <>
+                      <th className="w-28 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Cant.</th>
+                      <th className="w-36 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Precio</th>
+                    </>
+                  ) : null}
                   <th className="w-12 px-3 py-2"></th>
                 </tr>
               </thead>
@@ -193,22 +276,32 @@ export function OrderForm({
                     <td className="px-3 py-3 align-top font-mono text-sm font-semibold text-stone-500">{index + 1}</td>
                     <td className="px-3 py-3 align-top">
                       <input {...register(`products.${index}.productName`)} className={inputClass} placeholder="Sofa Chesterfield 200x090 cm" />
-                      {(errors as { products?: Array<{ productName?: { message?: string } }> }).products?.[index]?.productName?.message ? (
-                        <p className="mt-1 text-xs font-medium text-rose-600">{(errors as { products?: Array<{ productName?: { message?: string } }> }).products?.[index]?.productName?.message}</p>
+                      {typedErrors.products?.[index]?.productName?.message ? (
+                        <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.productName?.message}</p>
                       ) : null}
                     </td>
                     <td className="px-3 py-3 align-top">
-                      <input {...register(`products.${index}.material`)} className={inputClass} placeholder="Cuero natural" />
-                      {(errors as { products?: Array<{ material?: { message?: string } }> }).products?.[index]?.material?.message ? (
-                        <p className="mt-1 text-xs font-medium text-rose-600">{(errors as { products?: Array<{ material?: { message?: string } }> }).products?.[index]?.material?.message}</p>
+                      <input {...register(`products.${index}.material`)} className={inputClass} placeholder={isLeatherHouse ? "Opcional" : "Cuero natural"} />
+                      {typedErrors.products?.[index]?.material?.message ? (
+                        <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.material?.message}</p>
                       ) : null}
                     </td>
                     <td className="px-3 py-3 align-top">
                       <input {...register(`products.${index}.color`)} className={inputClass} placeholder="Riga Whisky" />
-                      {(errors as { products?: Array<{ color?: { message?: string } }> }).products?.[index]?.color?.message ? (
-                        <p className="mt-1 text-xs font-medium text-rose-600">{(errors as { products?: Array<{ color?: { message?: string } }> }).products?.[index]?.color?.message}</p>
+                      {typedErrors.products?.[index]?.color?.message ? (
+                        <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.color?.message}</p>
                       ) : null}
                     </td>
+                    {isCommercialDocument ? (
+                      <>
+                        <td className="px-3 py-3 align-top">
+                          <input {...register(`products.${index}.quantity`)} type="number" min="1" className={inputClass} />
+                        </td>
+                        <td className="px-3 py-3 align-top">
+                          <input {...register(`products.${index}.unitPrice`)} type="number" min="0" step="1" className={inputClass} />
+                        </td>
+                      </>
+                    ) : null}
                     <td className="px-3 py-3 align-top">
                       <button
                         type="button"
@@ -229,6 +322,32 @@ export function OrderForm({
         </section>
       )}
 
+      {isCommercialDocument ? (
+        <section className="panel">
+          <div className="panel-header flex items-center gap-3">
+            <DollarSign className="size-5 text-stone-500" />
+            <div>
+              <h2 className="panel-title">Valores y pagos</h2>
+              <p className="panel-description">Abonos y saldos quedan asociados al documento comercial.</p>
+            </div>
+          </div>
+          <div className="grid gap-4 p-4 md:grid-cols-4">
+            <Field label="Subtotal" error={typedErrors.subtotal?.message}>
+              <input {...register("subtotal")} type="number" min="0" step="1" className={inputClass} placeholder="0" />
+            </Field>
+            <Field label="Descuento" error={typedErrors.discount?.message}>
+              <input {...register("discount")} type="number" min="0" step="1" className={inputClass} placeholder="0" />
+            </Field>
+            <Field label="Total" error={typedErrors.total?.message}>
+              <input {...register("total")} type="number" min="0" step="1" className={inputClass} placeholder="0" />
+            </Field>
+            <Field label="Abono" error={typedErrors.paidAmount?.message}>
+              <input {...register("paidAmount")} type="number" min="0" step="1" className={inputClass} placeholder="0" />
+            </Field>
+          </div>
+        </section>
+      ) : null}
+
       <section className="panel">
         <div className="panel-header flex items-center gap-3">
           <CalendarDays className="size-5 text-stone-500" />
@@ -239,10 +358,10 @@ export function OrderForm({
         </div>
 
         <div className="grid gap-4 p-4 md:grid-cols-2">
-          <Field label="Fecha ingreso" error={errors.entryDate?.message}>
+          <Field label="Fecha ingreso" error={typedErrors.entryDate?.message}>
             <input {...register("entryDate")} type="date" className={inputClass} />
           </Field>
-          <Field label="Fecha entrega" error={errors.deliveryDate?.message}>
+          <Field label="Fecha entrega" error={typedErrors.deliveryDate?.message}>
             <input {...register("deliveryDate")} type="date" className={inputClass} />
           </Field>
           <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2">
@@ -251,9 +370,9 @@ export function OrderForm({
           </div>
           <label className="flex h-11 items-center gap-3 rounded-md border border-stone-200 bg-stone-50 px-3 text-sm font-medium">
             <input {...register("isWarranty")} type="checkbox" className="size-4 accent-stone-950" />
-            Es garantía
+            Es garantia
           </label>
-          <Field label="Observaciones" error={errors.observations?.message} full>
+          <Field label="Observaciones" error={typedErrors.observations?.message} full>
             <textarea
               {...register("observations")}
               className="textarea-control min-h-28 bg-white"
@@ -282,26 +401,19 @@ export function OrderForm({
                 className="block w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-stone-800"
               />
             </Field>
-            <p className="mt-2 text-xs text-stone-500">Máximo 10 MB. Se puede dejar vacío y adjuntar después desde el detalle de la orden.</p>
+            <p className="mt-2 text-xs text-stone-500">Maximo 10 MB. Se puede dejar vacio y adjuntar despues desde el detalle de la orden.</p>
           </div>
         </section>
       ) : null}
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-        <Link
-          href="/admin"
-          className="btn-lg btn-secondary"
-        >
+        <Link href="/admin" className="btn-lg btn-secondary">
           <ArrowLeft className="size-4" />
           Volver
         </Link>
-        <button
-          type="submit"
-          disabled={pending}
-          className="btn-lg btn-primary"
-        >
+        <button type="submit" disabled={pending} className="btn-lg btn-primary">
           <Save className="size-4" />
-          {pending ? "Guardando..." : orderId ? "Guardar cambios" : "Guardar nota"}
+          {pending ? "Guardando..." : orderId ? "Guardar cambios" : isLeatherHouse ? "Guardar ingreso" : "Guardar documento"}
         </button>
       </div>
     </form>

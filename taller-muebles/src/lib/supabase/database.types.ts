@@ -228,13 +228,18 @@ export type Database = {
       orders: {
         Row: {
           assigned_to: string | null
+          balance_amount: number | null
           client_name: string
           color: string | null
           completed_at: string | null
           condition: Database["public"]["Enums"]["order_condition"]
           created_at: string
           created_by: string | null
+          customer_contact: string | null
           delivery_date: string | null
+          discount_amount: number | null
+          document_status: string
+          document_type: string
           entry_date: string
           id: string
           group_code: string
@@ -242,22 +247,32 @@ export type Database = {
           is_warranty: boolean
           material: string | null
           observations: string | null
+          paid_amount: number | null
           priority: Database["public"]["Enums"]["priority_level"]
           product_name: string
+          quantity: number | null
           sales_note_number: string | null
           status: Database["public"]["Enums"]["order_status"]
           store_id: string
+          subtotal_amount: number | null
+          total_amount: number | null
+          unit_price: number | null
           updated_at: string
         }
         Insert: {
           assigned_to?: string | null
+          balance_amount?: number | null
           client_name: string
           color?: string | null
           completed_at?: string | null
           condition?: Database["public"]["Enums"]["order_condition"]
           created_at?: string
           created_by?: string | null
+          customer_contact?: string | null
           delivery_date?: string | null
+          discount_amount?: number | null
+          document_status?: string
+          document_type?: string
           entry_date?: string
           id?: string
           group_code?: string
@@ -265,22 +280,32 @@ export type Database = {
           is_warranty?: boolean
           material?: string | null
           observations?: string | null
+          paid_amount?: number | null
           priority?: Database["public"]["Enums"]["priority_level"]
           product_name: string
+          quantity?: number | null
           sales_note_number?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           store_id: string
+          subtotal_amount?: number | null
+          total_amount?: number | null
+          unit_price?: number | null
           updated_at?: string
         }
         Update: {
           assigned_to?: string | null
+          balance_amount?: number | null
           client_name?: string
           color?: string | null
           completed_at?: string | null
           condition?: Database["public"]["Enums"]["order_condition"]
           created_at?: string
           created_by?: string | null
+          customer_contact?: string | null
           delivery_date?: string | null
+          discount_amount?: number | null
+          document_status?: string
+          document_type?: string
           entry_date?: string
           id?: string
           group_code?: string
@@ -288,11 +313,16 @@ export type Database = {
           is_warranty?: boolean
           material?: string | null
           observations?: string | null
+          paid_amount?: number | null
           priority?: Database["public"]["Enums"]["priority_level"]
           product_name?: string
+          quantity?: number | null
           sales_note_number?: string | null
           status?: Database["public"]["Enums"]["order_status"]
           store_id?: string
+          subtotal_amount?: number | null
+          total_amount?: number | null
+          unit_price?: number | null
           updated_at?: string
         }
         Relationships: [

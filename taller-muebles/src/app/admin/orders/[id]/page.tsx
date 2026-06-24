@@ -95,10 +95,15 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             <div className="grid gap-4 p-4 md:grid-cols-2">
               <Info label="Cliente" value={order.client} />
               <Info label="Tienda" value={order.store} />
+              <Info label="Documento" value={documentTypeLabel(order.documentType)} />
+              <Info label="Estado doc." value={documentStatusLabel(order.documentStatus)} />
               <Info label="Pedido común" value={order.groupCode} />
+              {order.customerContact ? <Info label="Contacto / RUT" value={order.customerContact} /> : null}
               <Info label="Producto" value={order.product} />
               <Info label="Material" value={order.material} />
               <Info label="Color" value={order.color} />
+              {order.quantity ? <Info label="Cantidad" value={String(order.quantity)} /> : null}
+              {order.unitPrice !== undefined ? <Info label="Precio unit." value={formatCurrency(order.unitPrice)} /> : null}
               <Info label="Responsable" value={order.assignedTo} />
               <Info label="Condicion" value={order.condition} />
               <Info label="Urgencia por fecha" value={priorityLabel(order.priority)} />
@@ -190,6 +195,25 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             </div>
           </section>
 
+          {order.documentType !== "production_intake" ? (
+            <section className="rounded-lg border border-stone-200 bg-white p-4">
+              <div className="flex items-center gap-3">
+                <FileText className="size-5 text-stone-500" />
+                <div>
+                  <h2 className="text-base font-semibold">Valores</h2>
+                  <p className="text-sm text-stone-500">Resumen comercial del documento.</p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3">
+                <Info label="Subtotal" value={formatCurrency(order.subtotal)} />
+                <Info label="Descuento" value={formatCurrency(order.discount)} />
+                <Info label="Total" value={formatCurrency(order.total)} strong />
+                <Info label="Abono" value={formatCurrency(order.paidAmount)} />
+                <Info label="Saldo" value={formatCurrency(order.balance)} strong />
+              </div>
+            </section>
+          ) : null}
+
           <section className="rounded-lg border border-stone-200 bg-white p-4">
             <div className="flex items-center gap-3">
               <History className="size-5 text-stone-500" />
@@ -261,4 +285,35 @@ function auditActionLabel(action: string) {
     cancel_order: "Orden cancelada",
   };
   return labels[action] ?? action;
+}
+
+function documentTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    sales_note: "Nota de Venta",
+    quote: "Cotizacion",
+    purchase_order: "Orden de Compra",
+    warranty: "Garantia",
+    production_intake: "Ingreso produccion",
+  };
+  return labels[type] ?? type;
+}
+
+function documentStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    draft: "Borrador",
+    issued: "Emitido",
+    approved: "Aprobado",
+    closed: "Cerrado",
+    cancelled: "Anulado",
+  };
+  return labels[status] ?? status;
+}
+
+function formatCurrency(value?: number) {
+  if (value === undefined) return "$0";
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(value);
 }

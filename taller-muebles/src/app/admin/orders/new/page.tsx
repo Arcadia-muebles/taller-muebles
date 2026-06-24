@@ -1,10 +1,10 @@
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { OrderForm } from "@/components/order-form";
 import { requireSession } from "@/lib/auth";
-import type { StoreCode } from "@/lib/types";
-import { getSystemSettings } from "@/lib/repositories/settings";
-import { redirect } from "next/navigation";
 import { listOrders } from "@/lib/repositories/production";
+import { getSystemSettings } from "@/lib/repositories/settings";
+import type { StoreCode } from "@/lib/types";
 
 export default async function NewOrderPage() {
   const user = await requireSession(["admin", "manager"]);
@@ -20,14 +20,14 @@ export default async function NewOrderPage() {
     <AppShell active="admin" user={user}>
       <header className="border-b border-stone-200 pb-5">
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">
-          Nueva nota
+          Nuevo ingreso
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-950">
-          Crear orden de producción
+          Crear documento o ingreso de produccion
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-          Esta pantalla concentra los datos que antes quedaban repartidos entre
-          hojas: venta, cliente, producto, fechas, prioridad y primera asignación.
+          LR crea un documento comercial completo que alimenta produccion. LH crea
+          un ingreso simplificado para fabricar con la informacion necesaria.
         </p>
       </header>
 

@@ -1,5 +1,19 @@
 export type StoreCode = "LH" | "LR";
 
+export type CommercialDocumentType =
+  | "sales_note"
+  | "quote"
+  | "purchase_order"
+  | "warranty"
+  | "production_intake";
+
+export type CommercialDocumentStatus =
+  | "draft"
+  | "issued"
+  | "approved"
+  | "closed"
+  | "cancelled";
+
 export type OrderStatus =
   | "draft"
   | "scheduled"
@@ -41,10 +55,20 @@ export type Order = {
   code: string;
   groupCode: string;
   store: StoreCode;
+  documentType: CommercialDocumentType;
+  documentStatus: CommercialDocumentStatus;
   client: string;
+  customerContact?: string;
   product: string;
   material: string;
   color: string;
+  quantity?: number;
+  unitPrice?: number;
+  subtotal?: number;
+  discount?: number;
+  total?: number;
+  paidAmount?: number;
+  balance?: number;
   status: OrderStatus;
   condition:
     | "Sin condicion"

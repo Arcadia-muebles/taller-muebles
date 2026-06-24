@@ -62,6 +62,8 @@ export async function createWorkshopOrder(
   });
   const input = {
     store: parsed.data.store,
+    documentType: "production_intake" as const,
+    documentStatus: "issued" as const,
     salesNoteNumber,
     clientName: parsed.data.clientName || "Trabajo interno",
     productName: parsed.data.productName,
@@ -106,6 +108,8 @@ export async function createWorkshopOrder(
       internal_code: input.salesNoteNumber,
       sales_note_number: input.salesNoteNumber,
       group_code: input.groupCode,
+      document_type: input.documentType,
+      document_status: input.documentStatus,
       client_name: input.clientName,
       product_name: input.productName,
       material: input.material,

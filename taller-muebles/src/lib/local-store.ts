@@ -164,12 +164,21 @@ export async function getLocalOrder(id: string) {
 
 export async function createLocalOrder(input: {
   store: Order["store"];
+  documentType?: Order["documentType"];
+  documentStatus?: Order["documentStatus"];
   salesNoteNumber: string;
   groupCode?: string;
   clientName: string;
+  customerContact?: string;
   productName: string;
   material: string;
   color: string;
+  quantity?: number;
+  unitPrice?: number;
+  subtotal?: number;
+  discount?: number;
+  total?: number;
+  paidAmount?: number;
   entryDate: string;
   deliveryDate: string;
   priority: Order["priority"];
@@ -201,10 +210,20 @@ export async function createLocalOrder(input: {
     code: input.salesNoteNumber,
     groupCode: input.groupCode?.trim() || input.salesNoteNumber,
     store: input.store,
+    documentType: input.documentType ?? (input.store === "LH" ? "production_intake" : "sales_note"),
+    documentStatus: input.documentStatus ?? "issued",
     client: input.clientName,
+    customerContact: input.customerContact?.trim() || undefined,
     product: input.productName,
     material: input.material,
     color: input.color,
+    quantity: input.quantity,
+    unitPrice: input.unitPrice,
+    subtotal: input.subtotal,
+    discount: input.discount,
+    total: input.total,
+    paidAmount: input.paidAmount,
+    balance: input.total !== undefined ? Math.max(input.total - (input.paidAmount ?? 0), 0) : undefined,
     status: "in_production",
     condition: "Sin condicion",
     priority: input.priority,
@@ -224,12 +243,21 @@ export async function createLocalOrder(input: {
 
 export async function updateLocalOrder(id: string, input: {
   store: Order["store"];
+  documentType?: Order["documentType"];
+  documentStatus?: Order["documentStatus"];
   salesNoteNumber?: string;
   groupCode?: string;
   clientName: string;
+  customerContact?: string;
   productName: string;
   material: string;
   color: string;
+  quantity?: number;
+  unitPrice?: number;
+  subtotal?: number;
+  discount?: number;
+  total?: number;
+  paidAmount?: number;
   entryDate: string;
   deliveryDate: string;
   priority: Order["priority"];
@@ -242,12 +270,22 @@ export async function updateLocalOrder(id: string, input: {
   if (!order) return false;
 
   order.store = input.store;
+  order.documentType = input.documentType ?? order.documentType ?? (input.store === "LH" ? "production_intake" : "sales_note");
+  order.documentStatus = input.documentStatus ?? order.documentStatus ?? "issued";
   order.code = input.salesNoteNumber?.trim() || order.code;
   order.groupCode = input.groupCode?.trim() || order.code;
   order.client = input.clientName;
+  order.customerContact = input.customerContact?.trim() || undefined;
   order.product = input.productName;
   order.material = input.material;
   order.color = input.color;
+  order.quantity = input.quantity;
+  order.unitPrice = input.unitPrice;
+  order.subtotal = input.subtotal;
+  order.discount = input.discount;
+  order.total = input.total;
+  order.paidAmount = input.paidAmount;
+  order.balance = input.total !== undefined ? Math.max(input.total - (input.paidAmount ?? 0), 0) : undefined;
   order.entryDate = input.entryDate;
   order.deliveryDate = input.deliveryDate;
   order.priority = input.priority;
@@ -648,6 +686,18 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
     }
     if (!order.priority) {
       order.priority = "normal";
+      changed = true;
+    }
+    if (!order.documentType) {
+      order.documentType = order.store === "LH" ? "production_intake" : "sales_note";
+      changed = true;
+    }
+    if (!order.documentStatus) {
+      order.documentStatus = "issued";
+      changed = true;
+    }
+    if (order.total !== undefined && order.balance === undefined) {
+      order.balance = Math.max(order.total - (order.paidAmount ?? 0), 0);
       changed = true;
     }
     for (const step of order.steps) {
