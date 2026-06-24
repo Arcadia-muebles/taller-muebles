@@ -1,5 +1,6 @@
 import { FileText, Plus } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
@@ -72,32 +73,42 @@ export default async function DocumentsPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Productos</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Entrega</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Total</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Abono</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Saldo</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Produccion</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((document) => (
-                      <tr key={document.key} className="border-b border-stone-100 last:border-0 hover:bg-stone-50">
-                        <td className="px-4 py-3 align-middle">
-                          <Link href={`/admin/orders/${document.orders[0].id}`} className="font-mono text-sm font-semibold underline-offset-4 hover:underline">
+                    {rows.map((document) => {
+                      const documentHref = `/admin/documents/${encodeURIComponent(document.code)}`;
+                      return (
+                      <tr
+                        key={document.key}
+                        className="group cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50"
+                      >
+                        <ClickableCell href={documentHref}>
+                          <span className="font-mono text-sm font-semibold underline-offset-4 group-hover:underline">
                             {document.code}
-                          </Link>
-                          <p className="mt-1 text-xs text-stone-500">{documentStatusLabel(document.status)} - {document.store}</p>
-                        </td>
-                        <td className="px-4 py-3 align-middle text-sm font-medium text-stone-900">{document.client}</td>
-                        <td className="px-4 py-3 align-middle text-sm text-stone-600">{document.orders.length}</td>
-                        <td className="px-4 py-3 align-middle text-sm text-stone-600">{formatDate(document.deliveryDate)}</td>
-                        <td className="px-4 py-3 align-middle text-sm font-semibold text-stone-900">{formatCurrency(document.total)}</td>
-                        <td className="px-4 py-3 align-middle text-sm font-semibold text-stone-900">{formatCurrency(document.balance)}</td>
+                          </span>
+                          <span className="mt-1 block text-xs text-stone-500">{documentStatusLabel(document.status)} - {document.store}</span>
+                        </ClickableCell>
+                        <ClickableCell href={documentHref} className="text-sm font-medium text-stone-900">{document.client}</ClickableCell>
+                        <ClickableCell href={documentHref} className="text-sm text-stone-600">{document.orders.length}</ClickableCell>
+                        <ClickableCell href={documentHref} className="text-sm text-stone-600">{formatDate(document.deliveryDate)}</ClickableCell>
+                        <ClickableCell href={documentHref} className="text-sm font-semibold text-stone-900">{formatCurrency(document.total)}</ClickableCell>
+                        <ClickableCell href={documentHref} className="text-sm text-stone-600">{formatCurrency(document.paidAmount)}</ClickableCell>
+                        <ClickableCell href={documentHref} className="text-sm font-semibold text-stone-900">{formatCurrency(document.balance)}</ClickableCell>
                         <td className="px-4 py-3 align-middle">
-                          <StatusBadge type="order" value={document.orders[0].status} />
+                          <a href={documentHref} className="inline-block">
+                            <StatusBadge type="order" value={document.orders[0].status} />
+                          </a>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     {!rows.length ? (
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-sm text-stone-500">
+                        <td colSpan={8} className="px-4 py-8 text-center text-sm text-stone-500">
                           No hay documentos de esta categoria.
                         </td>
                       </tr>
@@ -110,6 +121,24 @@ export default async function DocumentsPage() {
         })}
       </section>
     </AppShell>
+  );
+}
+
+function ClickableCell({
+  href,
+  className,
+  children,
+}: {
+  href: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <td className="p-0 align-middle">
+      <a href={href} className={`block px-4 py-3 ${className ?? ""}`}>
+        {children}
+      </a>
+    </td>
   );
 }
 
@@ -162,7 +191,7 @@ function documentStatusLabel(status: string) {
 }
 
 function formatCurrency(value?: number) {
-  if (value === undefined) return "$0";
+  if (typeof value !== "number" || !Number.isFinite(value)) return "$0";
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
     currency: "CLP",

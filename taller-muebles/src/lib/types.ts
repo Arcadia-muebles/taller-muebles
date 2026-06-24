@@ -59,6 +59,11 @@ export type Order = {
   documentStatus: CommercialDocumentStatus;
   client: string;
   customerContact?: string;
+  customerAddress?: string;
+  customerCommune?: string;
+  customerRut?: string;
+  customerEmail?: string;
+  customerPhone?: string;
   product: string;
   material: string;
   color: string;

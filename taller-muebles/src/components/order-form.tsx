@@ -73,6 +73,10 @@ export function OrderForm({
   const store = useWatch({ control, name: "store" });
   const documentType = useWatch({ control, name: "documentType" });
   const products = useWatch({ control, name: "products" }) ?? [];
+  const quantity = useWatch({ control, name: "quantity" });
+  const unitPrice = useWatch({ control, name: "unitPrice" });
+  const discountValue = useWatch({ control, name: "discount" });
+  const paidAmountValue = useWatch({ control, name: "paidAmount" });
   const isLeatherHouse = store === "LH";
   const isCommercialDocument = store === "LR";
   const pending = actionPending || formPending;
@@ -104,6 +108,22 @@ export function OrderForm({
       setValue("documentType", "sales_note", { shouldDirty: false, shouldValidate: true });
     }
   }, [documentType, setValue, store]);
+
+  const computedSubtotal = isCommercialDocument
+    ? orderId
+      ? lineTotal(quantity, unitPrice)
+      : products.reduce((sum, product) => sum + lineTotal(product.quantity, product.unitPrice), 0)
+    : 0;
+  const computedDiscount = Number(discountValue ?? 0) || 0;
+  const computedTotal = Math.max(computedSubtotal - computedDiscount, 0);
+  const computedPaid = Number(paidAmountValue ?? 0) || 0;
+  const computedBalance = Math.max(computedTotal - computedPaid, 0);
+
+  useEffect(() => {
+    if (!isCommercialDocument) return;
+    setValue("subtotal", computedSubtotal, { shouldDirty: false, shouldValidate: true });
+    setValue("total", computedTotal, { shouldDirty: false, shouldValidate: true });
+  }, [computedSubtotal, computedTotal, isCommercialDocument, setValue]);
 
   const submit = handleSubmit((_values, event) => {
     if (!(event?.target instanceof HTMLFormElement)) return;
@@ -191,9 +211,24 @@ export function OrderForm({
             <input {...register("clientName")} className={inputClass} placeholder="Persona o empresa" />
           </Field>
           {isCommercialDocument ? (
-            <Field label="Contacto / RUT" error={typedErrors.customerContact?.message}>
-              <input {...register("customerContact")} className={inputClass} placeholder="Telefono, correo o RUT" />
-            </Field>
+            <>
+              <Field label="RUT" error={typedErrors.customerRut?.message}>
+                <input {...register("customerRut")} className={inputClass} placeholder="14.567.890-3" />
+              </Field>
+              <Field label="Telefono" error={typedErrors.customerPhone?.message}>
+                <input {...register("customerPhone")} className={inputClass} placeholder="+56 9 8712 3456" />
+              </Field>
+              <Field label="Correo" error={typedErrors.customerEmail?.message}>
+                <input {...register("customerEmail")} type="email" className={inputClass} placeholder="cliente@correo.cl" />
+              </Field>
+              <Field label="Direccion" error={typedErrors.customerAddress?.message}>
+                <input {...register("customerAddress")} className={inputClass} placeholder="Av. Providencia 1652, Depto 4B" />
+              </Field>
+              <Field label="Comuna" error={typedErrors.customerCommune?.message}>
+                <input {...register("customerCommune")} className={inputClass} placeholder="Providencia" />
+              </Field>
+              <input type="hidden" {...register("customerContact")} />
+            </>
           ) : null}
         </div>
       </section>
@@ -333,17 +368,22 @@ export function OrderForm({
           </div>
           <div className="grid gap-4 p-4 md:grid-cols-4">
             <Field label="Subtotal" error={typedErrors.subtotal?.message}>
-              <input {...register("subtotal")} type="number" min="0" step="1" className={inputClass} placeholder="0" />
+              <input {...register("subtotal")} type="number" min="0" step="1" className={inputClass} placeholder="0" readOnly />
             </Field>
             <Field label="Descuento" error={typedErrors.discount?.message}>
               <input {...register("discount")} type="number" min="0" step="1" className={inputClass} placeholder="0" />
             </Field>
             <Field label="Total" error={typedErrors.total?.message}>
-              <input {...register("total")} type="number" min="0" step="1" className={inputClass} placeholder="0" />
+              <input {...register("total")} type="number" min="0" step="1" className={inputClass} placeholder="0" readOnly />
             </Field>
             <Field label="Abono" error={typedErrors.paidAmount?.message}>
               <input {...register("paidAmount")} type="number" min="0" step="1" className={inputClass} placeholder="0" />
             </Field>
+          </div>
+          <div className="grid gap-3 border-t border-stone-200 p-4 md:grid-cols-3">
+            <PaymentMetric label="Neto documento" value={formatCurrency(computedTotal)} />
+            <PaymentMetric label="Abonado" value={formatCurrency(computedPaid)} />
+            <PaymentMetric label="Saldo pendiente" value={formatCurrency(computedBalance)} emphasis />
           </div>
         </section>
       ) : null}
@@ -438,4 +478,25 @@ function Field({
       {error ? <p className="mt-1 text-xs font-medium text-rose-600">{error}</p> : null}
     </label>
   );
+}
+
+function PaymentMetric({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {
+  return (
+    <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-3">
+      <p className="text-xs font-medium uppercase tracking-[0.12em] text-stone-500">{label}</p>
+      <p className={`mt-1 text-base font-semibold ${emphasis ? "text-rose-700" : "text-stone-950"}`}>{value}</p>
+    </div>
+  );
+}
+
+function lineTotal(quantity?: number, unitPrice?: number) {
+  return (Number(quantity ?? 1) || 1) * (Number(unitPrice ?? 0) || 0);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(value);
 }

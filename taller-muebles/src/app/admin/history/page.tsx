@@ -58,6 +58,8 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
       <div className="mt-5">
         <OrderTable
           orders={historical}
+          rowLinks
+          hideActions
           title="Historial de órdenes"
           description={`${historical.length} de ${allHistorical.length} órdenes despachadas o canceladas.`}
           emptyText="No hay órdenes históricas registradas."

@@ -13,6 +13,7 @@ type LocalData = {
   comments: OrderComment[];
   attachments: Array<Omit<OrderAttachment, "url"> & { storagePath: string }>;
   users: AppUser[];
+  deletedUserIds?: string[];
   settings?: SystemSettings;
 };
 
@@ -27,6 +28,7 @@ const emptyData: LocalData = {
   comments: [],
   attachments: [],
   users: [],
+  deletedUserIds: [],
 };
 
 const defaultLocalUsers: AppUser[] = [
@@ -142,6 +144,7 @@ async function readData(): Promise<LocalData> {
     comments: parsed.comments ?? [],
     attachments: parsed.attachments ?? [],
     users: parsed.users ?? [],
+    deletedUserIds: parsed.deletedUserIds ?? [],
     settings: parsed.settings,
   };
   const normalized = normalizeLocalData(data);
@@ -170,6 +173,11 @@ export async function createLocalOrder(input: {
   groupCode?: string;
   clientName: string;
   customerContact?: string;
+  customerAddress?: string;
+  customerCommune?: string;
+  customerRut?: string;
+  customerEmail?: string;
+  customerPhone?: string;
   productName: string;
   material: string;
   color: string;
@@ -214,6 +222,11 @@ export async function createLocalOrder(input: {
     documentStatus: input.documentStatus ?? "issued",
     client: input.clientName,
     customerContact: input.customerContact?.trim() || undefined,
+    customerAddress: input.customerAddress?.trim() || undefined,
+    customerCommune: input.customerCommune?.trim() || undefined,
+    customerRut: input.customerRut?.trim() || undefined,
+    customerEmail: input.customerEmail?.trim() || undefined,
+    customerPhone: input.customerPhone?.trim() || undefined,
     product: input.productName,
     material: input.material,
     color: input.color,
@@ -249,6 +262,11 @@ export async function updateLocalOrder(id: string, input: {
   groupCode?: string;
   clientName: string;
   customerContact?: string;
+  customerAddress?: string;
+  customerCommune?: string;
+  customerRut?: string;
+  customerEmail?: string;
+  customerPhone?: string;
   productName: string;
   material: string;
   color: string;
@@ -276,6 +294,11 @@ export async function updateLocalOrder(id: string, input: {
   order.groupCode = input.groupCode?.trim() || order.code;
   order.client = input.clientName;
   order.customerContact = input.customerContact?.trim() || undefined;
+  order.customerAddress = input.customerAddress?.trim() || undefined;
+  order.customerCommune = input.customerCommune?.trim() || undefined;
+  order.customerRut = input.customerRut?.trim() || undefined;
+  order.customerEmail = input.customerEmail?.trim() || undefined;
+  order.customerPhone = input.customerPhone?.trim() || undefined;
   order.product = input.productName;
   order.material = input.material;
   order.color = input.color;
@@ -610,11 +633,12 @@ export async function upsertLocalUser(user: Omit<AppUser, "id" | "active">) {
   await writeData(data);
 }
 
-export async function deactivateLocalUser(id: string) {
+export async function deleteLocalUser(id: string) {
   const data = await readData();
-  const user = data.users.find((item) => item.id === id);
-  if (!user) return false;
-  user.active = false;
+  const index = data.users.findIndex((item) => item.id === id);
+  if (index < 0) return false;
+  data.deletedUserIds = Array.from(new Set([...(data.deletedUserIds ?? []), id]));
+  data.users.splice(index, 1);
   await writeData(data);
   return true;
 }
@@ -625,7 +649,6 @@ export async function updateLocalUser(input: {
   role: AppUser["role"];
   area?: AreaKey;
   areas?: AreaKey[];
-  active: boolean;
 }) {
   const data = await readData();
   const user = data.users.find((item) => item.id === input.id);
@@ -634,7 +657,6 @@ export async function updateLocalUser(input: {
   user.role = input.role;
   user.areas = input.role === "operator" ? input.areas ?? parseAreas(input.area) : undefined;
   user.area = input.role === "operator" ? user.areas?.[0] : undefined;
-  user.active = input.active;
   await writeData(data);
   return true;
 }
@@ -673,6 +695,7 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
   let changed = false;
   const usersByEmail = new Set(data.users.map((user) => user.email.toLowerCase()));
   for (const user of defaultLocalUsers) {
+    if (data.deletedUserIds?.includes(user.id)) continue;
     if (!usersByEmail.has(user.email.toLowerCase())) {
       data.users.push(user);
       changed = true;

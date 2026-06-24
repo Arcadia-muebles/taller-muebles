@@ -24,6 +24,7 @@ export default async function UsersPage() {
       <RoleUserGroups
         users={users}
         steps={settings.production.steps}
+        currentUserId={session.id}
         supabaseEnabled={supabaseEnabled}
         disabled={!accountManagementEnabled}
       />

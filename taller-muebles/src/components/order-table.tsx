@@ -19,6 +19,9 @@ import { StatusBadge } from "./status-badge";
 type OrderTableProps = {
   orders: Order[];
   canEditOrders?: boolean;
+  rowLinks?: boolean;
+  hideActions?: boolean;
+  detailPathPrefix?: string;
   title?: string;
   description?: string;
   emptyText?: string;
@@ -27,6 +30,9 @@ type OrderTableProps = {
 export function OrderTable({
   orders,
   canEditOrders = false,
+  rowLinks = false,
+  hideActions = false,
+  detailPathPrefix = "/admin/orders",
   title = "Órdenes de producción",
   description,
   emptyText = "No hay órdenes que coincidan con los filtros.",
@@ -51,7 +57,8 @@ export function OrderTable({
   );
 
   const columns = useMemo<ColumnDef<Order>[]>(
-    () => [
+    () => {
+      const baseColumns: ColumnDef<Order>[] = [
       {
         accessorKey: "code",
         header: ({ column }) => (
@@ -62,9 +69,15 @@ export function OrderTable({
         ),
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-2">
-            <Link href={`/admin/orders/${row.original.id}`} className="truncate font-mono text-sm font-semibold underline-offset-4 hover:underline">
-              {row.original.code}
-            </Link>
+            {rowLinks ? (
+              <span className="truncate font-mono text-sm font-semibold underline-offset-4 group-hover:underline">
+                {row.original.code}
+              </span>
+            ) : (
+              <Link href={`${detailPathPrefix}/${row.original.id}`} className="truncate font-mono text-sm font-semibold underline-offset-4 hover:underline">
+                {row.original.code}
+              </Link>
+            )}
             {row.original.isWarranty ? <ShieldCheck className="size-4 shrink-0 text-violet-600" /> : null}
             {hasMeaningfulObservations(row.original.observations) ? (
               <MessageSquareWarning className="size-4 shrink-0 text-amber-600" aria-label="Tiene observaciones" />
@@ -178,7 +191,7 @@ export function OrderTable({
                 <MoreHorizontal className="size-4" />
               </summary>
               <div className="absolute right-0 top-10 z-20 w-44 overflow-hidden rounded-lg border border-stone-200 bg-white p-1 text-sm shadow-xl shadow-stone-950/10">
-                <Link href={`/admin/orders/${order.id}`} className="flex h-9 items-center gap-2 rounded-md px-2.5 font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
+                <Link href={`${detailPathPrefix}/${order.id}`} className="flex h-9 items-center gap-2 rounded-md px-2.5 font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
                   <Eye className="size-4 text-stone-400" />
                   Ver detalle
                 </Link>
@@ -195,8 +208,10 @@ export function OrderTable({
           );
         },
       },
-    ],
-    [canEditOrders],
+      ];
+      return hideActions ? baseColumns.filter((column) => column.id !== "actions") : baseColumns;
+    },
+    [canEditOrders, detailPathPrefix, hideActions, rowLinks],
   );
 
   // TanStack Table returns runtime helpers that React Compiler intentionally skips.
@@ -267,7 +282,7 @@ export function OrderTable({
 
       <div className="grid gap-3 p-3 xl:hidden">
         {visibleRows.map((row) => (
-          <OrderCard key={row.id} order={row.original} canEditOrders={canEditOrders} />
+          <OrderCard key={row.id} order={row.original} canEditOrders={canEditOrders} rowLinks={rowLinks} hideActions={hideActions} detailPathPrefix={detailPathPrefix} />
         ))}
         {!visibleRows.length ? (
           <div className="empty-state">{emptyText}</div>
@@ -289,11 +304,19 @@ export function OrderTable({
           </thead>
           <tbody>
             {visibleRows.map((row) => (
-              <tr key={row.id} className="border-b border-stone-100 last:border-0 hover:bg-stone-50/70">
+              <tr key={row.id} className={cn("border-b border-stone-100 last:border-0 hover:bg-stone-50/70", rowLinks && "group cursor-pointer")}>
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="min-w-0 px-3 py-3 align-middle text-sm">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
+                  rowLinks ? (
+                    <td key={cell.id} className="min-w-0 p-0 align-middle text-sm">
+                      <Link href={`${detailPathPrefix}/${row.original.id}`} className="block min-h-14 px-3 py-3">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </Link>
+                    </td>
+                  ) : (
+                    <td key={cell.id} className="min-w-0 px-3 py-3 align-middle text-sm">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  )
                 ))}
               </tr>
             ))}
@@ -320,18 +343,36 @@ export function OrderTable({
   );
 }
 
-function OrderCard({ order, canEditOrders }: { order: Order; canEditOrders: boolean }) {
+function OrderCard({
+  order,
+  canEditOrders,
+  rowLinks,
+  hideActions,
+  detailPathPrefix,
+}: {
+  order: Order;
+  canEditOrders: boolean;
+  rowLinks: boolean;
+  hideActions: boolean;
+  detailPathPrefix: string;
+}) {
   const progress = completionPercent(order);
   const canEdit = canEditOrders && !["completed", "cancelled"].includes(order.status);
 
-  return (
-    <article className="min-w-0 rounded-lg border border-stone-200 bg-stone-50 p-3">
+  const card = (
+    <article className={cn("min-w-0 rounded-lg border border-stone-200 bg-stone-50 p-3", rowLinks && "group cursor-pointer hover:bg-stone-100")}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Link href={`/admin/orders/${order.id}`} className="min-w-0 truncate font-mono text-sm font-semibold underline-offset-4 hover:underline">
-              {order.code}
-            </Link>
+            {rowLinks ? (
+              <span className="min-w-0 truncate font-mono text-sm font-semibold underline-offset-4 group-hover:underline">
+                {order.code}
+              </span>
+            ) : (
+              <Link href={`${detailPathPrefix}/${order.id}`} className="min-w-0 truncate font-mono text-sm font-semibold underline-offset-4 hover:underline">
+                {order.code}
+              </Link>
+            )}
             {order.isWarranty ? <ShieldCheck className="size-4 shrink-0 text-violet-600" /> : null}
             {hasMeaningfulObservations(order.observations) ? (
               <MessageSquareWarning className="size-4 shrink-0 text-amber-600" aria-label="Tiene observaciones" />
@@ -361,20 +402,24 @@ function OrderCard({ order, canEditOrders }: { order: Order; canEditOrders: bool
 
       {order.observations ? <p className="mt-3 line-clamp-2 text-xs leading-5 text-stone-500">{order.observations}</p> : null}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Link href={`/admin/orders/${order.id}`} className="btn btn-secondary h-9">
-          <Eye className="size-4 text-stone-400" />
-          Ver detalle
-        </Link>
-        {canEdit ? (
-          <Link href={`/admin/orders/${order.id}/edit`} className="btn btn-secondary h-9">
-            <Pencil className="size-4 text-stone-400" />
-            Editar
+      {!hideActions ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link href={`${detailPathPrefix}/${order.id}`} className="btn btn-secondary h-9">
+            <Eye className="size-4 text-stone-400" />
+            Ver detalle
           </Link>
-        ) : null}
-      </div>
+          {canEdit ? (
+            <Link href={`/admin/orders/${order.id}/edit`} className="btn btn-secondary h-9">
+              <Pencil className="size-4 text-stone-400" />
+              Editar
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
+
+  return rowLinks ? <Link href={`${detailPathPrefix}/${order.id}`} className="block">{card}</Link> : card;
 }
 
 function Info({ label, value }: { label: string; value: string }) {

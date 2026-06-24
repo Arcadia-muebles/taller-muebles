@@ -99,6 +99,11 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               <Info label="Estado doc." value={documentStatusLabel(order.documentStatus)} />
               <Info label="Pedido común" value={order.groupCode} />
               {order.customerContact ? <Info label="Contacto / RUT" value={order.customerContact} /> : null}
+              {order.customerRut ? <Info label="RUT" value={order.customerRut} /> : null}
+              {order.customerPhone ? <Info label="Telefono" value={order.customerPhone} /> : null}
+              {order.customerEmail ? <Info label="Correo" value={order.customerEmail} /> : null}
+              {order.customerAddress ? <Info label="Direccion" value={order.customerAddress} /> : null}
+              {order.customerCommune ? <Info label="Comuna" value={order.customerCommune} /> : null}
               <Info label="Producto" value={order.product} />
               <Info label="Material" value={order.material} />
               <Info label="Color" value={order.color} />
@@ -310,7 +315,7 @@ function documentStatusLabel(status: string) {
 }
 
 function formatCurrency(value?: number) {
-  if (value === undefined) return "$0";
+  if (typeof value !== "number" || !Number.isFinite(value)) return "$0";
   return new Intl.NumberFormat("es-CL", {
     style: "currency",
     currency: "CLP",

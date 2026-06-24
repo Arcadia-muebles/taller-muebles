@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { deactivateLocalUser, updateLocalUser, upsertLocalUser } from "@/lib/local-store";
+import { deleteLocalUser, updateLocalUser, upsertLocalUser } from "@/lib/local-store";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const userSchema = z.object({
@@ -76,16 +76,28 @@ export async function createUser(formData: FormData): Promise<UserActionResult> 
 }
 
 export async function removeUser(formData: FormData) {
-  await requireSession(["admin"]);
+  const session = await requireSession(["admin"]);
   const id = formData.get("userId")?.toString();
   if (!id) return;
 
   if (!hasSupabaseConfig()) {
-    await deactivateLocalUser(id);
+    if (id === session.id) return;
+    await deleteLocalUser(id);
   } else {
     if (!hasSupabaseAdminConfig()) return;
     const admin = getSupabaseAdmin();
-    await admin.from("profiles").update({ active: false }).eq("id", id);
+    const { data: profile, error: profileError } = await admin
+      .from("profiles")
+      .select("id, user_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (profileError || !profile || profile.id === session.id) return;
+
+    const { error: deleteError } = await admin.auth.admin.deleteUser(profile.user_id);
+    if (deleteError) {
+      console.error("Auth user deletion failed:", deleteError.message);
+      return;
+    }
   }
   revalidatePath("/admin/users");
 }
@@ -95,7 +107,6 @@ const updateUserSchema = z.object({
   name: z.string().trim().min(2),
   role: z.enum(["admin", "manager", "operator", "viewer"]),
   areas: z.array(z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/)).optional(),
-  active: z.enum(["true", "false"]).transform((value) => value === "true"),
 });
 
 export async function updateUser(formData: FormData): Promise<UserActionResult> {
@@ -105,7 +116,6 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
     name: formData.get("name"),
     role: formData.get("role"),
     areas: formData.getAll("areas").map(String).filter(Boolean),
-    active: formData.get("active") ?? "false",
   });
 
   if (!parsed.success) {
@@ -120,7 +130,6 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
         role: parsed.data.role,
         area: parsed.data.role === "operator" ? parsed.data.areas?.[0] : undefined,
         areas: parsed.data.role === "operator" ? parsed.data.areas : undefined,
-        active: parsed.data.active,
       });
       if (!updated) return { ok: false, message: "No se encontró el usuario." };
     } else {
@@ -133,7 +142,6 @@ export async function updateUser(formData: FormData): Promise<UserActionResult> 
           full_name: parsed.data.name,
           role: parsed.data.role,
           area: parsed.data.role === "operator" ? (parsed.data.areas ?? []).join(",") || null : null,
-          active: parsed.data.active,
         })
         .eq("id", parsed.data.id);
       if (error) return { ok: false, message: error.message };

@@ -16,11 +16,13 @@ const inputClass = "control disabled:cursor-not-allowed disabled:opacity-50";
 export function RoleUserGroups({
   users,
   steps,
+  currentUserId,
   supabaseEnabled,
   disabled,
 }: {
   users: AppUser[];
   steps: SystemSettings["production"]["steps"];
+  currentUserId: string;
   supabaseEnabled: boolean;
   disabled: boolean;
 }) {
@@ -50,9 +52,7 @@ export function RoleUserGroups({
                 </span>
                 <span>
                   <span className="block text-base font-semibold text-stone-950">{roleLabel(role)}</span>
-                  <span className="mt-0.5 block text-sm text-stone-500">
-                    {roleUsers.filter((user) => user.active).length} activos · {roleUsers.length} registrados
-                  </span>
+                  <span className="mt-0.5 block text-sm text-stone-500">{roleUsers.length} registrados</span>
                 </span>
               </span>
               <ChevronDown className={cn("size-5 shrink-0 text-stone-500 transition", open ? "rotate-180" : "")} />
@@ -71,17 +71,14 @@ export function RoleUserGroups({
                     <article key={user.id} className="border-t border-stone-100">
                       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`grid size-10 place-items-center rounded-lg ${user.active ? "bg-stone-100" : "bg-stone-50 opacity-50"}`}>
+                          <div className="grid size-10 place-items-center rounded-lg bg-stone-100">
                             <UserRound className="size-5 text-stone-600" />
                           </div>
                           <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold">{user.name}</p>
-                              {!user.active ? <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500">Inactivo</span> : null}
-                            </div>
+                            <p className="font-semibold">{user.name}</p>
                             <p className="text-sm text-stone-500">
                               {user.email.includes("@") ? user.email : "Cuenta Supabase"}
-                              {userAreas(user).length ? ` · ${areaLabels(userAreas(user), enabledSteps)}` : ""}
+                              {userAreas(user).length ? ` - ${areaLabels(userAreas(user), enabledSteps)}` : ""}
                             </p>
                           </div>
                         </div>
@@ -90,7 +87,7 @@ export function RoleUserGroups({
                             <ShieldCheck className="size-3.5" />
                             {roleLabel(user.role)}
                           </span>
-                          {user.active ? <DeactivateUserButton userId={user.id} disabled={disabled} /> : null}
+                          {user.id !== currentUserId ? <DeactivateUserButton userId={user.id} disabled={disabled} /> : null}
                         </div>
                       </div>
                       <UserEditForm user={user} steps={steps} disabled={disabled} />
@@ -146,7 +143,7 @@ function RoleCreateForm({
       )}
       {supabaseEnabled ? (
         <Field label="Clave temporal">
-          <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" className={inputClass} />
+          <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Minimo 8 caracteres" className={inputClass} />
         </Field>
       ) : null}
       <div className="flex flex-col gap-2">

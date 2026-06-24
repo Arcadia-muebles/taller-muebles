@@ -26,7 +26,7 @@ const optionalQuantity = z.preprocess(
   z.coerce.number().min(1, "La cantidad debe ser al menos 1.").optional(),
 );
 
-export const orderSchema = z.object({
+const baseOrderSchema = z.object({
   store: z.enum(["LH", "LR"]),
   documentType: documentTypeSchema,
   documentStatus: documentStatusSchema,
@@ -34,6 +34,11 @@ export const orderSchema = z.object({
   groupCode: z.string().trim().max(40, "El codigo de pedido es demasiado largo.").optional(),
   clientName: z.string().trim().min(2, "Ingresa el nombre del cliente."),
   customerContact: z.string().trim().max(120, "El contacto es demasiado largo.").optional(),
+  customerAddress: z.string().trim().max(160, "La direccion es demasiado larga.").optional(),
+  customerCommune: z.string().trim().max(80, "La comuna es demasiado larga.").optional(),
+  customerRut: z.string().trim().max(20, "El RUT es demasiado largo.").optional(),
+  customerEmail: z.string().trim().email("Ingresa un correo valido.").or(z.literal("")).optional(),
+  customerPhone: z.string().trim().max(40, "El telefono es demasiado largo.").optional(),
   productName: z.string().trim().min(3, "Ingresa producto o modelo."),
   material: z.string().trim().optional(),
   color: z.string().trim().optional(),
@@ -48,7 +53,9 @@ export const orderSchema = z.object({
   assignedTo: z.string().trim().optional(),
   observations: z.string().optional(),
   isWarranty: z.boolean(),
-}).superRefine((value, context) => {
+});
+
+function refineOrder(value: z.infer<typeof baseOrderSchema>, context: z.RefinementCtx) {
   if (value.store === "LH") {
     if (!value.color?.trim()) {
       context.addIssue({ code: "custom", path: ["color"], message: "Ingresa color." });
@@ -70,7 +77,9 @@ export const orderSchema = z.object({
   ) {
     context.addIssue({ code: "custom", path: ["paidAmount"], message: "El abono no puede superar el total." });
   }
-});
+}
+
+export const orderSchema = baseOrderSchema.superRefine(refineOrder);
 
 export type OrderFormValues = z.infer<typeof orderSchema>;
 
@@ -86,9 +95,17 @@ export const orderProductsSchema = z.array(orderProductSchema).min(1, "Agrega al
 
 export type OrderProductFormValues = z.infer<typeof orderProductSchema>;
 
-export const newOrderSchema = orderSchema
+export const newOrderSchema = baseOrderSchema
   .omit({ productName: true, material: true, color: true, quantity: true, unitPrice: true })
-  .extend({ products: orderProductsSchema });
+  .extend({ products: orderProductsSchema })
+  .superRefine((value, context) => refineOrder({
+    ...value,
+    productName: value.products[0]?.productName ?? "",
+    material: value.products[0]?.material,
+    color: value.products[0]?.color,
+    quantity: value.products[0]?.quantity,
+    unitPrice: value.products[0]?.unitPrice,
+  }, context));
 
 export type NewOrderFormValues = z.infer<typeof newOrderSchema>;
 

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { ProductionBoard } from "@/components/production-board";
+import { ProductionSheets } from "@/components/production-sheets";
 import { StatCard } from "@/components/stat-card";
 import { requireSession } from "@/lib/auth";
 import { activeOrders, blockedOrders, overdueOrders } from "@/lib/metrics";
@@ -53,7 +53,7 @@ export default async function AdminPage() {
         <StatCard label="Despacho" value={String(dispatching.length)} helper="Listas para salida." icon={Truck} tone={dispatching.length ? "emerald" : "neutral"} />
       </section>
 
-      <ProductionBoard orders={active} allOrders={orders} steps={settings.production.steps} canMove={canEditOrders} />
+      <ProductionSheets orders={orders} steps={settings.production.steps} canEditOrders={canEditOrders} />
     </AppShell>
   );
 }
