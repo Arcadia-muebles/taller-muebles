@@ -134,28 +134,6 @@ export function OrderForm({
 
   return (
     <form action={formAction} onSubmit={submit} className="space-y-5">
-      {state.message ? (
-        <div
-          className={
-            state.status === "success"
-              ? "flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-950"
-              : "flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-950"
-          }
-        >
-          {state.status === "success" ? (
-            <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
-          ) : (
-            <XCircle className="mt-0.5 size-5 shrink-0" />
-          )}
-          <div>
-            <p className="text-sm font-semibold">
-              {state.status === "success" ? "Orden procesada" : "No se pudo guardar"}
-            </p>
-            <p className="mt-1 text-sm">{state.message}</p>
-          </div>
-        </div>
-      ) : null}
-
       <section className="panel">
         <div className="panel-header flex items-center gap-3">
           {isLeatherHouse ? <Factory className="size-5 text-stone-500" /> : <FileText className="size-5 text-stone-500" />}
@@ -456,6 +434,28 @@ export function OrderForm({
           {pending ? "Guardando..." : orderId ? "Guardar cambios" : isLeatherHouse ? "Guardar ingreso" : "Guardar documento"}
         </button>
       </div>
+      {state.message ? (
+        <div
+          aria-live="polite"
+          className={
+            state.status === "success"
+              ? "flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-950"
+              : "flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-950"
+          }
+        >
+          {state.status === "success" ? (
+            <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+          ) : (
+            <XCircle className="mt-0.5 size-5 shrink-0" />
+          )}
+          <div>
+            <p className="text-sm font-semibold">
+              {state.status === "success" ? "Orden procesada" : "No se pudo guardar"}
+            </p>
+            <p className="mt-1 text-sm">{state.message}</p>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }

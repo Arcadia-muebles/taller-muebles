@@ -63,7 +63,7 @@ export async function createOrder(
     paidAmount: formData.get("paidAmount"),
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
-    assignedTo: formData.get("assignedTo"),
+    assignedTo: formData.get("assignedTo")?.toString() || undefined,
     observations: formData.get("observations")?.toString() ?? "",
     isWarranty: parseBooleanFormValue(formData.get("isWarranty")) || normalizedDocumentType(formData) === "warranty",
   });
@@ -111,8 +111,8 @@ export async function createOrder(
     return {
       status: "success",
       message: attachmentResult.message
-        ? `Orden creada en almacenamiento local. ${attachmentResult.message}`
-        : "Orden creada en almacenamiento local.",
+        ? `Orden creada correctamente. ${attachmentResult.message}`
+        : "Orden creada correctamente.",
       orderId: order.id,
     };
   }
@@ -271,7 +271,7 @@ export async function updateOrder(
     paidAmount: formData.get("paidAmount"),
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
-    assignedTo: formData.get("assignedTo"),
+    assignedTo: formData.get("assignedTo")?.toString() || undefined,
     observations: formData.get("observations")?.toString() ?? "",
     isWarranty: parseBooleanFormValue(formData.get("isWarranty")) || normalizedDocumentType(formData) === "warranty",
   });

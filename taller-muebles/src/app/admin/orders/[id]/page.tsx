@@ -120,7 +120,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               <Clock className="size-5 text-stone-500" />
               <div>
                 <h2 className="text-base font-semibold">Etapas productivas</h2>
-                <p className="text-sm text-stone-500">Cada cambio quedará auditado al conectar Supabase.</p>
+                <p className="text-sm text-stone-500">Cada cambio queda registrado en la actividad de la orden.</p>
               </div>
             </div>
             <div className="p-4">

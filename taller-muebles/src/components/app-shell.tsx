@@ -34,7 +34,7 @@ export function AppShell({ active, user, children }: AppShellProps) {
         </div>
         {localMode ? (
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-            Modo local de desarrollo
+            Modo local
           </div>
         ) : null}
 

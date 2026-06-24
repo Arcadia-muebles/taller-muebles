@@ -57,7 +57,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
 
       {!supabaseEnabled ? (
         <div className="mt-4 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-5 text-stone-600">
-          <p className="font-semibold text-stone-800">Cuentas demo</p>
+          <p className="font-semibold text-stone-800">Acceso local</p>
           <p>Administrador: admin@taller.local</p>
           <p>Supervisor: supervisor@taller.local</p>
           <p>Taller: taller@taller.local</p>
@@ -88,7 +88,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
       <p className="mt-4 text-xs leading-5 text-stone-500">
         {supabaseEnabled
           ? "Acceso protegido. Tu perfil determina automáticamente los módulos y acciones disponibles."
-          : "Modo local de desarrollo: usa una cuenta demo o una cuenta creada por un administrador. La clave puede ser cualquier texto."}
+          : "Modo local: usa una cuenta creada por un administrador. La clave puede ser cualquier texto."}
       </p>
     </form>
   );

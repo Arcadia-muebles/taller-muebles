@@ -67,8 +67,8 @@ export function ProductionSheets({ orders, canEditOrders, steps }: ProductionShe
           title={sheet === "active" ? "Hoja 2: Notas activas" : "Hoja 1: Todas las notas de venta"}
           description={
             sheet === "active"
-              ? `${active.length} notas pendientes, en produccion, atrasadas o sin iniciar. Las terminadas desaparecen de esta hoja.`
-              : `${orders.length} notas antiguas y nuevas, terminadas y pendientes.`
+              ? "Notas pendientes, en produccion, atrasadas o sin iniciar. Las terminadas desaparecen de esta hoja."
+              : "Historial completo de notas antiguas y nuevas, terminadas y pendientes."
           }
           emptyText={
             sheet === "active"
