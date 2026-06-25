@@ -40,7 +40,7 @@ type Feedback = {
 };
 
 export function ProductionBoard({ orders, allOrders = orders, steps, canMove }: ProductionBoardProps) {
-  const enabledSteps = steps.filter((step) => step.enabled);
+  const enabledSteps = useMemo(() => steps.filter((step) => step.enabled), [steps]);
   const [selectedId, setSelectedId] = useState<string | null>(orders[0]?.id ?? null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverStep, setHoverStep] = useState<AreaKey | null>(null);
@@ -53,10 +53,11 @@ export function ProductionBoard({ orders, allOrders = orders, steps, canMove }: 
   const boardOrders = useMemo(
     () =>
       orders.map((order) => {
+        const configuredOrder = orderWithConfiguredSteps(order, enabledSteps);
         const override = stageOverrides[order.id];
-        return override ? orderWithStage(order, override) : order;
+        return override ? orderWithStage(configuredOrder, override) : configuredOrder;
       }),
-    [orders, stageOverrides],
+    [enabledSteps, orders, stageOverrides],
   );
   const groupOptions = useMemo(
     () => Array.from(new Set(boardOrders.map((order) => order.groupCode).filter(Boolean))).sort(),
@@ -485,5 +486,43 @@ function orderWithStage(order: Order, stepKey: AreaKey): Order {
       if (index === targetIndex) return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
       return { ...step, status: "pending" };
     }),
+  };
+}
+
+function orderWithConfiguredSteps(
+  order: Order,
+  enabledSteps: SystemSettings["production"]["steps"],
+): Order {
+  if (!enabledSteps.length) return order;
+
+  const existingByKey = new Map(order.steps.map((step) => [step.key, step]));
+  const configuredKeys = new Set(enabledSteps.map((step) => step.key));
+  const current = currentStep(order);
+  const currentConfiguredIndex = current ? enabledSteps.findIndex((step) => step.key === current.key) : -1;
+  const completed = order.status === "completed" || order.steps.every((step) => step.status === "done");
+
+  const configuredSteps: ProductionStep[] = enabledSteps.map((stepConfig, index) => {
+    const existing = existingByKey.get(stepConfig.key);
+    if (existing) {
+      return {
+        ...existing,
+        label: existing.label || stepConfig.label,
+      };
+    }
+
+    return {
+      key: stepConfig.key,
+      label: stepConfig.label,
+      owner: stepConfig.label,
+      status: completed || (currentConfiguredIndex >= 0 && index < currentConfiguredIndex) ? "done" : "pending",
+    };
+  });
+
+  return {
+    ...order,
+    steps: [
+      ...configuredSteps,
+      ...order.steps.filter((step) => !configuredKeys.has(step.key)),
+    ],
   };
 }

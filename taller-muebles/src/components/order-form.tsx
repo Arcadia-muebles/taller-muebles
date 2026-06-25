@@ -51,7 +51,7 @@ export function OrderForm({
     control,
     getValues,
     setValue,
-    formState: { errors },
+    formState: { errors, submitCount },
   } = useForm<FormValues>({
     resolver: zodResolver(orderId ? orderSchema : newOrderSchema) as Resolver<FormValues>,
     defaultValues: initialValues ?? {
@@ -80,6 +80,7 @@ export function OrderForm({
   const isLeatherHouse = store === "LH";
   const isCommercialDocument = store === "LR";
   const pending = actionPending || formPending;
+  const showValidationSummary = submitCount > 0 && Object.keys(errors).length > 0;
   const typedErrors = errors as FieldErrors & {
     products?: Array<{
       productName?: { message?: string };
@@ -131,6 +132,10 @@ export function OrderForm({
     if (!orderId) formData.set("productItems", JSON.stringify(products));
     startTransition(() => formAction(formData));
   });
+
+  if (!orderId && state.status === "success") {
+    return <OrderSuccessScreen message={state.message} orderId={state.orderId} />;
+  }
 
   return (
     <form action={formAction} onSubmit={submit} className="space-y-5">
@@ -309,9 +314,15 @@ export function OrderForm({
                       <>
                         <td className="px-3 py-3 align-top">
                           <input {...register(`products.${index}.quantity`)} type="number" min="1" className={inputClass} />
+                          {typedErrors.products?.[index]?.quantity?.message ? (
+                            <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.quantity?.message}</p>
+                          ) : null}
                         </td>
                         <td className="px-3 py-3 align-top">
                           <input {...register(`products.${index}.unitPrice`)} type="number" min="0" step="1" className={inputClass} />
+                          {typedErrors.products?.[index]?.unitPrice?.message ? (
+                            <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.unitPrice?.message}</p>
+                          ) : null}
                         </td>
                       </>
                     ) : null}
@@ -434,6 +445,12 @@ export function OrderForm({
           {pending ? "Guardando..." : orderId ? "Guardar cambios" : isLeatherHouse ? "Guardar ingreso" : "Guardar documento"}
         </button>
       </div>
+      {showValidationSummary ? (
+        <div aria-live="polite" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950">
+          <p className="text-sm font-semibold">Faltan datos obligatorios</p>
+          <p className="mt-1 text-sm">Completa los campos marcados arriba para poder guardar.</p>
+        </div>
+      ) : null}
       {state.message ? (
         <div
           aria-live="polite"
@@ -457,6 +474,41 @@ export function OrderForm({
         </div>
       ) : null}
     </form>
+  );
+}
+
+function OrderSuccessScreen({ message, orderId }: { message: string; orderId?: string }) {
+  return (
+    <section className="panel overflow-hidden">
+      <div className="border-b border-emerald-200 bg-emerald-50 px-5 py-6">
+        <div className="flex items-start gap-4">
+          <div className="grid size-11 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800">
+            <CheckCircle2 className="size-6" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Orden emitida</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-stone-950">La orden fue emitida correctamente</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">{message}</p>
+          </div>
+        </div>
+      </div>
+      <div className="grid gap-3 p-5 sm:grid-cols-3">
+        {orderId ? (
+          <Link href={`/admin/orders/${orderId}`} className="btn-lg btn-primary sm:col-span-1">
+            <FileText className="size-4" />
+            Ver orden
+          </Link>
+        ) : null}
+        <button type="button" onClick={() => window.location.assign("/admin/orders/new")} className="btn-lg btn-secondary">
+          <PackagePlus className="size-4" />
+          Nueva orden
+        </button>
+        <Link href="/admin" className="btn-lg btn-secondary">
+          <ArrowLeft className="size-4" />
+          Volver al panel
+        </Link>
+      </div>
+    </section>
   );
 }
 

@@ -451,12 +451,11 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
   const parsed = moveOrderStageSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Movimiento inválido." };
 
-  const order = (await listOrders()).find((item) => item.id === parsed.data.orderId);
+  let order = (await listOrders()).find((item) => item.id === parsed.data.orderId);
   if (!order) return { ok: false, message: "No se encontró la orden." };
-  const targetIndex = order.steps.findIndex((step) => step.key === parsed.data.stepKey);
-  if (targetIndex < 0) return { ok: false, message: "La etapa destino no existe en esta orden." };
-
   if (!hasSupabaseConfig()) {
+    const targetIndex = order.steps.findIndex((step) => step.key === parsed.data.stepKey);
+    if (targetIndex < 0) return { ok: false, message: "La etapa destino no existe en esta orden." };
     const moved = await moveLocalOrderToStep({
       orderId: parsed.data.orderId,
       stepKey: parsed.data.stepKey,
@@ -467,6 +466,20 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
     if (!profileId) return { ok: false, message: "No se pudo identificar tu perfil." };
+    const operatorByArea = operatorMapByArea(await listUsers());
+    try {
+      order = await ensureSupabaseConfiguredOrderSteps({
+        supabase,
+        order,
+        settings,
+        profileId,
+        operatorByArea,
+      });
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : "No se pudieron preparar las etapas de la orden." };
+    }
+    const targetIndex = order.steps.findIndex((step) => step.key === parsed.data.stepKey);
+    if (targetIndex < 0) return { ok: false, message: "La etapa destino no existe en esta orden." };
     const now = new Date().toISOString();
 
     for (const [index, step] of order.steps.entries()) {
@@ -638,6 +651,88 @@ async function saveInitialAttachment({
   } catch {
     return { message: "La orden quedo creada, pero no fue posible subir el adjunto." };
   }
+}
+
+async function ensureSupabaseConfiguredOrderSteps({
+  supabase,
+  order,
+  settings,
+  profileId,
+  operatorByArea,
+}: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  order: Awaited<ReturnType<typeof listOrders>>[number];
+  settings: Awaited<ReturnType<typeof getSystemSettings>>;
+  profileId: string;
+  operatorByArea: Map<string, string>;
+}) {
+  const enabledSteps = settings.production.steps.filter((step) => step.enabled);
+  if (!enabledSteps.length) return order;
+
+  const existingByKey = new Map(order.steps.map((step) => [step.key, step]));
+  const existingKeys = new Set(order.steps.map((step) => step.key));
+  const current = currentStepForStageNormalization(order);
+  const currentConfiguredIndex = current ? enabledSteps.findIndex((step) => step.key === current.key) : -1;
+  const completed = order.status === "completed" || order.steps.every((step) => step.status === "done");
+  const now = new Date().toISOString();
+
+  const normalizedSteps = enabledSteps.map((stepConfig, index) => {
+    const existing = existingByKey.get(stepConfig.key);
+    if (existing) {
+      return {
+        ...existing,
+        label: existing.label || stepConfig.label,
+      };
+    }
+
+    const inferredDone = completed || (currentConfiguredIndex >= 0 && index < currentConfiguredIndex);
+    return {
+      key: stepConfig.key,
+      label: stepConfig.label,
+      owner: "Sin asignar",
+      status: inferredDone ? "done" as const : "pending" as const,
+      completedAt: inferredDone ? now : undefined,
+    };
+  });
+
+  const missingSteps = normalizedSteps.filter((step) => !existingKeys.has(step.key));
+  if (missingSteps.length) {
+    const { error } = await supabase.from("production_steps").upsert(
+      missingSteps.map((step) => {
+        const sortOrder = enabledSteps.findIndex((item) => item.key === step.key) + 1;
+        return {
+          order_id: order.id,
+          step: step.key,
+          step_label: step.label,
+          sort_order: sortOrder,
+          status: step.status,
+          assigned_to: operatorByArea.get(step.key) ?? null,
+          started_at: step.status === "done" ? step.completedAt ?? now : null,
+          completed_at: step.status === "done" ? step.completedAt ?? now : null,
+          updated_by: profileId,
+        };
+      }),
+      { onConflict: "order_id,step" },
+    );
+    if (error) throw new Error(error.message);
+  }
+
+  const configuredKeys = new Set(enabledSteps.map((step) => step.key));
+  return {
+    ...order,
+    steps: [
+      ...normalizedSteps,
+      ...order.steps.filter((step) => !configuredKeys.has(step.key)),
+    ],
+  };
+}
+
+function currentStepForStageNormalization(order: Awaited<ReturnType<typeof listOrders>>[number]) {
+  return (
+    order.steps.find((step) => step.status === "active") ??
+    order.steps.find((step) => step.status === "blocked") ??
+    order.steps.find((step) => step.status === "pending")
+  );
 }
 
 async function validateOrderRules(

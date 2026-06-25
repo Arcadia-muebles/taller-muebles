@@ -723,6 +723,9 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
       order.balance = Math.max(order.total - (order.paidAmount ?? 0), 0);
       changed = true;
     }
+    if (ensureConfiguredOrderSteps(order, data, data.settings?.production.steps ?? defaultSystemSettings.production.steps)) {
+      changed = true;
+    }
     for (const step of order.steps) {
       if (step.owner === step.label || step.owner === stepDefinitions.find((item) => item.key === step.key)?.ownerFallback) {
         const nextOwner = pickLocalStepOwner(data, step.key, step.owner);
@@ -742,6 +745,60 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
   }
 
   return { data, changed };
+}
+
+function ensureConfiguredOrderSteps(
+  order: Order,
+  data: LocalData,
+  configuredSteps: SystemSettings["production"]["steps"],
+) {
+  const enabledSteps = configuredSteps.filter((step) => step.enabled);
+  if (!enabledSteps.length) return false;
+
+  const existingByKey = new Map(order.steps.map((step) => [step.key, step]));
+  const configuredKeys = new Set(enabledSteps.map((step) => step.key));
+  const existingCurrent = currentStepForNormalization(order);
+  const currentConfiguredIndex = existingCurrent
+    ? enabledSteps.findIndex((step) => step.key === existingCurrent.key)
+    : -1;
+  const completed = order.status === "completed" || order.steps.every((step) => step.status === "done");
+
+  const normalizedSteps: ProductionStep[] = enabledSteps.map((stepConfig, index) => {
+    const existing = existingByKey.get(stepConfig.key);
+    if (existing) {
+      return {
+        ...existing,
+        label: existing.label || stepConfig.label,
+        owner: existing.owner || pickLocalStepOwner(data, stepConfig.key, stepConfig.label),
+      };
+    }
+
+    const inferredDone = completed || (currentConfiguredIndex >= 0 && index < currentConfiguredIndex);
+    return {
+      key: stepConfig.key,
+      label: stepConfig.label,
+      owner: pickLocalStepOwner(data, stepConfig.key, stepConfig.label),
+      status: inferredDone ? "done" : "pending",
+      completedAt: inferredDone ? nowIso() : undefined,
+    };
+  });
+
+  const extraSteps = order.steps.filter((step) => !configuredKeys.has(step.key));
+  const nextSteps = [...normalizedSteps, ...extraSteps];
+  const changed =
+    nextSteps.length !== order.steps.length ||
+    nextSteps.some((step, index) => order.steps[index]?.key !== step.key || order.steps[index]?.label !== step.label);
+
+  if (changed) order.steps = nextSteps;
+  return changed;
+}
+
+function currentStepForNormalization(order: Order) {
+  return (
+    order.steps.find((step) => step.status === "active") ??
+    order.steps.find((step) => step.status === "blocked") ??
+    order.steps.find((step) => step.status === "pending")
+  );
 }
 
 export async function nextLocalOrderCode(store: Order["store"]) {
