@@ -17,6 +17,7 @@ import type {
 } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
 import { getLocalOrder, listLocalAuditLogs, listLocalOrderAttachments, listLocalOrderComments, listLocalOrders, listLocalStockItems, listLocalStockMovements } from "@/lib/local-store";
+import { shortOrderCode } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
@@ -271,11 +272,13 @@ function mapOrderRecord(record: OrderRecord): Order {
   const steps = (record.production_steps ?? [])
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(mapStepRecord);
+  const code = shortOrderCode(record.internal_code);
+  const groupCode = shortOrderCode(record.group_code ?? record.internal_code);
 
   return {
     id: record.id,
-    code: record.internal_code,
-    groupCode: record.group_code ?? record.internal_code,
+    code,
+    groupCode,
     store: (record.stores?.code ?? "LH") as StoreCode,
     documentType: (record.document_type ?? ((record.stores?.code ?? "LH") === "LH" ? "production_intake" : "sales_note")) as CommercialDocumentType,
     documentStatus: (record.document_status ?? "issued") as CommercialDocumentStatus,

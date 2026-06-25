@@ -227,7 +227,7 @@ export function OrderTable({
         </div>
       </div>
 
-      <div className="grid gap-3 p-3 xl:hidden">
+      <div className="grid gap-3 p-3 lg:hidden">
         {visibleRows.map((row) => (
           <OrderCard key={row.id} order={row.original} canEditOrders={canEditOrders} rowLinks={rowLinks} hideActions={hideActions} detailPathPrefix={detailPathPrefix} />
         ))}
@@ -236,13 +236,13 @@ export function OrderTable({
         ) : null}
       </div>
 
-      <div className="hidden min-w-0 overflow-x-auto bg-stone-50/70 px-2 pb-2 xl:block">
-        <table className="w-full min-w-[1180px] border-separate border-spacing-y-2">
+      <div className="hidden min-w-0 overflow-x-auto bg-stone-50/70 px-2 pb-2 lg:block">
+        <table className="w-full min-w-[1040px] border-separate border-spacing-y-1.5">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className={cn("whitespace-nowrap px-3 pt-3 pb-1 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500", columnClass(header.column.id))}>
+                  <th key={header.id} className={cn("whitespace-nowrap px-2 pt-3 pb-1 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500", columnClass(header.column.id))}>
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))}
@@ -258,7 +258,7 @@ export function OrderTable({
                 <tr key={row.id} className={cn(rowLinks && "group cursor-pointer")}>
                   {row.getVisibleCells().map((cell, index) => {
                     const cellClass = cn(
-                      "border-y border-stone-200 px-3 py-3 align-middle text-sm shadow-sm transition",
+                      "border-y border-stone-200 px-2 py-2.5 align-middle text-sm shadow-sm transition",
                       done ? "border-emerald-100 bg-emerald-50/70 group-hover:bg-emerald-50" : "bg-white group-hover:bg-stone-50",
                       index === 0 && "rounded-l-lg border-l",
                       index === row.getVisibleCells().length - 1 && "rounded-r-lg border-r",
@@ -409,7 +409,7 @@ function ProgressMeter({ order }: { order: Order }) {
   return (
     <div className="min-w-0">
       <p className="mb-1 text-xs font-semibold text-stone-900">{value}%</p>
-      <div className="h-2.5 w-24 overflow-hidden rounded-full bg-stone-200">
+      <div className="h-2.5 w-16 overflow-hidden rounded-full bg-stone-200">
         <div className={cn("h-full rounded-full", toneBar(presentation.tone))} style={{ width: `${value}%` }} />
       </div>
     </div>
@@ -657,17 +657,17 @@ function toneBar(tone: ProductionTone) {
 
 function columnClass(id: string) {
   const classes: Record<string, string> = {
-    code: "w-[150px]",
-    product: "w-[210px]",
-    color: "w-[105px]",
-    entryDate: "w-[105px]",
-    deliveryDate: "w-[105px]",
-    term: "w-[85px]",
-    process: "w-[210px]",
-    status: "w-[145px]",
-    deliveryWindow: "w-[130px]",
-    progress: "w-[120px]",
-    actions: "w-[60px]",
+    code: "w-[130px]",
+    product: "w-[185px]",
+    color: "w-[90px]",
+    entryDate: "w-[90px]",
+    deliveryDate: "w-[90px]",
+    term: "w-[75px]",
+    process: "w-[180px]",
+    status: "w-[125px]",
+    deliveryWindow: "w-[115px]",
+    progress: "w-[80px]",
+    actions: "w-[50px]",
   };
   return classes[id] ?? "";
 }

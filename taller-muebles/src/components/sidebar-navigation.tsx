@@ -11,7 +11,7 @@ type SidebarNavigationProps = {
 };
 
 const moduleLinks = [
-  { href: "/admin/documents", label: "Documentos", icon: FileText },
+  { href: "/admin/documents", label: "Comercial", icon: FileText },
   { href: "/admin/stock", label: "Stock", icon: Boxes },
   { href: "/admin/reports", label: "Reportes", icon: BarChart3 },
   { href: "/admin/history", label: "Historial", icon: Archive },

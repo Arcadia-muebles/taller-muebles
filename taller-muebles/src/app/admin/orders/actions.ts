@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder } from "@/lib/local-store";
+import { nextOrderCodeForStore } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -757,16 +758,7 @@ async function validateOrderRules(
 
 async function nextOrderCode(store: z.infer<typeof orderSchema>["store"]) {
   if (!hasSupabaseConfig()) return nextLocalOrderCode(store);
-  return nextCodeForStore(store, (await listOrders()).map((order) => order.code));
-}
-
-function nextCodeForStore(store: z.infer<typeof orderSchema>["store"], codes: string[]) {
-  const max = codes.reduce((current, code) => {
-    const match = new RegExp(`^${store}-?(\\d+)$`).exec(code);
-    if (!match) return current;
-    return Math.max(current, Number(match[1]));
-  }, 0);
-  return `${store}-${String(max + 1).padStart(2, "0")}`;
+  return nextOrderCodeForStore(store, (await listOrders()).map((order) => order.code));
 }
 
 function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {

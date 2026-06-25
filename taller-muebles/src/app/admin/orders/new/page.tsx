@@ -2,9 +2,9 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { OrderForm } from "@/components/order-form";
 import { requireSession } from "@/lib/auth";
+import { nextOrderCodeForStore } from "@/lib/order-codes";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
-import type { StoreCode } from "@/lib/types";
 
 export default async function NewOrderPage() {
   const user = await requireSession(["admin", "manager"]);
@@ -12,8 +12,8 @@ export default async function NewOrderPage() {
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) redirect("/admin");
   const orders = await listOrders();
   const nextCodes = {
-    LH: nextCodeForStore("LH", orders.map((order) => order.code)),
-    LR: nextCodeForStore("LR", orders.map((order) => order.code)),
+    LH: nextOrderCodeForStore("LH", orders.map((order) => order.code)),
+    LR: nextOrderCodeForStore("LR", orders.map((order) => order.code)),
   };
 
   return (
@@ -36,13 +36,4 @@ export default async function NewOrderPage() {
       </div>
     </AppShell>
   );
-}
-
-function nextCodeForStore(store: StoreCode, codes: string[]) {
-  const max = codes.reduce((current, code) => {
-    const match = new RegExp(`^${store}-?(\\d+)$`).exec(code);
-    if (!match) return current;
-    return Math.max(current, Number(match[1]));
-  }, 0);
-  return `${store}-${String(max + 1).padStart(2, "0")}`;
 }

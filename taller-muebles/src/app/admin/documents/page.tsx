@@ -36,16 +36,16 @@ export default async function DocumentsPage() {
     <AppShell active="admin" user={user}>
       <header className="page-header">
         <div>
-          <p className="page-kicker">Documentos</p>
-          <h1 className="page-title">Documentacion comercial</h1>
+          <p className="page-kicker">Comercial</p>
+          <h1 className="page-title">Documentos comerciales</h1>
           <p className="page-description">
-            Notas de Venta, Cotizaciones, Ordenes de Compra y Garantias creadas desde el flujo La Reina.
+            Notas de venta, cotizaciones, ordenes de compra y garantias vinculadas a produccion.
           </p>
         </div>
         {canEditOrders ? (
           <Link href="/admin/orders/new" className="btn btn-primary">
             <Plus className="size-4" />
-            Nuevo documento
+            Nuevo registro
           </Link>
         ) : null}
       </header>

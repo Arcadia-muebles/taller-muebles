@@ -33,14 +33,14 @@ export default async function ReportsPage() {
         </div>
       </header>
 
-      <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Activas" value={String(active.length)} helper="Órdenes en flujo." icon={Factory} tone="blue" />
         <StatCard label="Urgentes" value={String(urgent.length)} helper="Seguimiento diario." icon={TriangleAlert} tone="amber" />
         <StatCard label="Atrasadas" value={String(overdue.length)} helper="Fuera de plazo." icon={Clock} tone={overdue.length ? "rose" : "emerald"} />
         <StatCard label="Bloqueadas" value={String(blocked.length)} helper="Requieren decision." icon={BarChart3} tone={blocked.length ? "rose" : "neutral"} />
       </section>
 
-      <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)]">
+      <section className="mt-5 grid min-w-0 gap-4 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)]">
         <div className="panel">
           <div className="panel-header">
             <h2 className="panel-title">Carga por área</h2>

@@ -35,6 +35,7 @@ type Tone = "green" | "blue" | "amber" | "purple" | "rose" | "stone";
 
 export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProductionDashboardProps) {
   const enabledSteps = useMemo(() => steps.filter((step) => step.enabled), [steps]);
+  const dashboardSteps = useMemo(() => enabledSteps.filter((step) => !isDashboardHiddenStep(step)), [enabledSteps]);
   const normalizedOrders = useMemo(
     () => orders.map((order) => orderWithConfiguredSteps(order, enabledSteps)),
     [enabledSteps, orders],
@@ -59,7 +60,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
     [filter, normalizedOrders, optimisticStage, search, sortKey],
   );
 
-  const counters = useMemo(() => buildCounters(normalizedOrders, enabledSteps), [enabledSteps, normalizedOrders]);
+  const counters = useMemo(() => buildCounters(normalizedOrders, dashboardSteps), [dashboardSteps, normalizedOrders]);
 
   function move(order: Order, stepKey: AreaKey) {
     const current = currentStep(order);
@@ -84,7 +85,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
 
   return (
     <section className="mt-5 space-y-3">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[repeat(9,minmax(0,1fr))]">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[repeat(7,minmax(0,1fr))]">
         <MetricCard
           label="Notas activas"
           value={String(normalizedOrders.length)}
@@ -113,7 +114,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
 
       <section className="panel overflow-hidden">
         <div className="border-b border-stone-200 p-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 flex-wrap gap-1.5">
               <FilterChip active={filter === "all"} label="Todos" count={normalizedOrders.length} onClick={() => setFilter("all")} />
               <FilterChip active={filter === "LH"} label="LH" count={counters.lh} onClick={() => setFilter("LH")} />
@@ -125,7 +126,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
               <FilterChip active={filter === "ready"} label="Listos" count={counters.ready} tone="green" onClick={() => setFilter("ready")} />
             </div>
 
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row xl:w-[520px]">
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row lg:w-[430px] xl:w-[500px]">
               <label className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
                 <input
@@ -160,30 +161,30 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
         </div>
 
         <div className="overflow-x-auto bg-stone-50/70 p-1.5">
-          <table className="w-full min-w-[1420px] border-separate border-spacing-y-1">
+          <table className="w-full min-w-[980px] border-separate border-spacing-y-1">
             <thead>
               <tr>
-                <HeaderCell className="w-[160px]">Codigo / cliente</HeaderCell>
-                <HeaderCell className="w-[220px]">Producto</HeaderCell>
-                <HeaderCell className="w-[150px]">Color / material</HeaderCell>
-                <HeaderCell className="w-[430px] text-center">Procesos</HeaderCell>
-                <HeaderCell className="w-[165px]">Estado actual</HeaderCell>
-                <HeaderCell className="w-[105px]">Dias etapa</HeaderCell>
-                <HeaderCell className="w-[150px]">Entrega</HeaderCell>
-                <HeaderCell className="w-[110px]">Avance</HeaderCell>
-                <HeaderCell className="w-[165px]">Observaciones</HeaderCell>
+                <HeaderCell className="w-[120px]">Codigo / cliente</HeaderCell>
+                <HeaderCell className="w-[165px]">Producto</HeaderCell>
+                <HeaderCell className="w-[105px]">Color / material</HeaderCell>
+                <HeaderCell className="w-[190px] text-center">Procesos</HeaderCell>
+                <HeaderCell className="w-[120px]">Estado actual</HeaderCell>
+                <HeaderCell className="w-[60px]">Dias</HeaderCell>
+                <HeaderCell className="w-[105px]">Entrega</HeaderCell>
+                <HeaderCell className="w-[70px]">Avance</HeaderCell>
+                <HeaderCell className="w-[95px]">Obs.</HeaderCell>
               </tr>
               <tr>
                 <th />
                 <th />
                 <th />
                 <th className="px-3 pb-2">
-                  <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.max(enabledSteps.length, 1)}, minmax(52px, 1fr))` }}>
-                    {enabledSteps.map((step) => (
+                  <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardSteps.length, 1)}, minmax(30px, 1fr))` }}>
+                    {dashboardSteps.map((step) => (
                       <span
                         key={step.key}
                         title={step.label}
-                        className="whitespace-nowrap text-center text-[10px] font-semibold uppercase leading-none tracking-[0.04em] text-stone-500"
+                        className="whitespace-nowrap text-center text-[9px] font-semibold uppercase leading-none tracking-[0.04em] text-stone-500"
                       >
                         {processColumnLabel(step.label)}
                       </span>
@@ -231,8 +232,8 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
                       </div>
                     </BodyCell>
                     <BodyCell className="text-center">
-                      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.max(enabledSteps.length, 1)}, minmax(52px, 1fr))` }}>
-                        {enabledSteps.map((step) => {
+                      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardSteps.length, 1)}, minmax(30px, 1fr))` }}>
+                        {dashboardSteps.map((step) => {
                           const orderStep = order.steps.find((item) => item.key === step.key);
                           return (
                             <StepDot
@@ -274,7 +275,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
                     </BodyCell>
                     <BodyCell>
                       <p className="mb-1 text-xs font-semibold text-stone-900">{progress}%</p>
-                      <div className="h-2.5 w-24 overflow-hidden rounded-full bg-stone-200">
+                      <div className="h-2.5 w-16 overflow-hidden rounded-full bg-stone-200">
                         <div className={cn("h-full rounded-full", toneBar(presentation.tone))} style={{ width: `${progress}%` }} />
                       </div>
                     </BodyCell>
@@ -373,7 +374,7 @@ function StepDot({ order, step, canMove, onMove }: { order: Order; step: Product
       title={disabled ? step.label : `Mover a ${step.label}`}
       aria-label={disabled ? `${step.label}: ${step.status}` : `Mover ${order.code} a ${step.label}`}
       className={cn(
-        "mx-auto grid size-7 place-items-center rounded-md border transition",
+        "mx-auto grid size-6 place-items-center rounded-md border transition",
         stepDotClass(step.status, stepTone(step)),
         !disabled && "hover:-translate-y-0.5 hover:border-stone-400 hover:shadow-sm",
         disabled && "cursor-default opacity-80",
@@ -386,7 +387,7 @@ function StepDot({ order, step, canMove, onMove }: { order: Order; step: Product
 
 function HeaderCell({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={cn("whitespace-nowrap px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500", className)}>
+    <th className={cn("whitespace-nowrap px-2 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500", className)}>
       {children}
     </th>
   );
@@ -394,7 +395,7 @@ function HeaderCell({ children, className }: { children: React.ReactNode; classN
 
 function BodyCell({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <td className={cn("border-y border-stone-200 bg-white px-3 py-2.5 align-middle text-sm shadow-sm transition group-hover:bg-stone-50", className)}>
+    <td className={cn("border-y border-stone-200 bg-white px-2 py-2.5 align-middle text-sm shadow-sm transition group-hover:bg-stone-50", className)}>
       {children}
     </td>
   );
@@ -458,6 +459,11 @@ function buildCounters(orders: Order[], steps: SystemSettings["production"]["ste
     ready: orders.filter((order) => order.status === "quality_control" || order.steps.every((step) => step.status === "done")).length,
     byStep,
   };
+}
+
+function isDashboardHiddenStep(step: Pick<ProductionStep, "key" | "label">) {
+  const normalized = `${step.key} ${step.label}`.toLowerCase();
+  return normalized.includes("en_blanco") || normalized.includes("blanco") || normalized.includes("quality") || normalized.includes("calidad");
 }
 
 function matchesFilter(order: Order, filter: DashboardFilter) {
@@ -568,12 +574,12 @@ function processColumnLabel(label: string) {
     .trim();
   if (/estructura/i.test(normalized)) return "Est";
   if (/blanco/i.test(normalized)) return "Blanco";
-  if (/corte/i.test(normalized)) return "Corte";
-  if (/costura/i.test(normalized)) return "Costura";
-  if (/tapicer/i.test(normalized)) return "Tapiceria";
+  if (/corte/i.test(normalized)) return "Cor";
+  if (/costura/i.test(normalized)) return "Cos";
+  if (/tapicer/i.test(normalized)) return "Tap";
   if (/calidad/i.test(normalized)) return "Calidad";
-  if (/despacho/i.test(normalized)) return "Despacho";
-  return normalized.slice(0, 8);
+  if (/despacho/i.test(normalized)) return "Des";
+  return normalized.slice(0, 3);
 }
 
 function stepIconByKey(key: string, label: string) {

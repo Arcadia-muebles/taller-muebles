@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
 import { createLocalOrder, nextLocalOrderCode, updateLocalProductionStep } from "@/lib/local-store";
+import { nextOrderCodeForStore } from "@/lib/order-codes";
 import { getOrder, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -462,12 +463,7 @@ function operatorMapByArea(users: Awaited<ReturnType<typeof listUsers>>) {
 
 async function nextWorkshopOrderCode(store: z.infer<typeof workshopOrderSchema>["store"]) {
   if (!hasSupabaseConfig()) return nextLocalOrderCode(store);
-  const max = (await getOrderCodes()).reduce((current, code) => {
-    const match = new RegExp(`^${store}-?(\\d+)$`).exec(code);
-    if (!match) return current;
-    return Math.max(current, Number(match[1]));
-  }, 0);
-  return `${store}-${String(max + 1).padStart(2, "0")}`;
+  return nextOrderCodeForStore(store, await getOrderCodes());
 }
 
 async function getOrderCodes() {

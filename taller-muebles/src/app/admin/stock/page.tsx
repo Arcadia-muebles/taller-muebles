@@ -54,12 +54,12 @@ export default async function StockPage() {
           <p className="panel-description">Primera vista para validar reglas antes de automatizar consumos.</p>
         </div>
 
-        <div className="grid gap-3 p-3 xl:hidden">
+        <div className="grid gap-3 p-3 lg:hidden">
           {items.map((item) => <StockCard key={item.id} item={item} canEdit={canEdit} />)}
           {!items.length ? <EmptyState text="No hay materiales registrados." /> : null}
         </div>
 
-        <div className="hidden xl:block">
+        <div className="hidden lg:block">
           <table className="w-full table-fixed">
             <thead className="table-head">
               <tr>

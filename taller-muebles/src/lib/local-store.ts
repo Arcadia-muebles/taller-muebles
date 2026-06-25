@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AppUser, AreaKey, AuditEntry, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, SystemSettings } from "@/lib/types";
 import { defaultSystemSettings } from "@/lib/system-settings";
+import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
 
 type LocalData = {
   orders: Order[];
@@ -703,9 +704,20 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
   }
 
   for (const order of data.orders) {
+    const shortCode = shortOrderCode(order.code);
+    if (order.code !== shortCode) {
+      order.code = shortCode;
+      changed = true;
+    }
     if (!order.groupCode) {
       order.groupCode = order.code;
       changed = true;
+    } else {
+      const shortGroupCode = shortOrderCode(order.groupCode);
+      if (order.groupCode !== shortGroupCode) {
+        order.groupCode = shortGroupCode;
+        changed = true;
+      }
     }
     if (!order.priority) {
       order.priority = "normal";
@@ -826,10 +838,5 @@ function userAreas(user: AppUser) {
 }
 
 function nextCodeForStore(store: Order["store"], codes: string[]) {
-  const max = codes.reduce((current, code) => {
-    const match = new RegExp(`^${store}-?(\\d+)$`).exec(code);
-    if (!match) return current;
-    return Math.max(current, Number(match[1]));
-  }, 0);
-  return `${store}-${String(max + 1).padStart(2, "0")}`;
+  return nextOrderCodeForStore(store, codes);
 }

@@ -34,7 +34,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
         <div>
           <Link href="/admin/documents" className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-950">
             <ArrowLeft className="size-4" />
-            Volver a documentos
+            Volver a comercial
           </Link>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <h1 className="page-title mt-0">{documentCode}</h1>
@@ -46,7 +46,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
             </span>
           </div>
           <p className="page-description">
-            Vista completa del documento comercial y de los productos que alimentan produccion.
+            Vista completa del registro comercial y de los productos que alimentan produccion.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

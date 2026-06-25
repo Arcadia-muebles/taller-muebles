@@ -43,7 +43,7 @@ export function MobileNavigation({
           <NavLink href={active === "admin" ? "/admin" : "/taller"} icon={Home} label="Inicio" active={pathname === (active === "admin" ? "/admin" : "/taller")} />
           {canUseAdmin ? (
             <>
-              <NavLink href="/admin/documents" icon={FileText} label="Documentos" active={pathname.startsWith("/admin/documents")} />
+              <NavLink href="/admin/documents" icon={FileText} label="Comercial" active={pathname.startsWith("/admin/documents")} />
               <NavLink href="/admin/stock" icon={Boxes} label="Stock" active={pathname.startsWith("/admin/stock")} />
               <NavLink href="/admin/reports" icon={BarChart3} label="Reportes" active={pathname.startsWith("/admin/reports")} />
               <NavLink href="/admin/history" icon={Archive} label="Historial" active={pathname.startsWith("/admin/history")} />

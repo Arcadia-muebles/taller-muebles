@@ -34,7 +34,7 @@ type FieldErrors = Partial<Record<keyof OrderFormValues, { message?: string }>>;
 export function OrderForm({
   orderId,
   initialValues,
-  nextCodes = { LH: "LH-01", LR: "LR-01" },
+  nextCodes = { LH: "LH-001", LR: "LR-001" },
 }: {
   orderId?: string;
   initialValues?: OrderFormValues;
