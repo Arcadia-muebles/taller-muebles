@@ -53,7 +53,7 @@ const stepConfig: Record<
   { label: string; className: string; icon: React.ElementType }
 > = {
   pending: {
-    label: "Pendiente",
+    label: "Sin empezar",
     className: "border-stone-200 bg-white text-stone-500",
     icon: Circle,
   },
