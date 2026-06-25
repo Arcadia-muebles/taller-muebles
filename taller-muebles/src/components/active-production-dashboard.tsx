@@ -164,9 +164,9 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
           <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-y-1">
             <colgroup>
               <col className="w-[145px]" />
-              <col className="w-[200px]" />
-              <col className="w-[55px]" />
-              <col className="w-[230px]" />
+              <col className="w-[190px]" />
+              <col className="w-[75px]" />
+              <col className="w-[220px]" />
               <col className="w-[120px]" />
               <col className="w-[100px]" />
               <col className="w-[70px]" />
@@ -236,7 +236,9 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
                       <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-[0.04em] text-stone-500">Pedido {order.groupCode}</p>
                     </BodyCell>
                     <BodyCell>
-                      <p className="truncate text-xs font-semibold text-stone-900">{order.color || "Sin color"}</p>
+                      <p title={order.color || "Sin color"} className="line-clamp-2 break-words text-xs font-semibold leading-4 text-stone-900">
+                        {order.color || "Sin color"}
+                      </p>
                     </BodyCell>
                     <BodyCell className="text-center">
                       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardSteps.length, 1)}, minmax(30px, 1fr))` }}>
@@ -578,7 +580,7 @@ function processColumnLabel(label: string) {
   if (/costura/i.test(normalized)) return "Cos";
   if (/tapicer/i.test(normalized)) return "Tap";
   if (/calidad/i.test(normalized)) return "Calidad";
-  if (/despacho|terminado/i.test(normalized)) return "Terminado";
+  if (/despacho|terminado/i.test(normalized)) return "Ter";
   return normalized.slice(0, 3);
 }
 
