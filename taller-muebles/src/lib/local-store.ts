@@ -112,14 +112,20 @@ const defaultLocalUsers: AppUser[] = [
   },
 ];
 
+const seededDemoPeople = new Map(
+  defaultLocalUsers
+    .filter((user) => user.role === "operator")
+    .map((user) => [user.id, user.name]),
+);
+
 const stepDefinitions: Array<{ key: AreaKey; label: string; ownerFallback: string }> = [
-  { key: "structure", label: "Estructura", ownerFallback: "Estructura" },
-  { key: "en_blanco", label: "En Blanco", ownerFallback: "En Blanco" },
-  { key: "cutting", label: "Corte", ownerFallback: "Corte" },
-  { key: "sewing", label: "Costura", ownerFallback: "Costura" },
-  { key: "upholstery", label: "Tapicería", ownerFallback: "Tapicería" },
-  { key: "quality", label: "Control Calidad", ownerFallback: "Control Calidad" },
-  { key: "dispatch", label: "Despacho", ownerFallback: "Despacho" },
+  { key: "structure", label: "Estructura", ownerFallback: "Sin responsable asignado" },
+  { key: "en_blanco", label: "En Blanco", ownerFallback: "Sin responsable asignado" },
+  { key: "cutting", label: "Corte", ownerFallback: "Sin responsable asignado" },
+  { key: "sewing", label: "Costura", ownerFallback: "Sin responsable asignado" },
+  { key: "upholstery", label: "Tapicería", ownerFallback: "Sin responsable asignado" },
+  { key: "quality", label: "Control Calidad", ownerFallback: "Sin responsable asignado" },
+  { key: "dispatch", label: "Terminado", ownerFallback: "Sin responsable asignado" },
 ];
 
 async function ensureDataFile() {
@@ -208,7 +214,7 @@ export async function createLocalOrder(input: {
   const steps: ProductionStep[] = enabledSteps.map((step, index) => ({
     key: step.key,
     label: step.label,
-    owner: input.assignedTo?.trim() || pickLocalStepOwner(data, step.key, step.label),
+    owner: input.assignedTo?.trim() || pickLocalStepOwner(data, step.key, "Sin responsable asignado"),
     status: index === 0 ? "active" : "pending",
     startedAt: index === 0 ? nowIso() : undefined,
   }));
@@ -354,7 +360,6 @@ export async function updateLocalProductionStep(input: {
   stepKey: AreaKey;
   status: StepStatus;
   reason?: string;
-  autoCompleteAfterQuality?: boolean;
 }) {
   const data = await readData();
   const order = data.orders.find((item) => item.id === input.orderId);
@@ -399,9 +404,8 @@ export async function updateLocalProductionStep(input: {
   if (order.steps.some((item) => item.status === "blocked")) {
     order.status = "blocked";
   } else if (order.steps.every((item) => item.status === "done")) {
-    const waitsForManualClose = step.key === "quality" && input.autoCompleteAfterQuality === false;
-    order.status = waitsForManualClose ? "quality_control" : "completed";
-    order.condition = waitsForManualClose ? "Control de calidad" : "Entregado";
+    order.status = "quality_control";
+    order.condition = "Control de calidad";
   } else if (order.steps.find((item) => item.key === "quality")?.status === "active") {
     order.status = "quality_control";
     order.condition = "Control de calidad";
@@ -735,12 +739,21 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
       order.balance = Math.max(order.total - (order.paidAmount ?? 0), 0);
       changed = true;
     }
+    if (isSeededDemoPersonName(order.assignedTo) || order.assignedTo === "Sin asignar") {
+      order.assignedTo = "Sin responsable asignado";
+      changed = true;
+    }
     if (ensureConfiguredOrderSteps(order, data, data.settings?.production.steps ?? defaultSystemSettings.production.steps)) {
       changed = true;
     }
     for (const step of order.steps) {
-      if (step.owner === step.label || step.owner === stepDefinitions.find((item) => item.key === step.key)?.ownerFallback) {
-        const nextOwner = pickLocalStepOwner(data, step.key, step.owner);
+      const ownerFallback = stepDefinitions.find((item) => item.key === step.key)?.ownerFallback ?? step.label;
+      if (
+        step.owner === step.label ||
+        step.owner === ownerFallback ||
+        isSeededDemoPersonName(step.owner)
+      ) {
+        const nextOwner = pickLocalStepOwner(data, step.key, ownerFallback);
         if (nextOwner !== step.owner) {
           step.owner = nextOwner;
           changed = true;
@@ -778,10 +791,11 @@ function ensureConfiguredOrderSteps(
   const normalizedSteps: ProductionStep[] = enabledSteps.map((stepConfig, index) => {
     const existing = existingByKey.get(stepConfig.key);
     if (existing) {
+      const label = normalizeStepLabel(existing.label, stepConfig.label, stepConfig.key);
       return {
         ...existing,
-        label: existing.label || stepConfig.label,
-        owner: existing.owner || pickLocalStepOwner(data, stepConfig.key, stepConfig.label),
+        label,
+        owner: existing.owner || pickLocalStepOwner(data, stepConfig.key, "Sin responsable asignado"),
       };
     }
 
@@ -789,7 +803,7 @@ function ensureConfiguredOrderSteps(
     return {
       key: stepConfig.key,
       label: stepConfig.label,
-      owner: pickLocalStepOwner(data, stepConfig.key, stepConfig.label),
+      owner: pickLocalStepOwner(data, stepConfig.key, "Sin responsable asignado"),
       status: inferredDone ? "done" : "pending",
       completedAt: inferredDone ? nowIso() : undefined,
     };
@@ -820,10 +834,24 @@ export async function nextLocalOrderCode(store: Order["store"]) {
 
 function pickLocalStepOwner(data: LocalData, area: AreaKey, fallback: string) {
   return (
-    data.users.find((user) => user.active && user.role === "operator" && userAreas(user).includes(area))?.name ??
-    data.users.find((user) => user.active && user.role === "operator" && !userAreas(user).length)?.name ??
+    data.users.find((user) => isRealLocalOperator(user) && userAreas(user).includes(area))?.name ??
+    data.users.find((user) => isRealLocalOperator(user) && !userAreas(user).length)?.name ??
     fallback
   );
+}
+
+function normalizeStepLabel(label: string | undefined, fallback: string, key: AreaKey) {
+  const value = label || fallback;
+  if (key === "dispatch" || /despacho/i.test(value)) return "Terminado";
+  return value;
+}
+
+function isRealLocalOperator(user: AppUser) {
+  return user.active && user.role === "operator" && seededDemoPeople.get(user.id) !== user.name;
+}
+
+function isSeededDemoPersonName(name?: string) {
+  return Boolean(name && Array.from(seededDemoPeople.values()).includes(name));
 }
 
 function parseAreas(value?: string | null) {

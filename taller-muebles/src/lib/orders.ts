@@ -7,8 +7,8 @@ export function orderStatusLabel(status: OrderStatus) {
     in_production: "En producción",
     blocked: "Bloqueada",
     urgent: "Urgente",
-    quality_control: "Control calidad",
-    completed: "Terminada",
+    quality_control: "Listo para entrega",
+    completed: "Entregada",
     cancelled: "Cancelada",
   };
   return labels[status];

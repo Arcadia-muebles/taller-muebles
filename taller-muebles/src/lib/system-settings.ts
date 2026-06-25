@@ -16,7 +16,7 @@ export const defaultSystemSettings: SystemSettings = {
       { key: "sewing", label: "Costura", targetDays: 2, enabled: true, required: true },
       { key: "upholstery", label: "Tapicería", targetDays: 3, enabled: true, required: true },
       { key: "quality", label: "Control Calidad", targetDays: 1, enabled: true, required: true },
-      { key: "dispatch", label: "Despacho", targetDays: 1, enabled: true, required: true },
+      { key: "dispatch", label: "Terminado", targetDays: 1, enabled: true, required: true },
     ],
     allowParallelSteps: false,
     requireQualityApproval: true,

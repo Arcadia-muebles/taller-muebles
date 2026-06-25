@@ -5,6 +5,25 @@ export function activeOrders(orders: Order[]) {
   return orders.filter((order) => !["completed", "cancelled"].includes(order.status));
 }
 
+export function isReadyForDelivery(order: Order) {
+  if (order.status === "quality_control") return true;
+  if (!order.steps.length) return false;
+  if (order.steps.every((step) => step.status === "done")) return true;
+
+  const lastStep = order.steps.at(-1);
+  const lastStepIsFinishedGate = lastStep ? /dispatch|despacho|terminado/i.test(`${lastStep.key} ${lastStep.label}`) : false;
+  return Boolean(
+    lastStep &&
+      lastStepIsFinishedGate &&
+      lastStep.status !== "blocked" &&
+      order.steps.slice(0, -1).every((step) => step.status === "done"),
+  );
+}
+
+export function readyForDeliveryOrders(orders: Order[]) {
+  return activeOrders(orders).filter(isReadyForDelivery);
+}
+
 export function completedOrders(orders: Order[]) {
   return orders.filter((order) => order.status === "completed");
 }

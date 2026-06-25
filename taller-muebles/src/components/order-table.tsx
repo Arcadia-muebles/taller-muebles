@@ -580,7 +580,7 @@ function shortStepLabel(label: string) {
     .replace("Estructura", "Estruct.")
     .replace("Revision de calidad", "Calidad")
     .replace("Tapiceria", "Tapic.")
-    .replace("Despacho", "Desp.")
+    .replace("Despacho", "Terminado")
     .trim();
 }
 

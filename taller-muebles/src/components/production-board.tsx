@@ -407,13 +407,13 @@ function OrderDetailDrawer({
           <form action={closeOrder}>
             <input type="hidden" name="orderId" value={order.id} />
             <ConfirmSubmitButton
-              title="Marcar como despachado"
-              description="La orden saldrá del tablero activo y quedará registrada como despachada en el historial."
-              confirmLabel="Confirmar despacho"
-              pendingLabel="Despachando..."
+              title="Confirmar entrega"
+              description="La orden saldrá del tablero activo y quedará registrada como entregada en el historial."
+              confirmLabel="Confirmar entrega"
+              pendingLabel="Entregando..."
               tone="neutral"
               triggerClassName="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-3 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
-              trigger={<><Truck className="size-4" />Marcar como despachado</>}
+              trigger={<><Truck className="size-4" />Entregar</>}
             />
           </form>
         ) : null}

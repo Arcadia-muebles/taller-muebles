@@ -161,12 +161,12 @@ select {
     visibility: hidden;
   }
 
-  body.printing-label .label-print-area,
-  body.printing-label .label-print-area * {
+  body.printing-label .label-print-area.is-printing-label,
+  body.printing-label .label-print-area.is-printing-label * {
     visibility: visible;
   }
 
-  body.printing-label .label-print-area {
+  body.printing-label .label-print-area.is-printing-label {
     display: block !important;
     position: absolute;
     inset: 0 auto auto 0;

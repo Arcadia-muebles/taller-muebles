@@ -2,6 +2,7 @@
 
 import { Tag } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { useState } from "react";
 import type { Order } from "@/lib/types";
 import { orderStatusLabel } from "@/lib/orders";
 import { cn } from "@/lib/utils";
@@ -10,10 +11,12 @@ export function OrderLabelPrintButton({
   order,
   groupOrders = [order],
   className,
+  compact = false,
 }: {
   order: Order;
   groupOrders?: Order[];
   className?: string;
+  compact?: boolean;
 }) {
   const orderedGroup = groupOrders.length ? groupOrders : [order];
   const productIndex = Math.max(orderedGroup.findIndex((item) => item.id === order.id), 0) + 1;
@@ -22,11 +25,16 @@ export function OrderLabelPrintButton({
   const brand = storeBrand(order.store);
   const qrValue = `pedido:${order.id}|codigo:${order.code}|tienda:${order.store}`;
   const observations = order.observations?.trim();
+  const [printing, setPrinting] = useState(false);
 
   function printLabel() {
+    setPrinting(true);
     document.body.classList.add("printing-label");
     window.print();
-    window.setTimeout(() => document.body.classList.remove("printing-label"), 250);
+    window.setTimeout(() => {
+      document.body.classList.remove("printing-label");
+      setPrinting(false);
+    }, 250);
   }
 
   return (
@@ -34,15 +42,19 @@ export function OrderLabelPrintButton({
       <button
         type="button"
         onClick={printLabel}
+        title="Imprimir etiqueta"
+        aria-label={`Imprimir etiqueta de ${order.code}`}
         className={cn(
-          "inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 transition hover:bg-stone-50",
+          compact
+            ? "inline-grid size-7 shrink-0 place-items-center rounded-md border border-stone-200 bg-white text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 hover:text-stone-950"
+            : "inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 transition hover:bg-stone-50",
           className,
         )}
       >
         <Tag className="size-4" />
-        Imprimir etiqueta
+        {compact ? <span className="sr-only">Imprimir etiqueta</span> : "Imprimir etiqueta"}
       </button>
-      <section className="label-print-area hidden">
+      <section className={cn("label-print-area hidden", printing && "is-printing-label")}>
         <div className="label-card">
           <aside className="label-brand-panel">
             <div className="label-brand">

@@ -19,7 +19,8 @@ import {
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { closeOrder, moveOrderStage } from "@/app/admin/orders/actions";
-import { completionPercent } from "@/lib/metrics";
+import { OrderLabelPrintButton } from "@/components/order-label-print-button";
+import { completionPercent, isReadyForDelivery } from "@/lib/metrics";
 import type { AreaKey, Order, ProductionStep, StepStatus, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
 
@@ -29,7 +30,7 @@ type ActiveProductionDashboardProps = {
   canMove: boolean;
 };
 
-type DashboardFilter = "all" | "LH" | "LR" | "late" | "today" | "week" | "sewing" | "ready";
+type DashboardFilter = "all" | "LH" | "LR" | "late" | "today" | "week" | "sewing";
 type SortKey = "delivery" | "code" | "progress";
 type Tone = "green" | "blue" | "amber" | "purple" | "rose" | "stone";
 
@@ -114,8 +115,8 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
 
       <section className="panel overflow-hidden">
         <div className="border-b border-stone-200 p-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 flex-wrap gap-1.5">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="-mx-1 flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto px-1 pb-1">
               <FilterChip active={filter === "all"} label="Todos" count={normalizedOrders.length} onClick={() => setFilter("all")} />
               <FilterChip active={filter === "LH"} label="LH" count={counters.lh} onClick={() => setFilter("LH")} />
               <FilterChip active={filter === "LR"} label="LR" count={counters.lr} onClick={() => setFilter("LR")} />
@@ -123,10 +124,9 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
               <FilterChip active={filter === "today"} label="Vencen hoy" count={counters.today} tone="amber" onClick={() => setFilter("today")} />
               <FilterChip active={filter === "week"} label="Esta semana" count={counters.week} tone="amber" onClick={() => setFilter("week")} />
               <FilterChip active={filter === "sewing"} label="En costura" count={counters.sewing} tone="purple" onClick={() => setFilter("sewing")} />
-              <FilterChip active={filter === "ready"} label="Listos" count={counters.ready} tone="green" onClick={() => setFilter("ready")} />
             </div>
 
-            <div className="flex min-w-0 flex-col gap-2 sm:flex-row lg:w-[430px] xl:w-[500px]">
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row xl:w-[500px]">
               <label className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
                 <input
@@ -161,18 +161,25 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
         </div>
 
         <div className="overflow-x-auto bg-stone-50/70 p-1.5">
-          <table className="w-full min-w-[980px] border-separate border-spacing-y-1">
+          <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-y-1">
+            <colgroup>
+              <col className="w-[145px]" />
+              <col className="w-[200px]" />
+              <col className="w-[55px]" />
+              <col className="w-[230px]" />
+              <col className="w-[120px]" />
+              <col className="w-[100px]" />
+              <col className="w-[70px]" />
+            </colgroup>
             <thead>
               <tr>
-                <HeaderCell className="w-[120px]">Codigo / cliente</HeaderCell>
-                <HeaderCell className="w-[165px]">Producto</HeaderCell>
-                <HeaderCell className="w-[105px]">Color / material</HeaderCell>
-                <HeaderCell className="w-[190px] text-center">Procesos</HeaderCell>
-                <HeaderCell className="w-[120px]">Estado actual</HeaderCell>
-                <HeaderCell className="w-[60px]">Dias</HeaderCell>
-                <HeaderCell className="w-[105px]">Entrega</HeaderCell>
-                <HeaderCell className="w-[70px]">Avance</HeaderCell>
-                <HeaderCell className="w-[95px]">Obs.</HeaderCell>
+                <HeaderCell>Codigo / cliente</HeaderCell>
+                <HeaderCell>Producto</HeaderCell>
+                <HeaderCell>Color</HeaderCell>
+                <HeaderCell className="text-center">Procesos</HeaderCell>
+                <HeaderCell>Estado actual</HeaderCell>
+                <HeaderCell>Entrega</HeaderCell>
+                <HeaderCell>Avance</HeaderCell>
               </tr>
               <tr>
                 <th />
@@ -194,42 +201,42 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
                 <th />
                 <th />
                 <th />
-                <th />
-                <th />
               </tr>
             </thead>
             <tbody>
               {displayedOrders.map((order) => {
-                const current = currentStep(order);
                 const presentation = statusPresentation(order);
                 const StatusIcon = presentation.icon;
                 const progress = completionPercent(order);
+                const groupOrders = normalizedOrders.filter((item) => item.groupCode === order.groupCode);
                 return (
                   <tr key={order.id} className="group">
                     <BodyCell className="rounded-l-lg border-l">
-                      <Link href={`/admin/orders/${order.id}`} className="block min-w-0">
-                        <div className="flex min-w-0 items-start gap-2">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <Link href={`/admin/orders/${order.id}`} aria-label={`Abrir orden ${order.code}`} className="shrink-0">
                           <StoreStripe store={order.store} />
-                          <div className="min-w-0">
-                            <p className="truncate text-lg font-semibold text-stone-950 group-hover:underline">{order.code}</p>
+                        </Link>
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <Link href={`/admin/orders/${order.id}`} className="min-w-0">
+                              <p className="truncate text-lg font-semibold text-stone-950 group-hover:underline">{order.code}</p>
+                            </Link>
+                            <OrderLabelPrintButton order={order} groupOrders={groupOrders} compact />
+                            <ObservationAlert order={order} />
+                          </div>
+                          <Link href={`/admin/orders/${order.id}`} className="block min-w-0">
                             <p className="mt-1 truncate text-xs font-medium text-stone-600">{order.store === "LH" ? "Leather House" : "La Reina"}</p>
                             <p className="mt-0.5 truncate text-xs text-stone-500">{order.client}</p>
-                          </div>
+                          </Link>
                         </div>
-                      </Link>
+                      </div>
                     </BodyCell>
                     <BodyCell>
                       <p className="line-clamp-2 text-xs font-semibold uppercase leading-5 text-stone-950">{order.product}</p>
                       <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-[0.04em] text-stone-500">Pedido {order.groupCode}</p>
                     </BodyCell>
                     <BodyCell>
-                      <div className="flex items-center gap-2">
-                        <span className={cn("size-3 shrink-0 rounded-full", colorSwatch(order.color))} />
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-stone-900">{order.color || "Sin color"}</p>
-                          <p className="mt-1 truncate text-xs text-stone-500">{order.material || "Sin material"}</p>
-                        </div>
-                      </div>
+                      <p className="truncate text-xs font-semibold text-stone-900">{order.color || "Sin color"}</p>
                     </BodyCell>
                     <BodyCell className="text-center">
                       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardSteps.length, 1)}, minmax(30px, 1fr))` }}>
@@ -268,26 +275,20 @@ export function ActiveProductionDashboard({ orders, steps, canMove }: ActiveProd
                       </div>
                     </BodyCell>
                     <BodyCell>
-                      <DaysInStep step={current} />
-                    </BodyCell>
-                    <BodyCell>
                       <DeliveryBlock order={order} />
                     </BodyCell>
-                    <BodyCell>
+                    <BodyCell className="rounded-r-lg border-r">
                       <p className="mb-1 text-xs font-semibold text-stone-900">{progress}%</p>
                       <div className="h-2.5 w-16 overflow-hidden rounded-full bg-stone-200">
                         <div className={cn("h-full rounded-full", toneBar(presentation.tone))} style={{ width: `${progress}%` }} />
                       </div>
-                    </BodyCell>
-                    <BodyCell className="rounded-r-lg border-r">
-                      <ObservationBlock order={order} />
                     </BodyCell>
                   </tr>
                 );
               })}
               {!displayedOrders.length ? (
                 <tr>
-                  <td colSpan={9} className="rounded-lg border border-dashed border-stone-200 bg-white px-4 py-10 text-center text-sm text-stone-500">
+                  <td colSpan={7} className="rounded-lg border border-dashed border-stone-200 bg-white px-4 py-10 text-center text-sm text-stone-500">
                     No hay notas activas que coincidan con los filtros.
                   </td>
                 </tr>
@@ -351,7 +352,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition",
+        "inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-xs font-semibold transition",
         active ? "border-stone-950 bg-stone-950 text-white" : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:text-stone-950",
       )}
     >
@@ -423,23 +424,17 @@ function DeliveryBlock({ order }: { order: Order }) {
   );
 }
 
-function DaysInStep({ step }: { step?: ProductionStep }) {
-  if (!step) return <span className="text-xs font-semibold text-stone-400">-</span>;
-  const anchor = step.startedAt ?? step.completedAt;
-  if (!anchor) return <span className="text-xs font-semibold text-stone-500">0 dias</span>;
-  const date = new Date(anchor);
-  if (Number.isNaN(date.getTime())) return <span className="text-xs font-semibold text-stone-500">0 dias</span>;
-  const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
-  return <span className={cn("text-sm font-semibold", days >= 3 ? "text-rose-700" : days >= 1 ? "text-amber-700" : "text-emerald-700")}>{days} dias</span>;
-}
-
-function ObservationBlock({ order }: { order: Order }) {
-  if (!hasMeaningfulObservations(order.observations)) return <span className="text-stone-400">-</span>;
+function ObservationAlert({ order }: { order: Order }) {
+  if (!hasMeaningfulObservations(order.observations)) return null;
   return (
-    <p className={cn("line-clamp-2 text-xs leading-5", order.priority === "critical" ? "font-semibold text-rose-700" : "text-stone-600")}>
-      <MessageSquare className="mr-1 inline size-3.5 align-text-bottom text-stone-400" />
-      {order.observations}
-    </p>
+    <Link
+      href={`/admin/orders/${order.id}#observaciones`}
+      title="Ver observacion"
+      aria-label={`Ver observacion de ${order.code}`}
+      className="grid size-5 shrink-0 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-700"
+    >
+      <MessageSquare className="size-3" />
+    </Link>
   );
 }
 
@@ -456,7 +451,6 @@ function buildCounters(orders: Order[], steps: SystemSettings["production"]["ste
     today: orders.filter((order) => daysUntil(order.deliveryDate) === 0).length,
     week: orders.filter((order) => daysUntil(order.deliveryDate) >= 0 && daysUntil(order.deliveryDate) <= 7).length,
     sewing: orders.filter((order) => currentStep(order)?.key === "sewing").length,
-    ready: orders.filter((order) => order.status === "quality_control" || order.steps.every((step) => step.status === "done")).length,
     byStep,
   };
 }
@@ -473,7 +467,6 @@ function matchesFilter(order: Order, filter: DashboardFilter) {
   if (filter === "today") return days === 0;
   if (filter === "week") return days >= 0 && days <= 7;
   if (filter === "sewing") return currentStep(order)?.key === "sewing";
-  if (filter === "ready") return order.status === "quality_control" || order.steps.every((step) => step.status === "done");
   return true;
 }
 
@@ -492,12 +485,12 @@ function sortOrders(a: Order, b: Order, sortKey: SortKey) {
 }
 
 function statusPresentation(order: Order): { label: string; tone: Tone; icon: React.ElementType } {
-  if (order.status === "completed") return { label: "Listo para entrega", tone: "green", icon: CheckCircle2 };
+  if (order.status === "completed") return { label: "Entregada", tone: "green", icon: CheckCircle2 };
   if (order.status === "blocked" || order.steps.some((step) => step.status === "blocked")) return { label: "Bloqueada", tone: "rose", icon: CircleDashed };
-  if (order.status === "quality_control" || order.steps.every((step) => step.status === "done")) return { label: "Listo para entrega", tone: "green", icon: CheckCircle2 };
+  if (isReadyForDelivery(order)) return { label: "Listo para entrega", tone: "green", icon: CheckCircle2 };
   const step = currentStep(order);
   if (!step) return { label: "Sin iniciar", tone: "stone", icon: Clock3 };
-  return { label: `En ${cleanStepLabel(step.label)}`, tone: stepTone(step), icon: stepIconByKey(step.key, step.label) };
+  return { label: currentStepStatusLabel(step), tone: stepTone(step), icon: stepIconByKey(step.key, step.label) };
 }
 
 function currentStep(order: Order) {
@@ -563,8 +556,15 @@ function cleanStepLabel(label: string) {
 
 function metricStepLabel(label: string) {
   const clean = label.trim();
+  if (/despacho|terminado/i.test(clean)) return "Terminado";
   if (/^en\s+/i.test(clean)) return clean;
   return `En ${clean}`;
+}
+
+function currentStepStatusLabel(step: Pick<ProductionStep, "key" | "label">) {
+  const normalized = `${step.key} ${step.label}`;
+  if (/dispatch|despacho|terminado/i.test(normalized)) return "Terminado";
+  return `En ${cleanStepLabel(step.label)}`;
 }
 
 function processColumnLabel(label: string) {
@@ -578,7 +578,7 @@ function processColumnLabel(label: string) {
   if (/costura/i.test(normalized)) return "Cos";
   if (/tapicer/i.test(normalized)) return "Tap";
   if (/calidad/i.test(normalized)) return "Calidad";
-  if (/despacho/i.test(normalized)) return "Des";
+  if (/despacho|terminado/i.test(normalized)) return "Terminado";
   return normalized.slice(0, 3);
 }
 
@@ -654,15 +654,4 @@ function chipTone(tone: Tone) {
     stone: "bg-stone-100 text-stone-600",
   };
   return classes[tone];
-}
-
-function colorSwatch(color: string) {
-  const normalized = color.toLowerCase();
-  if (normalized.includes("verde")) return "bg-emerald-800";
-  if (normalized.includes("azul")) return "bg-blue-800";
-  if (normalized.includes("negro")) return "bg-stone-950";
-  if (normalized.includes("gris")) return "bg-slate-500";
-  if (normalized.includes("burdeo") || normalized.includes("rojo")) return "bg-red-900";
-  if (normalized.includes("camel") || normalized.includes("tabaco") || normalized.includes("cafe")) return "bg-amber-800";
-  return "bg-stone-400";
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, BarChart3, Boxes, FileText, Home, Settings, Users } from "lucide-react";
+import { Archive, BarChart3, Boxes, FileText, Home, PackageCheck, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -12,6 +12,7 @@ type SidebarNavigationProps = {
 
 const moduleLinks = [
   { href: "/admin/documents", label: "Comercial", icon: FileText },
+  { href: "/admin/ready", label: "Listos para entrega", icon: PackageCheck },
   { href: "/admin/stock", label: "Stock", icon: Boxes },
   { href: "/admin/reports", label: "Reportes", icon: BarChart3 },
   { href: "/admin/history", label: "Historial", icon: Archive },

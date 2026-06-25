@@ -241,7 +241,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
             </div>
           </section>
 
-          <section className="rounded-lg border border-stone-200 bg-white p-4">
+          <section id="observaciones" className="scroll-mt-5 rounded-lg border border-stone-200 bg-white p-4">
             <div className="flex items-center gap-3">
               <MessageSquareText className="size-5 text-stone-500" />
               <div>

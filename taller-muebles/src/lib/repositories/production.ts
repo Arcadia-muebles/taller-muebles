@@ -306,7 +306,7 @@ function mapOrderRecord(record: OrderRecord): Order {
     entryDate: record.entry_date,
     deliveryDate: record.delivery_date ?? record.entry_date,
     completedAt: record.completed_at ?? undefined,
-    assignedTo: record.assigned_profile?.full_name ?? "Sin asignar",
+    assignedTo: normalizeOwner(record.assigned_profile?.full_name),
     observations: record.observations ?? "Sin observaciones.",
     steps,
   };
@@ -315,13 +315,22 @@ function mapOrderRecord(record: OrderRecord): Order {
 function mapStepRecord(record: StepRecord): ProductionStep {
   return {
     key: record.step,
-    label: record.step_label || labelFromStepKey(record.step),
-    owner: record.assigned_profile?.full_name ?? "Sin asignar",
+    label: normalizeStepLabel(record.step, record.step_label || labelFromStepKey(record.step)),
+    owner: normalizeOwner(record.assigned_profile?.full_name),
     status: record.status as StepStatus,
     notes: record.notes ?? record.blocked_reason ?? undefined,
     startedAt: record.started_at ?? undefined,
     completedAt: record.completed_at ?? undefined,
   };
+}
+
+function normalizeStepLabel(step: string, label: string) {
+  if (step === "dispatch" || /despacho/i.test(label)) return "Terminado";
+  return label;
+}
+
+function normalizeOwner(value?: string | null) {
+  return value && value !== "Sin asignar" ? value : "Sin responsable asignado";
 }
 
 function labelFromStepKey(step: string) {

@@ -85,6 +85,7 @@ export async function createWorkshopOrder(
       steps: settings.production.steps,
     });
     revalidatePath("/admin");
+    revalidatePath("/admin/ready");
     revalidatePath("/taller");
     return { status: "success", message: "Producto ingresado al flujo de taller.", orderId: order.id };
   }
@@ -158,6 +159,7 @@ export async function createWorkshopOrder(
   });
 
   revalidatePath("/admin");
+  revalidatePath("/admin/ready");
   revalidatePath("/taller");
   return { status: "success", message: "Producto ingresado al flujo de taller.", orderId: order.id };
 }
@@ -228,10 +230,7 @@ export async function updateProductionStep(
   }
 
   if (!hasSupabaseConfig()) {
-    const updated = await updateLocalProductionStep({
-      ...parsed.data,
-      autoCompleteAfterQuality: settings.production.autoCompleteAfterQuality,
-    });
+    const updated = await updateLocalProductionStep(parsed.data);
     if (!updated) {
       return {
         status: "error",
@@ -240,6 +239,7 @@ export async function updateProductionStep(
     }
 
     revalidatePath("/admin");
+    revalidatePath("/admin/ready");
     revalidatePath("/taller");
     revalidatePath(`/admin/orders/${parsed.data.orderId}`);
     revalidatePath(`/taller/orders/${parsed.data.orderId}`);
@@ -317,18 +317,15 @@ export async function updateProductionStep(
   const nextOrderStatus = orderStatusAfterStepChange(
     currentOrder.priority,
     effectiveSteps,
-    settings.production.autoCompleteAfterQuality,
   );
   const { error: orderStatusError } = await mutationClient
     .from("orders")
     .update({
       status: nextOrderStatus,
-      condition: nextOrderStatus === "completed"
-        ? "delivered"
-        : nextOrderStatus === "quality_control"
+      condition: nextOrderStatus === "quality_control"
           ? "quality_control"
           : "none",
-      completed_at: nextOrderStatus === "completed" ? now : null,
+      completed_at: null,
     })
     .eq("id", parsed.data.orderId);
   if (orderStatusError) {
@@ -352,6 +349,7 @@ export async function updateProductionStep(
   if (auditError) return { status: "error", message: `La etapa cambió, pero no se pudo registrar la auditoría: ${auditError.message}` };
 
   revalidatePath("/admin");
+  revalidatePath("/admin/ready");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${parsed.data.orderId}`);
   revalidatePath(`/taller/orders/${parsed.data.orderId}`);
@@ -426,12 +424,10 @@ function stepPatch({
 function orderStatusAfterStepChange(
   priority: NonNullable<Awaited<ReturnType<typeof getOrder>>>["priority"],
   steps: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"],
-  autoCompleteAfterQuality: boolean,
 ) {
   if (steps.some((step) => step.status === "blocked")) return "blocked" as const;
   if (steps.every((step) => step.status === "done")) {
-    if (steps.at(-1)?.key === "quality" && !autoCompleteAfterQuality) return "quality_control" as const;
-    return "completed" as const;
+    return "quality_control" as const;
   }
   if (steps.find((step) => step.key === "quality")?.status === "active") return "quality_control" as const;
   return priority === "critical" ? "urgent" as const : "in_production" as const;
