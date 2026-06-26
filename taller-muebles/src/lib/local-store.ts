@@ -2,7 +2,7 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AppUser, AreaKey, AuditEntry, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, SystemSettings } from "@/lib/types";
+import type { AppUser, AreaKey, AuditEntry, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
 import { defaultSystemSettings } from "@/lib/system-settings";
 import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
 
@@ -13,6 +13,8 @@ type LocalData = {
   auditLogs: AuditEntry[];
   comments: OrderComment[];
   attachments: Array<Omit<OrderAttachment, "url"> & { storagePath: string }>;
+  structureRequests: Array<Omit<StructureRequest, "attachments"> & { attachmentIds: string[] }>;
+  suppliers: Supplier[];
   users: AppUser[];
   deletedUserIds?: string[];
   settings?: SystemSettings;
@@ -28,6 +30,8 @@ const emptyData: LocalData = {
   auditLogs: [],
   comments: [],
   attachments: [],
+  structureRequests: [],
+  suppliers: [],
   users: [],
   deletedUserIds: [],
 };
@@ -150,6 +154,8 @@ async function readData(): Promise<LocalData> {
     auditLogs: parsed.auditLogs ?? [],
     comments: parsed.comments ?? [],
     attachments: parsed.attachments ?? [],
+    structureRequests: parsed.structureRequests ?? [],
+    suppliers: parsed.suppliers ?? [],
     users: parsed.users ?? [],
     deletedUserIds: parsed.deletedUserIds ?? [],
     settings: parsed.settings,
@@ -194,6 +200,9 @@ export async function createLocalOrder(input: {
   discount?: number;
   total?: number;
   paidAmount?: number;
+  sellerName?: string;
+  paymentMethod?: string;
+  deliveryTerms?: string;
   entryDate: string;
   deliveryDate: string;
   priority: Order["priority"];
@@ -244,6 +253,9 @@ export async function createLocalOrder(input: {
     total: input.total,
     paidAmount: input.paidAmount,
     balance: input.total !== undefined ? Math.max(input.total - (input.paidAmount ?? 0), 0) : undefined,
+    sellerName: input.sellerName?.trim() || undefined,
+    paymentMethod: input.paymentMethod?.trim() || undefined,
+    deliveryTerms: input.deliveryTerms?.trim() || undefined,
     status: "in_production",
     condition: "Sin condicion",
     priority: input.priority,
@@ -283,6 +295,9 @@ export async function updateLocalOrder(id: string, input: {
   discount?: number;
   total?: number;
   paidAmount?: number;
+  sellerName?: string;
+  paymentMethod?: string;
+  deliveryTerms?: string;
   entryDate: string;
   deliveryDate: string;
   priority: Order["priority"];
@@ -316,6 +331,9 @@ export async function updateLocalOrder(id: string, input: {
   order.total = input.total;
   order.paidAmount = input.paidAmount;
   order.balance = input.total !== undefined ? Math.max(input.total - (input.paidAmount ?? 0), 0) : undefined;
+  order.sellerName = input.sellerName?.trim() || undefined;
+  order.paymentMethod = input.paymentMethod?.trim() || undefined;
+  order.deliveryTerms = input.deliveryTerms?.trim() || undefined;
   order.entryDate = input.entryDate;
   order.deliveryDate = input.deliveryDate;
   order.priority = input.priority;
@@ -578,6 +596,156 @@ export async function createLocalOrderAttachment(orderId: string, file: File) {
   });
   addAudit(data, orderId, "add_attachment", `Adjunto agregado: ${file.name}`);
   await writeData(data);
+  return id;
+}
+
+export async function listLocalStructureRequests(): Promise<StructureRequest[]> {
+  const data = await readData();
+  return data.structureRequests.map((request) => ({
+    ...request,
+    attachments: request.attachmentIds
+      .map((id) => data.attachments.find((attachment) => attachment.id === id))
+      .filter((attachment): attachment is LocalData["attachments"][number] => Boolean(attachment))
+      .map((attachment) => ({
+        id: attachment.id,
+        orderId: attachment.orderId,
+        fileName: attachment.fileName,
+        fileType: attachment.fileType,
+        fileSize: attachment.fileSize,
+        createdAt: attachment.createdAt,
+        url: `/api/local-attachments/${attachment.id}`,
+      })),
+  }));
+}
+
+export async function createLocalStructureRequest(input: {
+  orderId: string;
+  specifications: string;
+  status: StructureRequestStatus;
+  assignedTo?: string;
+  file?: File;
+}) {
+  const data = await readData();
+  const order = data.orders.find((item) => item.id === input.orderId);
+  if (!order) return false;
+
+  const existing = data.structureRequests.find((request) => request.orderId === input.orderId && request.status !== "cancelled");
+  const attachmentIds: string[] = existing?.attachmentIds ?? [];
+  if (input.file && input.file.size > 0) {
+    const id = crypto.randomUUID();
+    const uploadDir = path.join(dataDir, "uploads");
+    await mkdir(uploadDir, { recursive: true });
+    const safeName = input.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storagePath = path.join(uploadDir, `${id}-${safeName}`);
+    await writeFile(storagePath, Buffer.from(await input.file.arrayBuffer()));
+    data.attachments.unshift({
+      id,
+      orderId: order.id,
+      fileName: input.file.name,
+      fileType: input.file.type || "application/octet-stream",
+      fileSize: input.file.size,
+      storagePath,
+      createdAt: nowIso(),
+    });
+    attachmentIds.unshift(id);
+  }
+
+  if (existing) {
+    existing.specifications = input.specifications;
+    existing.status = input.status;
+    existing.assignedTo = input.assignedTo?.trim() || undefined;
+    existing.attachmentIds = attachmentIds;
+  } else {
+    data.structureRequests.unshift({
+      id: crypto.randomUUID(),
+      orderId: order.id,
+      orderCode: order.code,
+      client: order.client,
+      product: order.product,
+      specifications: input.specifications,
+      status: input.status,
+      assignedTo: input.assignedTo?.trim() || undefined,
+      requestedAt: nowIso(),
+      attachmentIds,
+    });
+  }
+
+  const step = order.steps.find((item) => item.key === "structure");
+  if (step && input.status !== "draft") {
+    step.status = input.status === "done" ? "done" : step.status === "done" ? "done" : "active";
+    step.startedAt = step.startedAt ?? nowIso();
+    step.notes = input.specifications;
+    if (input.status === "done") step.completedAt = nowIso();
+  }
+  addAudit(data, order.id, "structure_request", `Estructura: ${input.status}`);
+  await writeData(data);
+  return true;
+}
+
+export async function updateLocalStructureRequestStatus(id: string, status: StructureRequestStatus) {
+  const data = await readData();
+  const request = data.structureRequests.find((item) => item.id === id);
+  const order = request ? data.orders.find((item) => item.id === request.orderId) : undefined;
+  if (!request || !order) return false;
+  request.status = status;
+  request.completedAt = status === "done" ? nowIso() : undefined;
+
+  const step = order.steps.find((item) => item.key === "structure");
+  if (step) {
+    if (status === "done") {
+      step.status = "done";
+      step.startedAt = step.startedAt ?? nowIso();
+      step.completedAt = nowIso();
+    } else if (status === "requested" || status === "in_progress") {
+      step.status = "active";
+      step.startedAt = step.startedAt ?? nowIso();
+      step.completedAt = undefined;
+    }
+  }
+  addAudit(data, order.id, "structure_status", `Estructura actualizada a ${status}`);
+  await writeData(data);
+  return true;
+}
+
+export async function listLocalSuppliers() {
+  return (await readData()).suppliers;
+}
+
+export async function upsertLocalSupplier(input: Omit<Supplier, "id" | "active" | "createdAt" | "updatedAt"> & { id?: string }) {
+  const data = await readData();
+  const now = nowIso();
+  if (input.id) {
+    const supplier = data.suppliers.find((item) => item.id === input.id);
+    if (!supplier) return false;
+    supplier.name = input.name;
+    supplier.contactName = input.contactName;
+    supplier.phone = input.phone;
+    supplier.email = input.email;
+    supplier.address = input.address;
+    supplier.products = input.products;
+    supplier.observations = input.observations;
+    supplier.updatedAt = now;
+  } else {
+    data.suppliers.unshift({
+      ...input,
+      id: crypto.randomUUID(),
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  await writeData(data);
+  return true;
+}
+
+export async function deactivateLocalSupplier(id: string) {
+  const data = await readData();
+  const supplier = data.suppliers.find((item) => item.id === id);
+  if (!supplier) return false;
+  supplier.active = false;
+  supplier.updatedAt = nowIso();
+  await writeData(data);
+  return true;
 }
 
 export async function createLocalStockMovement(input: {

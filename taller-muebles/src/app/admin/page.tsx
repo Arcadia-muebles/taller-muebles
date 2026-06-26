@@ -4,12 +4,12 @@ import { ActiveProductionDashboard } from "@/components/active-production-dashbo
 import { AppShell } from "@/components/app-shell";
 import { requireSession } from "@/lib/auth";
 import { activeOrders, isReadyForDelivery, readyForDeliveryOrders } from "@/lib/metrics";
-import { listOrders } from "@/lib/repositories/production";
+import { listOrders, listStructureRequests } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 
 export default async function AdminPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
-  const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
+  const [orders, settings, structureRequests] = await Promise.all([listOrders(), getSystemSettings(), listStructureRequests()]);
   const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
   const active = activeOrders(orders);
   const ready = readyForDeliveryOrders(orders);
@@ -20,7 +20,7 @@ export default async function AdminPage() {
       <header className="page-header">
         <div>
           <p className="page-kicker">ARCADIA</p>
-          <h1 className="page-title">Produccion activa</h1>
+          <h1 className="page-title">Producción activa</h1>
           <p className="page-description">
             Resumen operativo del taller con etapas editables desde la misma tabla.
           </p>
@@ -39,7 +39,7 @@ export default async function AdminPage() {
         </div>
       </header>
 
-      <ActiveProductionDashboard orders={inProduction} steps={settings.production.steps} canMove={canEditOrders} />
+      <ActiveProductionDashboard orders={inProduction} steps={settings.production.steps} canMove={canEditOrders} structureRequests={structureRequests} />
     </AppShell>
   );
 }

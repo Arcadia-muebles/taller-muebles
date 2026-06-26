@@ -298,7 +298,7 @@ function documentTypeLabel(type: string) {
     quote: "Cotizacion",
     purchase_order: "Orden de Compra",
     warranty: "Garantia",
-    production_intake: "Ingreso produccion",
+    production_intake: "Ingreso producción",
   };
   return labels[type] ?? type;
 }

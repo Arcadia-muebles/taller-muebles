@@ -62,6 +62,9 @@ export async function createOrder(
     discount: formData.get("discount"),
     total: formData.get("total"),
     paidAmount: formData.get("paidAmount"),
+    sellerName: formData.get("sellerName")?.toString() || undefined,
+    paymentMethod: formData.get("paymentMethod")?.toString() || undefined,
+    deliveryTerms: formData.get("deliveryTerms")?.toString() || undefined,
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
     assignedTo: formData.get("assignedTo")?.toString() || undefined,
@@ -169,6 +172,9 @@ export async function createOrder(
       total_amount: parsed.data.total ?? null,
       paid_amount: parsed.data.paidAmount ?? 0,
       balance_amount: parsed.data.total !== undefined ? Math.max(parsed.data.total - (parsed.data.paidAmount ?? 0), 0) : null,
+      seller_name: parsed.data.sellerName || null,
+      payment_method: parsed.data.paymentMethod || null,
+      delivery_terms: parsed.data.deliveryTerms || null,
       status: "in_production",
       condition: "none",
       priority: orderPriority,
@@ -178,7 +184,7 @@ export async function createOrder(
       observations: parsed.data.observations,
       assigned_to: assignee?.id ?? null,
       created_by: profileId,
-    })))
+    } as never)))
     .select("id");
 
   if (orderError || !createdOrders?.length) {
@@ -272,6 +278,9 @@ export async function updateOrder(
     discount: formData.get("discount"),
     total: formData.get("total"),
     paidAmount: formData.get("paidAmount"),
+    sellerName: formData.get("sellerName")?.toString() || undefined,
+    paymentMethod: formData.get("paymentMethod")?.toString() || undefined,
+    deliveryTerms: formData.get("deliveryTerms")?.toString() || undefined,
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
     assignedTo: formData.get("assignedTo")?.toString() || undefined,
@@ -329,6 +338,9 @@ export async function updateOrder(
       total_amount: parsed.data.total ?? null,
       paid_amount: parsed.data.paidAmount ?? 0,
       balance_amount: parsed.data.total !== undefined ? Math.max(parsed.data.total - (parsed.data.paidAmount ?? 0), 0) : null,
+      seller_name: parsed.data.sellerName || null,
+      payment_method: parsed.data.paymentMethod || null,
+      delivery_terms: parsed.data.deliveryTerms || null,
       group_code: parsed.data.groupCode?.trim() || parsed.data.salesNoteNumber,
       priority: orderPriority,
       is_warranty: parsed.data.isWarranty,
@@ -336,7 +348,7 @@ export async function updateOrder(
       delivery_date: parsed.data.deliveryDate,
       observations: parsed.data.observations,
       assigned_to: assignee?.id ?? null,
-    }).eq("id", orderId);
+    } as never).eq("id", orderId);
     if (error) return { status: "error", message: error.message };
     await supabase.from("audit_logs").insert({
       order_id: orderId,

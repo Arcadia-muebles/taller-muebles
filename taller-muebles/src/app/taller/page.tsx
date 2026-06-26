@@ -45,8 +45,8 @@ export default async function WorkshopPage() {
           hideActions
           detailPathPrefix="/taller/orders"
           title="Hoja 2: Notas activas"
-          description="Notas pendientes, en produccion, atrasadas o sin iniciar. Las terminadas desaparecen automaticamente."
-          emptyText="No hay notas activas para produccion."
+          description="Notas pendientes, en producción, atrasadas o sin iniciar. Las terminadas desaparecen automaticamente."
+          emptyText="No hay notas activas para producción."
         />
       </div>
 

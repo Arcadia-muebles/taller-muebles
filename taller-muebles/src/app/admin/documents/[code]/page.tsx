@@ -46,13 +46,13 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
             </span>
           </div>
           <p className="page-description">
-            Vista completa del registro comercial y de los productos que alimentan produccion.
+            Vista completa del registro comercial y de los productos que alimentan producción.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/admin/orders/${document.id}`} className="btn btn-secondary">
             <Wrench className="size-4" />
-            Ver produccion
+            Ver producción
           </Link>
           {canEditOrders ? (
             <Link href={`/admin/orders/${document.id}/edit`} className="btn btn-primary">
@@ -82,6 +82,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
               <Info label="Direccion" value={document.customerAddress} />
               <Info label="Comuna" value={document.customerCommune} />
               <Info label="Contacto general" value={document.customerContact} />
+              <Info label="Vendedor" value={document.sellerName} />
             </div>
           </section>
 
@@ -103,7 +104,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Cant.</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Precio</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Subtotal</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Produccion</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producción</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -169,7 +170,15 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
               <Info label="Total" value={formatCurrency(financials.total)} strong />
               <Info label="Abono" value={formatCurrency(financials.paidAmount)} />
               <Info label="Saldo" value={formatCurrency(financials.balance)} strong />
+              <Info label="Medio de pago" value={document.paymentMethod} />
             </div>
+          </section>
+
+          <section className="panel p-4">
+            <h2 className="panel-title">Condiciones de entrega</h2>
+            <p className="mt-3 text-sm leading-6 text-stone-700">
+              {document.deliveryTerms?.trim() || "Sin registrar"}
+            </p>
           </section>
         </aside>
       </section>

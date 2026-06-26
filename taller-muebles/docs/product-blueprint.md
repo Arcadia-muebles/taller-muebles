@@ -6,6 +6,8 @@ Construir una plataforma web interna para Leather House y La Reina que mantenga 
 
 Ultima definicion con Rodrigo: 2026-06-22. Ver `docs/reunion-rodrigo-2026-06-22.md`.
 
+Actualizacion 2026-06-26: Muebles La Reina es el emisor comercial principal para notas de venta, cotizaciones, garantias y ordenes de compra. Leather House se mantiene como flujo alternativo de ingreso productivo simple para fabricar productos que no requieren el documento comercial completo.
+
 ## Personas
 
 ### Administrador
@@ -62,6 +64,7 @@ Campos base:
 - Responsable actual.
 - Observaciones.
 - Adjuntos.
+- Vendedor, medio de pago y condiciones de entrega para documentos La Reina.
 
 Reglas acordadas:
 
@@ -69,6 +72,17 @@ Reglas acordadas:
 - Las observaciones importantes deben activar un indicador visual discreto en tarjetas y tablas.
 - Se conserva la marca de garantia para diferenciar reingresos por falla de ventas nuevas.
 - Debe existir flexibilidad para medidas, materiales y productos personalizados.
+- El formulario nuevo debe partir en La Reina; Leather House no debe sentirse como el flujo principal de documentos.
+
+### Lista de estructuras
+
+Modulo operativo independiente para solicitar estructuras manualmente.
+
+- Se vincula a pedidos activos.
+- Guarda especificaciones libres para el encargado de estructura.
+- Permite adjuntar imagenes o PDF como bosquejos, planos o fotos con medidas.
+- Estados base: borrador, solicitada, en fabricacion, lista, cancelada.
+- Una estructura solicitada debe verse en el Home como señal azul; una estructura terminada debe verse como check verde.
 
 ### 2. Produccion
 

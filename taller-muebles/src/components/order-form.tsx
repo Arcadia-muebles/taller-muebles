@@ -55,14 +55,17 @@ export function OrderForm({
   } = useForm<FormValues>({
     resolver: zodResolver(orderId ? orderSchema : newOrderSchema) as Resolver<FormValues>,
     defaultValues: initialValues ?? {
-      store: "LH",
-      documentType: "production_intake",
+      store: "LR",
+      documentType: "sales_note",
       documentStatus: "issued",
-      salesNoteNumber: nextCodes.LH,
+      salesNoteNumber: nextCodes.LR,
       isWarranty: false,
       entryDate: new Date().toISOString().slice(0, 10),
       discount: 0,
       paidAmount: 0,
+      sellerName: "Rodrigo Bravo G.",
+      paymentMethod: "Transferencia",
+      deliveryTerms: "El despacho dentro de Santiago no tiene costo. En caso de subir o bajar por escalas el costo sera de $7.000.- por piso.",
       products: [{ productName: "", material: "", color: "", quantity: 1 }],
     },
   });
@@ -119,6 +122,8 @@ export function OrderForm({
   const computedTotal = Math.max(computedSubtotal - computedDiscount, 0);
   const computedPaid = Number(paidAmountValue ?? 0) || 0;
   const computedBalance = Math.max(computedTotal - computedPaid, 0);
+  const computedNet = Math.round(computedTotal / 1.19);
+  const computedVat = Math.max(computedTotal - computedNet, 0);
 
   useEffect(() => {
     if (!isCommercialDocument) return;
@@ -143,11 +148,11 @@ export function OrderForm({
         <div className="panel-header flex items-center gap-3">
           {isLeatherHouse ? <Factory className="size-5 text-stone-500" /> : <FileText className="size-5 text-stone-500" />}
           <div>
-            <h2 className="panel-title">{isLeatherHouse ? "Ingreso Leather House" : "Documento comercial La Reina"}</h2>
+            <h2 className="panel-title">{isLeatherHouse ? "Ingreso Leather House" : "Fabricacion y venta de muebles - Muebles La Reina"}</h2>
             <p className="panel-description">
               {isLeatherHouse
                 ? "Formulario simplificado orientado exclusivamente a fabricacion."
-                : "Documento base que alimenta automaticamente la produccion."}
+                : "Documento base para nota de venta, cotizacion, garantia u orden de compra."}
             </p>
           </div>
         </div>
@@ -155,11 +160,11 @@ export function OrderForm({
         <div className="grid gap-4 p-4 md:grid-cols-2">
           <Field label="Flujo" error={typedErrors.store?.message}>
             <select {...register("store")} className={inputClass}>
-              <option value="LH">LH - ingreso de produccion</option>
+              <option value="LH">LH - ingreso de producción</option>
               <option value="LR">LR - documento comercial</option>
             </select>
           </Field>
-          <Field label={isLeatherHouse ? "Codigo produccion" : "Numero documento"} error={typedErrors.salesNoteNumber?.message}>
+          <Field label={isLeatherHouse ? "Código producción" : "Número documento"} error={typedErrors.salesNoteNumber?.message}>
             {orderId ? (
               <input {...register("salesNoteNumber")} className={inputClass} readOnly />
             ) : (
@@ -190,6 +195,11 @@ export function OrderForm({
           <Field label="Codigo pedido comun" error={typedErrors.groupCode?.message}>
             <input {...register("groupCode")} className={inputClass} placeholder="Opcional, ej. LR2101" />
           </Field>
+          {isCommercialDocument ? (
+            <Field label="Vendedor" error={typedErrors.sellerName?.message}>
+              <input {...register("sellerName")} className={inputClass} placeholder="Rodrigo Bravo G." />
+            </Field>
+          ) : null}
           <Field label="Cliente" error={typedErrors.clientName?.message}>
             <input {...register("clientName")} className={inputClass} placeholder="Persona o empresa" />
           </Field>
@@ -371,8 +381,19 @@ export function OrderForm({
           </div>
           <div className="grid gap-3 border-t border-stone-200 p-4 md:grid-cols-3">
             <PaymentMetric label="Neto documento" value={formatCurrency(computedTotal)} />
+            <PaymentMetric label="Neto sin IVA" value={formatCurrency(computedNet)} />
+            <PaymentMetric label="IVA 19%" value={formatCurrency(computedVat)} />
+            <PaymentMetric label="Total documento" value={formatCurrency(computedTotal)} emphasis />
             <PaymentMetric label="Abonado" value={formatCurrency(computedPaid)} />
             <PaymentMetric label="Saldo pendiente" value={formatCurrency(computedBalance)} emphasis />
+          </div>
+          <div className="grid gap-4 border-t border-stone-200 p-4 md:grid-cols-2">
+            <Field label="Medio de pago" error={typedErrors.paymentMethod?.message}>
+              <input {...register("paymentMethod")} className={inputClass} placeholder="Transferencia, efectivo, tarjeta..." />
+            </Field>
+            <Field label="Condiciones de entrega" error={typedErrors.deliveryTerms?.message} full>
+              <textarea {...register("deliveryTerms")} className="textarea-control min-h-24 bg-white" />
+            </Field>
           </div>
         </section>
       ) : null}

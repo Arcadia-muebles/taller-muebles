@@ -26,6 +26,13 @@ export type OrderStatus =
 
 export type StepStatus = "pending" | "active" | "done" | "blocked";
 
+export type StructureRequestStatus =
+  | "draft"
+  | "requested"
+  | "in_progress"
+  | "done"
+  | "cancelled";
+
 export type Role = "admin" | "manager" | "operator" | "viewer";
 
 export type AreaKey = string;
@@ -74,6 +81,9 @@ export type Order = {
   total?: number;
   paidAmount?: number;
   balance?: number;
+  sellerName?: string;
+  paymentMethod?: string;
+  deliveryTerms?: string;
   status: OrderStatus;
   condition:
     | "Sin condicion"
@@ -89,6 +99,34 @@ export type Order = {
   assignedTo: string;
   observations: string;
   steps: ProductionStep[];
+};
+
+export type StructureRequest = {
+  id: string;
+  orderId: string;
+  orderCode: string;
+  client: string;
+  product: string;
+  specifications: string;
+  status: StructureRequestStatus;
+  assignedTo?: string;
+  requestedAt: string;
+  completedAt?: string;
+  attachments: OrderAttachment[];
+};
+
+export type Supplier = {
+  id: string;
+  name: string;
+  contactName?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  products: string;
+  observations?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt?: string;
 };
 
 export type StockLocation = "warehouse" | "workshop";

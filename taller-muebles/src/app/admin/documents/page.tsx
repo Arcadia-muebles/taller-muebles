@@ -39,7 +39,7 @@ export default async function DocumentsPage() {
           <p className="page-kicker">Comercial</p>
           <h1 className="page-title">Documentos comerciales</h1>
           <p className="page-description">
-            Notas de venta, cotizaciones, ordenes de compra y garantias vinculadas a produccion.
+            Notas de venta, cotizaciones, ordenes de compra y garantias vinculadas a producción.
           </p>
         </div>
         {canEditOrders ? (
@@ -75,7 +75,7 @@ export default async function DocumentsPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Total</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Abono</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Saldo</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Produccion</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producción</th>
                     </tr>
                   </thead>
                   <tbody>

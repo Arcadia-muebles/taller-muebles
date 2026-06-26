@@ -11,12 +11,14 @@ import type {
   StepStatus,
   StockItem,
   StockMovement,
+  StructureRequest,
+  Supplier,
   StoreCode,
   CommercialDocumentStatus,
   CommercialDocumentType,
 } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { getLocalOrder, listLocalAuditLogs, listLocalOrderAttachments, listLocalOrderComments, listLocalOrders, listLocalStockItems, listLocalStockMovements } from "@/lib/local-store";
+import { getLocalOrder, listLocalAuditLogs, listLocalOrderAttachments, listLocalOrderComments, listLocalOrders, listLocalStockItems, listLocalStockMovements, listLocalStructureRequests, listLocalSuppliers } from "@/lib/local-store";
 import { shortOrderCode } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -26,6 +28,41 @@ type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
 type StoreRow = Database["public"]["Tables"]["stores"]["Row"];
 type StepRow = Database["public"]["Tables"]["production_steps"]["Row"];
 type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
+type LooseDb<T> = {
+  from: (table: string) => LooseQuery<T>;
+};
+type LooseQuery<T> = {
+  select: (columns?: string) => LooseQuery<T>;
+  order: (column: string, options?: { ascending?: boolean }) => LooseQuery<T> & Promise<{ data: T[] | null; error: { message: string } | null }>;
+  eq: (column: string, value: string) => LooseQuery<T>;
+  neq: (column: string, value: string) => LooseQuery<T>;
+  maybeSingle: () => Promise<{ data: T | null; error: { message: string } | null }>;
+};
+
+type StructureRequestRecord = {
+  id: string;
+  order_id: string;
+  specifications: string;
+  status: StructureRequest["status"];
+  assigned_to: string | null;
+  requested_at: string;
+  completed_at: string | null;
+  orders: { internal_code: string; client_name: string; product_name: string } | null;
+};
+
+type SupplierRecord = {
+  id: string;
+  name: string;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  products: string | null;
+  observations: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string | null;
+};
 
 type StepRecord = StepRow & {
   assigned_profile: { full_name: string } | null;
@@ -299,6 +336,9 @@ function mapOrderRecord(record: OrderRecord): Order {
     total: record.total_amount === null ? undefined : Number(record.total_amount),
     paidAmount: record.paid_amount === null ? undefined : Number(record.paid_amount),
     balance: record.balance_amount === null ? undefined : Number(record.balance_amount),
+    sellerName: (record as OrderRow & { seller_name?: string | null }).seller_name ?? undefined,
+    paymentMethod: (record as OrderRow & { payment_method?: string | null }).payment_method ?? undefined,
+    deliveryTerms: (record as OrderRow & { delivery_terms?: string | null }).delivery_terms ?? undefined,
     status: record.status as OrderStatus,
     condition: conditionLabels[record.condition] ?? "Sin condicion",
     priority: record.priority as Order["priority"],
@@ -310,6 +350,84 @@ function mapOrderRecord(record: OrderRecord): Order {
     observations: record.observations ?? "Sin observaciones.",
     steps,
   };
+}
+
+export async function listStructureRequests(): Promise<StructureRequest[]> {
+  if (!hasSupabaseConfig()) return listLocalStructureRequests();
+
+  const supabase = await createClient();
+  const { data, error } = await (supabase as unknown as LooseDb<StructureRequestRecord>)
+    .from("structure_requests")
+    .select(`
+      id,
+      order_id,
+      specifications,
+      status,
+      assigned_to,
+      requested_at,
+      completed_at,
+      orders (
+        internal_code,
+        client_name,
+        product_name
+      )
+    `)
+    .order("requested_at", { ascending: false });
+  if (error || !data) {
+    console.error("Supabase structure requests query failed:", error?.message);
+    return [];
+  }
+
+  const attachmentsByOrder = await Promise.all(
+    Array.from(new Set(data.map((request) => request.order_id))).map(async (orderId) => [
+      orderId,
+      await listOrderAttachments(orderId),
+    ] as const),
+  );
+  const attachmentMap = new Map(attachmentsByOrder);
+
+  return data.map((request) => ({
+    id: request.id,
+    orderId: request.order_id,
+    orderCode: shortOrderCode(request.orders?.internal_code ?? ""),
+    client: request.orders?.client_name ?? "Sin cliente",
+    product: request.orders?.product_name ?? "Sin producto",
+    specifications: request.specifications,
+    status: request.status,
+    assignedTo: request.assigned_to ?? undefined,
+    requestedAt: request.requested_at,
+    completedAt: request.completed_at ?? undefined,
+    attachments: attachmentMap.get(request.order_id) ?? [],
+  }));
+}
+
+export async function listSuppliers(): Promise<Supplier[]> {
+  if (!hasSupabaseConfig()) return listLocalSuppliers();
+
+  const supabase = await createClient();
+  const { data, error } = await (supabase as unknown as LooseDb<SupplierRecord>)
+    .from("suppliers")
+    .select("*")
+    .order("active", { ascending: false })
+    .order("name", { ascending: true });
+  if (error || !data) {
+    console.error("Supabase suppliers query failed:", error?.message);
+    return [];
+  }
+
+  return data.map((supplier) => ({
+    id: supplier.id,
+    name: supplier.name,
+    contactName: supplier.contact_name ?? undefined,
+    phone: supplier.phone ?? undefined,
+    email: supplier.email ?? undefined,
+    address: supplier.address ?? undefined,
+    products: supplier.products ?? "",
+    observations: supplier.observations ?? undefined,
+    active: supplier.active,
+    createdAt: supplier.created_at,
+    updatedAt: supplier.updated_at ?? undefined,
+  }));
 }
 
 function mapStepRecord(record: StepRecord): ProductionStep {

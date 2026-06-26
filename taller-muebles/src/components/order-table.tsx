@@ -50,7 +50,7 @@ export function OrderTable({
   rowLinks = false,
   hideActions = false,
   detailPathPrefix = "/admin/orders",
-  title = "Ordenes de produccion",
+  title = "Órdenes de producción",
   description,
   emptyText = "No hay ordenes que coincidan con los filtros.",
 }: OrderTableProps) {
@@ -588,7 +588,7 @@ function statusLabel(status: OrderStatus) {
   const labels: Record<OrderStatus, string> = {
     draft: "Borrador",
     scheduled: "Programada",
-    in_production: "En produccion",
+    in_production: "En producción",
     blocked: "Bloqueada",
     urgent: "Urgente",
     quality_control: "Listo para entrega",

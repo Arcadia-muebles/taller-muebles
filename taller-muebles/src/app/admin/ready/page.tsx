@@ -18,7 +18,7 @@ export default async function ReadyForDeliveryPage() {
     <AppShell active="admin" user={user}>
       <header className="page-header">
         <div>
-          <p className="page-kicker">Produccion</p>
+          <p className="page-kicker">Producción</p>
           <h1 className="page-title">Listos para entrega</h1>
           <p className="page-description">
             Órdenes terminadas en taller, pendientes de entrega o retiro.
