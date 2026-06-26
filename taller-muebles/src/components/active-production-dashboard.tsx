@@ -570,13 +570,18 @@ function orderWithStage(order: Order, stepKey: AreaKey): Order {
 }
 
 function orderWithActiveStep(order: Order, stepKey: AreaKey): Order {
+  const targetIndex = order.steps.findIndex((step) => step.key === stepKey);
+  if (targetIndex < 0) return order;
   return {
     ...order,
-    steps: order.steps.map((step) => {
-      if (step.key === stepKey) {
+    steps: order.steps.map((step, index) => {
+      if (index < targetIndex) {
+        return { ...step, status: "done", startedAt: step.startedAt ?? new Date().toISOString(), completedAt: step.completedAt ?? new Date().toISOString() };
+      }
+      if (index === targetIndex) {
         return { ...step, status: "active", startedAt: step.startedAt ?? new Date().toISOString(), completedAt: undefined };
       }
-      return step;
+      return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
     }),
   };
 }

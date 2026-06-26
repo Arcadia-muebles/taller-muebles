@@ -163,9 +163,7 @@ async function updateStructureStep({
   const patch =
     status === "done"
       ? { status: "done", started_at: now, completed_at: now, notes, updated_by: profileId }
-      : status === "requested" || status === "in_progress"
-        ? { status: "active", started_at: now, completed_at: null, notes, updated_by: profileId }
-        : { notes, updated_by: profileId };
+      : { notes, updated_by: profileId };
   await (supabase as unknown as LooseDb<ProductionStepRow>).from("production_steps").update(patch).eq("order_id", orderId).eq("step", "structure");
 }
 

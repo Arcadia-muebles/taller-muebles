@@ -672,10 +672,12 @@ export async function createLocalStructureRequest(input: {
 
   const step = order.steps.find((item) => item.key === "structure");
   if (step && input.status !== "draft") {
-    step.status = input.status === "done" ? "done" : step.status === "done" ? "done" : "active";
-    step.startedAt = step.startedAt ?? nowIso();
     step.notes = input.specifications;
-    if (input.status === "done") step.completedAt = nowIso();
+    if (input.status === "done") {
+      step.status = "done";
+      step.startedAt = step.startedAt ?? nowIso();
+      step.completedAt = nowIso();
+    }
   }
   addAudit(data, order.id, "structure_request", `Estructura: ${input.status}`);
   await writeData(data);
@@ -697,9 +699,7 @@ export async function updateLocalStructureRequestStatus(id: string, status: Stru
       step.startedAt = step.startedAt ?? nowIso();
       step.completedAt = nowIso();
     } else if (status === "requested" || status === "in_progress") {
-      step.status = "active";
-      step.startedAt = step.startedAt ?? nowIso();
-      step.completedAt = undefined;
+      step.notes = request.specifications;
     }
   }
   addAudit(data, order.id, "structure_status", `Estructura actualizada a ${status}`);
@@ -914,6 +914,9 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
     if (ensureConfiguredOrderSteps(order, data, data.settings?.production.steps ?? defaultSystemSettings.production.steps)) {
       changed = true;
     }
+    if (ensureSingleActiveStep(order)) {
+      changed = true;
+    }
     for (const step of order.steps) {
       const ownerFallback = stepDefinitions.find((item) => item.key === step.key)?.ownerFallback ?? step.label;
       if (
@@ -938,6 +941,38 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
   }
 
   return { data, changed };
+}
+
+function ensureSingleActiveStep(order: Order) {
+  const activeIndexes = order.steps
+    .map((step, index) => step.status === "active" ? index : -1)
+    .filter((index) => index >= 0);
+  if (activeIndexes.length <= 1) return false;
+
+  const keepActiveIndex = activeIndexes.at(-1);
+  if (keepActiveIndex === undefined) return false;
+  const now = nowIso();
+  order.steps = order.steps.map((step, index) => {
+    if (index === keepActiveIndex) return step;
+    if (index < keepActiveIndex && step.status === "active") {
+      return {
+        ...step,
+        status: "done",
+        startedAt: step.startedAt ?? now,
+        completedAt: step.completedAt ?? now,
+      };
+    }
+    if (index > keepActiveIndex && step.status === "active") {
+      return {
+        ...step,
+        status: "pending",
+        startedAt: undefined,
+        completedAt: undefined,
+      };
+    }
+    return step;
+  });
+  return true;
 }
 
 function ensureConfiguredOrderSteps(
