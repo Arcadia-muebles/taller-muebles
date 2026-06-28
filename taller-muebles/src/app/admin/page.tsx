@@ -19,11 +19,8 @@ export default async function AdminPage() {
     <AppShell active="admin" user={user}>
       <header className="page-header">
         <div>
-          <p className="page-kicker">ARCADIA</p>
           <h1 className="page-title">Producción activa</h1>
-          <p className="page-description">
-            Resumen operativo del taller con etapas editables desde la misma tabla.
-          </p>
+          <p className="page-description">Estado real del taller y próximas entregas.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/ready" className="btn btn-secondary">

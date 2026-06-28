@@ -19,15 +19,11 @@ export default async function NewOrderPage() {
   return (
     <AppShell active="admin" user={user}>
       <header className="border-b border-stone-200 pb-5">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">
-          Nuevo documento
-        </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-950">
           Crear documento La Reina
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-          El flujo principal emite documentos de Muebles La Reina y alimenta producción.
-          Leather House queda disponible como ingreso simplificado de fabricacion.
+          Documento comercial que alimenta producción. Leather House queda como ingreso simple de fabricación.
         </p>
       </header>
 

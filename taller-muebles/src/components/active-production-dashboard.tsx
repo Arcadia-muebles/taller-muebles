@@ -117,7 +117,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         <MetricCard
           label="Notas activas"
           value={String(normalizedOrders.length)}
-          helper={`LH: ${counters.lh} / LR: ${counters.lr}`}
+          helper=""
           icon={CheckCircle2}
           tone="green"
         />
@@ -134,7 +134,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         <MetricCard
           label="Atrasadas"
           value={String(counters.late)}
-          helper={normalizedOrders.length ? `${Math.round((counters.late / normalizedOrders.length) * 100)}% del total` : "Sin atrasos"}
+          helper={counters.late ? "Revisar fecha" : ""}
           icon={Clock3}
           tone={counters.late ? "rose" : "stone"}
         />
@@ -254,8 +254,8 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                       </div>
                     </BodyCell>
                     <BodyCell>
-                      <p className="line-clamp-2 text-xs font-semibold uppercase leading-5 text-stone-950">{order.product}</p>
-                      <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-[0.04em] text-stone-500">Pedido {order.groupCode}</p>
+                      <p className="whitespace-normal break-words text-xs font-semibold uppercase leading-5 text-stone-950">{order.product}</p>
+                      <p className="mt-1 whitespace-normal break-words text-[11px] font-medium uppercase tracking-[0.04em] text-stone-500">Pedido {order.groupCode}</p>
                     </BodyCell>
                     <BodyCell>
                       <p title={order.color || "Sin color"} className="line-clamp-2 break-words text-xs font-semibold leading-4 text-stone-900">

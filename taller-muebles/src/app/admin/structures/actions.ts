@@ -109,6 +109,10 @@ export async function createStructureRequest(formData: FormData) {
   revalidatePath("/taller");
 }
 
+export async function saveStructureSpecification(formData: FormData) {
+  await createStructureRequest(formData);
+}
+
 export async function setStructureRequestStatus(formData: FormData) {
   await requireSession(["admin", "manager"]);
   const id = formData.get("id")?.toString();

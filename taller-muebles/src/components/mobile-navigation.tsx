@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, BarChart3, Boxes, FileText, Home, LogOut, Menu, PackageCheck, Settings, Users, X } from "lucide-react";
+import { Archive, BarChart3, Boxes, Building2, FileText, Hammer, Home, LogOut, Menu, PackageCheck, Settings, Users, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -44,12 +44,21 @@ export function MobileNavigation({
           {canUseAdmin ? (
             <>
               <NavLink href="/admin/documents" icon={FileText} label="Comercial" active={pathname.startsWith("/admin/documents")} />
+              <NavLink href="/admin/structures" icon={Hammer} label="Estructuras" active={pathname.startsWith("/admin/structures")} />
               <NavLink href="/admin/ready" icon={PackageCheck} label="Listos para entrega" active={pathname.startsWith("/admin/ready")} />
               <NavLink href="/admin/stock" icon={Boxes} label="Stock" active={pathname.startsWith("/admin/stock")} />
-              <NavLink href="/admin/reports" icon={BarChart3} label="Reportes" active={pathname.startsWith("/admin/reports")} />
-              <NavLink href="/admin/history" icon={Archive} label="Historial" active={pathname.startsWith("/admin/history")} />
-              {canEditAdmin ? <NavLink href="/admin/users" icon={Users} label="Usuarios" active={pathname.startsWith("/admin/users")} /> : null}
-              <NavLink href="/admin/settings" icon={Settings} label="Configuración" active={pathname.startsWith("/admin/settings")} />
+              <details className="mt-1" open={isSecondaryActive(pathname)}>
+                <summary className="cursor-pointer rounded-md px-3 py-3 text-sm font-medium text-stone-500 hover:bg-stone-100 hover:text-stone-900">
+                  Más
+                </summary>
+                <div className="mt-1">
+                  <NavLink href="/admin/suppliers" icon={Building2} label="Proveedores" active={pathname.startsWith("/admin/suppliers")} />
+                  <NavLink href="/admin/reports" icon={BarChart3} label="Reportes" active={pathname.startsWith("/admin/reports")} />
+                  <NavLink href="/admin/history" icon={Archive} label="Historial" active={pathname.startsWith("/admin/history")} />
+                  {canEditAdmin ? <NavLink href="/admin/users" icon={Users} label="Usuarios" active={pathname.startsWith("/admin/users")} /> : null}
+                  <NavLink href="/admin/settings" icon={Settings} label="Configuración" active={pathname.startsWith("/admin/settings")} />
+                </div>
+              </details>
             </>
           ) : null}
           <div className="mt-2 flex items-center justify-between gap-3 border-t border-stone-200 px-2 pt-3">
@@ -68,6 +77,16 @@ export function MobileNavigation({
       ) : null}
     </div>
   );
+}
+
+function isSecondaryActive(pathname: string) {
+  return [
+    "/admin/suppliers",
+    "/admin/reports",
+    "/admin/history",
+    "/admin/users",
+    "/admin/settings",
+  ].some((href) => pathname.startsWith(href));
 }
 
 const roleLabels: Record<Role, string> = {

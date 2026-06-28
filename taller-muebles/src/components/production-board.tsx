@@ -282,7 +282,7 @@ function ProductCard({
       <div className="flex min-w-0 items-start gap-2">
         <div className="min-w-0">
           <p className="truncate font-mono text-xs font-semibold text-stone-500" title={order.code}>{order.code}</p>
-          <h4 className="mt-2 line-clamp-2 text-sm font-semibold text-stone-950">{order.product}</h4>
+          <h4 className="mt-2 whitespace-normal break-words text-sm font-semibold text-stone-950">{order.product}</h4>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {hasMeaningfulObservations(order.observations) ? (
@@ -293,7 +293,7 @@ function ProductCard({
       </div>
       <p className="mt-2 truncate text-xs font-medium text-stone-700">{order.client}</p>
       <p className="mt-1 truncate font-mono text-[11px] font-semibold text-stone-500">Pedido {order.groupCode}</p>
-      <p className="mt-1 line-clamp-2 text-xs text-stone-500">{order.material} / {order.color}</p>
+      <p className="mt-1 whitespace-normal break-words text-xs text-stone-500">{order.material} / {order.color}</p>
 
       <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
         {step ? <StatusBadge type="step" value={step.status} className="h-6 max-w-full px-2 text-[11px]" /> : null}

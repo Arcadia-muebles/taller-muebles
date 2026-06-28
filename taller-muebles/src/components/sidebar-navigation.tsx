@@ -10,12 +10,15 @@ type SidebarNavigationProps = {
   canEditAdmin: boolean;
 };
 
-const moduleLinks = [
+const primaryModuleLinks = [
   { href: "/admin/documents", label: "Comercial", icon: FileText },
   { href: "/admin/structures", label: "Estructuras", icon: Hammer },
-  { href: "/admin/suppliers", label: "Proveedores", icon: Building2 },
   { href: "/admin/ready", label: "Listos para entrega", icon: PackageCheck },
   { href: "/admin/stock", label: "Stock", icon: Boxes },
+];
+
+const secondaryModuleLinks = [
+  { href: "/admin/suppliers", label: "Proveedores", icon: Building2 },
   { href: "/admin/reports", label: "Reportes", icon: BarChart3 },
   { href: "/admin/history", label: "Historial", icon: Archive },
   { href: "/admin/users", label: "Usuarios", icon: Users, requiresEdit: true },
@@ -53,10 +56,9 @@ export function SidebarNavigation({ active, canUseAdmin, canEditAdmin }: Sidebar
 
       {canUseAdmin ? (
         <div className="mt-5">
-          <p className="px-3 text-xs font-medium uppercase tracking-[0.16em] text-stone-400">Módulos</p>
+          <p className="px-3 text-xs font-medium uppercase tracking-[0.16em] text-stone-400">Trabajo</p>
           <div className="mt-3 space-y-1 text-sm">
-            {moduleLinks.map(({ href, label, icon: Icon, requiresEdit }) => {
-              if (requiresEdit && !canEditAdmin) return null;
+            {primaryModuleLinks.map(({ href, label, icon: Icon }) => {
               const isActive = pathname === href || pathname.startsWith(`${href}/`);
 
               return (
@@ -74,6 +76,32 @@ export function SidebarNavigation({ active, canUseAdmin, canEditAdmin }: Sidebar
               );
             })}
           </div>
+
+          <details className="mt-4" open={secondaryModuleLinks.some(({ href }) => pathname === href || pathname.startsWith(`${href}/`))}>
+            <summary className="cursor-pointer rounded-md px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-stone-400 transition hover:bg-stone-100 hover:text-stone-600">
+              Más
+            </summary>
+            <div className="mt-1 space-y-1 text-sm">
+              {secondaryModuleLinks.map(({ href, label, icon: Icon, requiresEdit }) => {
+              if (requiresEdit && !canEditAdmin) return null;
+              const isActive = pathname === href || pathname.startsWith(`${href}/`);
+
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex h-9 items-center gap-3 rounded-md px-3 transition ${
+                    isActive ? "bg-stone-950 font-medium text-white" : "text-stone-500 hover:bg-stone-100 hover:text-stone-950"
+                  }`}
+                >
+                  <Icon className="size-4" />
+                  {label}
+                </Link>
+              );
+            })}
+            </div>
+          </details>
         </div>
       ) : null}
     </>

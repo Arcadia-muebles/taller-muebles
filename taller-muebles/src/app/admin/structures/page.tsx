@@ -1,203 +1,230 @@
-import { Check, ClipboardList, FileUp, Hammer, Play, Plus } from "lucide-react";
+import { CheckSquare, Paperclip, Pencil, Square } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { createStructureRequest, setStructureRequestStatus } from "@/app/admin/structures/actions";
+import { saveStructureSpecification } from "@/app/admin/structures/actions";
 import { requireSession } from "@/lib/auth";
 import { activeOrders } from "@/lib/metrics";
 import { listOrders, listStructureRequests } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import type { Order, StructureRequest } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+
+type StructureListRow = {
+  order: Order;
+  request?: StructureRequest;
+  structureStatus: "pending" | "in_progress" | "done";
+};
 
 export default async function StructuresPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const [orders, requests, settings] = await Promise.all([listOrders(), listStructureRequests(), getSystemSettings()]);
   const canEdit = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
-  const candidates = activeOrders(orders).filter((order) => order.steps.some((step) => step.key === "structure"));
+  const rows = buildRows(orders, requests);
 
   return (
     <AppShell active="admin" user={user}>
       <header className="page-header">
         <div>
-          <p className="page-kicker">Estructuras</p>
           <h1 className="page-title">Lista de estructuras</h1>
-          <p className="page-description">
-            Solicitudes internas para fabricar estructuras con especificaciones y adjuntos.
-          </p>
+          <p className="page-description">Especificaciones para el área de estructura.</p>
         </div>
       </header>
 
-      {canEdit ? <StructureRequestForm orders={candidates} /> : null}
-
-      <section className="panel mt-5">
-        <div className="panel-header flex items-center gap-3">
-          <ClipboardList className="size-5 text-stone-500" />
-          <div>
-            <h2 className="panel-title">Solicitudes</h2>
-            <p className="panel-description">{requests.length} registros de estructura.</p>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] border-collapse">
+      <section className="panel mt-5 overflow-hidden">
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full min-w-[980px] table-fixed">
+            <colgroup>
+              <col className="w-[210px]" />
+              <col />
+              <col className="w-[150px]" />
+              <col className="w-[95px]" />
+            </colgroup>
             <thead className="table-head">
               <tr>
-                <th className="px-4 py-3">Pedido</th>
-                <th className="px-4 py-3">Cliente / producto</th>
-                <th className="px-4 py-3">Especificaciones</th>
-                <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3">Adjuntos</th>
-                {canEdit ? <th className="px-4 py-3">Acción</th> : null}
+                <th className="px-3 py-2">Pedido</th>
+                <th className="px-3 py-2">Especificación</th>
+                <th className="px-3 py-2">Estado</th>
+                <th className="px-3 py-2">Acción</th>
               </tr>
             </thead>
             <tbody>
-              {requests.map((request) => (
-                <StructureRow key={request.id} request={request} canEdit={canEdit} />
+              {rows.map((row) => (
+                <StructureRow key={row.order.id} row={row} canEdit={canEdit} />
               ))}
-              {!requests.length ? (
+              {!rows.length ? (
                 <tr>
-                  <td colSpan={canEdit ? 6 : 5} className="px-4 py-10 text-center text-sm text-stone-500">
-                    Aún no hay estructuras solicitadas.
-                  </td>
+                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-stone-500">No hay pedidos activos con etapa de estructura.</td>
                 </tr>
               ) : null}
             </tbody>
           </table>
+        </div>
+        <div className="grid gap-2 p-2 md:hidden">
+          {rows.map((row) => (
+            <StructureMobileRow key={row.order.id} row={row} canEdit={canEdit} />
+          ))}
+          {!rows.length ? <div className="empty-state">No hay pedidos activos con etapa de estructura.</div> : null}
         </div>
       </section>
     </AppShell>
   );
 }
 
-function StructureRequestForm({ orders }: { orders: Order[] }) {
-  return (
-    <form action={createStructureRequest} className="panel mt-5">
-      <div className="panel-header flex items-center gap-3">
-        <Hammer className="size-5 text-stone-500" />
-        <div>
-          <h2 className="panel-title">Nueva solicitud</h2>
-          <p className="panel-description">Selecciona un pedido activo y describe lo que necesita estructura.</p>
-        </div>
-      </div>
-      <div className="grid gap-4 p-4 md:grid-cols-2">
-        <label>
-          <span className="field-label">Pedido</span>
-          <select name="orderId" required className="control-lg mt-2 bg-white">
-            <option value="">Seleccionar pedido</option>
-            {orders.map((order) => (
-              <option key={order.id} value={order.id}>
-                {order.code} | {order.client} | {order.product}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="field-label">Estado inicial</span>
-          <select name="status" defaultValue="requested" className="control-lg mt-2 bg-white">
-            <option value="requested">Solicitada</option>
-            <option value="in_progress">En fabricación</option>
-            <option value="draft">Borrador</option>
-          </select>
-        </label>
-        <label>
-          <span className="field-label">Responsable</span>
-          <input name="assignedTo" className="control-lg mt-2 bg-white" placeholder="Opcional" />
-        </label>
-        <label>
-          <span className="field-label">Adjunto</span>
-          <input
-            name="file"
-            type="file"
-            accept="image/*,application/pdf"
-            className="mt-2 block w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-stone-800"
-          />
-        </label>
-        <label className="md:col-span-2">
-          <span className="field-label">Especificaciones de estructura</span>
-          <textarea name="specifications" required minLength={3} className="textarea-control mt-2 min-h-28 bg-white" placeholder="Medidas, refuerzos, plano, notas para el maestro..." />
-        </label>
-      </div>
-      <div className="border-t border-stone-200 p-4">
-        <button type="submit" className="btn btn-primary">
-          <Plus className="size-4" />
-          Crear solicitud
-        </button>
-      </div>
-    </form>
-  );
+function buildRows(orders: Order[], requests: StructureRequest[]): StructureListRow[] {
+  const requestByOrderId = new Map(requests.map((request) => [request.orderId, request]));
+  return activeOrders(orders)
+    .filter((order) => order.steps.some((step) => step.key === "structure"))
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .map((order) => ({ order, request: requestByOrderId.get(order.id), structureStatus: structureStatusFromOrder(order) }));
 }
 
-function StructureRow({ request, canEdit }: { request: StructureRequest; canEdit: boolean }) {
+function StructureRow({ row, canEdit }: { row: StructureListRow; canEdit: boolean }) {
+  const status = row.structureStatus;
+
   return (
-    <tr className="border-t border-stone-100">
-      <td className="px-4 py-3 align-top">
-        <p className="font-mono text-sm font-semibold text-stone-950">{request.orderCode}</p>
-        <p className="mt-1 text-xs text-stone-500">{formatDate(request.requestedAt)}</p>
-      </td>
-      <td className="px-4 py-3 align-top">
-        <p className="text-sm font-semibold text-stone-950">{request.client}</p>
-        <p className="mt-1 line-clamp-2 text-sm text-stone-600">{request.product}</p>
-      </td>
-      <td className="max-w-[320px] px-4 py-3 align-top text-sm leading-6 text-stone-700">
-        <p className="line-clamp-3">{request.specifications}</p>
-      </td>
-      <td className="px-4 py-3 align-top">
-        <span className={statusClass(request.status)}>{statusLabel(request.status)}</span>
-      </td>
-      <td className="px-4 py-3 align-top">
-        <div className="grid gap-1">
-          {request.attachments.slice(0, 3).map((attachment) => (
-            <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-600 underline-offset-4 hover:text-stone-950 hover:underline">
-              <FileUp className="size-3.5" />
-              {attachment.fileName}
-            </a>
-          ))}
-          {!request.attachments.length ? <span className="text-xs text-stone-400">Sin adjuntos</span> : null}
-        </div>
+    <tr className="border-t border-stone-100 align-middle">
+      <td className="px-3 py-2 align-middle">
+        <OrderIdentity order={row.order} />
       </td>
       {canEdit ? (
-        <td className="px-4 py-3 align-top">
-          <div className="flex flex-wrap gap-2">
-            {request.status !== "in_progress" && request.status !== "done" ? (
-              <StatusButton id={request.id} status="in_progress" label="Fabricar" icon={Play} />
-            ) : null}
-            {request.status !== "done" ? (
-              <StatusButton id={request.id} status="done" label="Lista" icon={Check} />
-            ) : null}
-          </div>
-        </td>
-      ) : null}
+        <>
+          <td className="px-3 py-2 align-middle">
+            <form id={`structure-${row.order.id}`} action={saveStructureSpecification} className="flex min-w-0 items-center gap-2">
+              <input type="hidden" name="orderId" value={row.order.id} />
+              <input type="hidden" name="specifications" value={row.request?.specifications || defaultSpecification(row.order)} />
+              <div className="min-w-0 flex-1">
+                <p className="whitespace-normal break-words text-sm font-semibold uppercase leading-5 text-stone-950">
+                  {row.request?.specifications || defaultSpecification(row.order)}
+                </p>
+              </div>
+              <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">Estructuras</span>
+            </form>
+          </td>
+          <td className="px-3 py-2 align-middle">
+            <input form={`structure-${row.order.id}`} type="hidden" name="status" value={status === "in_progress" ? "in_progress" : status === "done" ? "done" : "requested"} />
+            <StatusDisplay status={status} />
+          </td>
+          <td className="px-3 py-2 align-middle">
+            <div className="flex items-center gap-1.5">
+              <label className="grid size-9 cursor-pointer place-items-center rounded-md border border-stone-200 bg-white text-stone-600 hover:bg-stone-50" title="Adjuntar archivo">
+                <Paperclip className="size-4" />
+                <input form={`structure-${row.order.id}`} name="file" type="file" accept="image/*,application/pdf" className="sr-only" />
+              </label>
+              <button form={`structure-${row.order.id}`} type="submit" className="grid size-9 place-items-center rounded-md bg-stone-950 text-white hover:bg-stone-800" title="Guardar" aria-label="Guardar">
+                <Pencil className="size-4" />
+              </button>
+            </div>
+          </td>
+        </>
+      ) : (
+        <>
+          <td className="px-3 py-2 align-middle">
+            <p className="whitespace-normal break-words text-sm font-semibold uppercase leading-5 text-stone-950">
+              {row.request?.specifications || defaultSpecification(row.order)}
+            </p>
+            <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">Estructuras</p>
+          </td>
+          <td className="px-3 py-2 align-middle"><StatusDisplay status={status} /></td>
+          <td className="px-3 py-2 align-middle"><AttachmentLink request={row.request} /></td>
+        </>
+      )}
     </tr>
   );
 }
 
-function StatusButton({ id, status, label, icon: Icon }: { id: string; status: string; label: string; icon: React.ElementType }) {
+function StructureMobileRow({ row, canEdit }: { row: StructureListRow; canEdit: boolean }) {
+  const status = row.structureStatus;
+
   return (
-    <form action={setStructureRequestStatus}>
-      <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="status" value={status} />
-      <button type="submit" className="btn btn-secondary h-9">
-        <Icon className="size-4" />
-        {label}
-      </button>
-    </form>
+    <article className="rounded-md border border-stone-200 bg-white p-3">
+      <div className="flex items-start justify-between gap-3">
+        <OrderIdentity order={row.order} />
+        <AttachmentLink request={row.request} />
+      </div>
+      {canEdit ? (
+        <form action={saveStructureSpecification} className="mt-3 grid gap-2">
+          <input type="hidden" name="orderId" value={row.order.id} />
+          <input type="hidden" name="specifications" value={row.request?.specifications || defaultSpecification(row.order)} />
+          <p className="whitespace-normal break-words text-sm font-semibold uppercase leading-5 text-stone-950">
+            {row.request?.specifications || defaultSpecification(row.order)}
+          </p>
+          <input type="hidden" name="status" value={status === "in_progress" ? "in_progress" : status === "done" ? "done" : "requested"} />
+          <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+            <div className="flex h-10 items-center"><StatusDisplay status={status} /></div>
+            <label className="grid size-10 cursor-pointer place-items-center rounded-md border border-stone-200 bg-white text-stone-600">
+              <Paperclip className="size-4" />
+              <input name="file" type="file" accept="image/*,application/pdf" className="sr-only" />
+            </label>
+            <button type="submit" className="grid size-10 place-items-center rounded-md bg-stone-950 text-white">
+              <Pencil className="size-4" />
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="mt-3">
+          <p className="text-sm font-semibold uppercase text-stone-950">{row.request?.specifications || defaultSpecification(row.order)}</p>
+          <div className="mt-2"><StatusDisplay status={status} /></div>
+        </div>
+      )}
+    </article>
   );
 }
 
-function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    draft: "Borrador",
-    requested: "Solicitada",
-    in_progress: "En fabricación",
-    done: "Lista",
-    cancelled: "Cancelada",
-  };
-  return labels[status] ?? status;
+function OrderIdentity({ order }: { order: Order }) {
+  return (
+    <div className="min-w-0">
+      <p className="truncate font-mono text-base font-semibold tracking-tight text-stone-950">{order.code}</p>
+      <p className="mt-0.5 truncate text-xs font-medium text-stone-500">{order.store === "LR" ? "La Reina" : "Leather House"}</p>
+      <p className="mt-0.5 truncate text-sm font-medium text-stone-700">{order.client}</p>
+    </div>
+  );
 }
 
-function statusClass(status: string) {
-  const base = "inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-medium";
-  if (status === "done") return `${base} border-emerald-200 bg-emerald-50 text-emerald-700`;
-  if (status === "requested" || status === "in_progress") return `${base} border-sky-200 bg-sky-50 text-sky-800`;
-  if (status === "cancelled") return `${base} border-stone-200 bg-stone-100 text-stone-600`;
-  return `${base} border-stone-200 bg-white text-stone-600`;
+function AttachmentLink({ request }: { request?: StructureRequest }) {
+  if (request?.attachments.length) {
+    return (
+      <a href={request.attachments[0].url} target="_blank" rel="noreferrer" className="grid size-9 place-items-center rounded-md border border-stone-200 bg-white text-stone-700 hover:bg-stone-50" aria-label="Abrir adjunto" title="Abrir adjunto">
+        <Paperclip className="size-4" />
+      </a>
+    );
+  }
+  return (
+    <span className="grid size-9 place-items-center rounded-md border border-stone-100 bg-stone-50 text-stone-300" title="Sin adjunto">
+      <Paperclip className="size-4" />
+    </span>
+  );
+}
+
+function StatusDisplay({ status }: { status: string }) {
+  if (status === "done") {
+    return (
+      <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
+        <CheckSquare className="size-4" />
+        Completado
+      </span>
+    );
+  }
+  if (status === "in_progress") {
+    return (
+      <span className="inline-flex items-center gap-2 text-sm font-semibold text-sky-700">
+        <CheckSquare className="size-4" />
+        En confección
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2 text-sm font-semibold text-amber-700">
+      <Square className="size-4 text-stone-300" />
+      Pendiente
+    </span>
+  );
+}
+
+function defaultSpecification(order: Order) {
+  return `01 ${order.product}`;
+}
+
+function structureStatusFromOrder(order: Order): StructureListRow["structureStatus"] {
+  const step = order.steps.find((item) => item.key === "structure");
+  if (step?.status === "done") return "done";
+  if (step?.status === "active") return "in_progress";
+  return "pending";
 }

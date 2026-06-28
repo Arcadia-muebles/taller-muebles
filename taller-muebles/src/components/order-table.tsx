@@ -326,7 +326,7 @@ function ProductCell({ order }: { order: Order }) {
   return (
     <div className="min-w-0">
       <p className="truncate text-xs font-semibold uppercase text-stone-950">{order.client}</p>
-      <p className="mt-1 line-clamp-2 text-xs font-semibold uppercase leading-4 text-stone-800">{order.product}</p>
+      <p className="mt-1 whitespace-normal break-words text-xs font-semibold uppercase leading-4 text-stone-800">{order.product}</p>
       <p className="mt-1 truncate text-xs font-medium uppercase text-stone-500">{order.material}</p>
     </div>
   );

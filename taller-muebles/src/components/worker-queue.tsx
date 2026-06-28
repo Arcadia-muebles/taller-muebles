@@ -152,8 +152,8 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
                     <p className="mt-1 font-mono text-xs text-stone-500">{order.groupCode}</p>
                   </td>
                   <td className="max-w-[260px] px-3 py-3 align-top">
-                    <p className="truncate text-sm font-semibold text-stone-950">{order.client}</p>
-                    <p className="mt-1 line-clamp-2 text-sm text-stone-700">{order.product}</p>
+                    <p className="whitespace-normal break-words text-sm font-semibold text-stone-950">{order.client}</p>
+                    <p className="mt-1 whitespace-normal break-words text-sm text-stone-700">{order.product}</p>
                   </td>
                   <td className="max-w-[180px] px-3 py-3 align-top text-sm text-stone-600">
                     <p className="truncate">{order.material}</p>
@@ -256,8 +256,8 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
                     <p className="font-mono text-sm font-semibold">{order.code}</p>
                     <StatusBadge type="step" value={step.status} />
                   </div>
-                  <h3 className="mt-3 text-lg font-semibold text-stone-950">{order.product}</h3>
-                  <p className="mt-1 text-sm text-stone-600">{order.material} / {order.color}</p>
+                  <h3 className="mt-3 whitespace-normal break-words text-lg font-semibold text-stone-950">{order.product}</h3>
+                  <p className="mt-1 whitespace-normal break-words text-sm text-stone-600">{order.material} / {order.color}</p>
                 </div>
                 <div className="shrink-0 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 sm:text-right">
                   <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">Entrega</p>
@@ -406,7 +406,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
                 <Link key={order.id} href={`/taller/orders/${order.id}`} className="flex min-w-0 flex-col gap-2 rounded-md border border-stone-200 bg-stone-50 px-3 py-3 transition hover:border-stone-300 hover:bg-white sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate font-mono text-sm font-semibold">{order.code}</p>
-                    <p className="mt-1 truncate text-sm font-medium text-stone-800">{order.product}</p>
+                    <p className="mt-1 whitespace-normal break-words text-sm font-medium text-stone-800">{order.product}</p>
                     <p className="mt-1 truncate text-xs text-stone-500">{order.material} / {order.color}</p>
                   </div>
                   <div className="shrink-0 sm:text-right">
@@ -451,7 +451,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
                       <Archive className="size-4 shrink-0 text-stone-400" />
                       <p className="truncate font-mono text-sm font-semibold">{order.code}</p>
                     </div>
-                    <p className="mt-1 truncate text-sm font-medium text-stone-800">{order.product}</p>
+                    <p className="mt-1 whitespace-normal break-words text-sm font-medium text-stone-800">{order.product}</p>
                     <p className="mt-1 truncate text-xs text-stone-500">{order.client}</p>
                   </div>
                   <div className="shrink-0 sm:text-right">
