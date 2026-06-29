@@ -30,13 +30,14 @@ type ActiveProductionDashboardProps = {
   steps: SystemSettings["production"]["steps"];
   canMove: boolean;
   structureRequests?: StructureRequest[];
+  deliveredCount?: number;
 };
 
 type DashboardFilter = "all" | "active";
 type SortKey = "delivery" | "code" | "progress";
 type Tone = "green" | "blue" | "amber" | "purple" | "rose" | "stone";
 
-export function ActiveProductionDashboard({ orders, steps, canMove, structureRequests = [] }: ActiveProductionDashboardProps) {
+export function ActiveProductionDashboard({ orders, steps, canMove, structureRequests = [], deliveredCount = 0 }: ActiveProductionDashboardProps) {
   const enabledSteps = useMemo(() => steps.filter((step) => step.enabled), [steps]);
   const dashboardSteps = useMemo(() => enabledSteps.filter((step) => !isDashboardHiddenStep(step)), [enabledSteps]);
   const normalizedOrders = useMemo(
@@ -66,7 +67,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
     [filter, normalizedOrders, optimisticActiveStep, optimisticStage, search, sortKey],
   );
 
-  const counters = useMemo(() => buildCounters(normalizedOrders, dashboardSteps), [dashboardSteps, normalizedOrders]);
+  const counters = useMemo(() => buildCounters(normalizedOrders, dashboardSteps, deliveredCount), [dashboardSteps, deliveredCount, normalizedOrders]);
   const requestedStructureOrders = useMemo(
     () => new Set(structureRequests.filter((request) => request.status === "requested" || request.status === "in_progress").map((request) => request.orderId)),
     [structureRequests],
@@ -476,11 +477,11 @@ function ObservationAlert({ order }: { order: Order }) {
   );
 }
 
-function buildCounters(orders: Order[], steps: SystemSettings["production"]["steps"]) {
+function buildCounters(orders: Order[], steps: SystemSettings["production"]["steps"], deliveredCount: number) {
   const byStep = steps.map((step) => ({
     key: step.key,
     label: step.label,
-    count: orders.filter((order) => metricStepKey(order) === step.key).length,
+    count: isDeliveredMetricStep(step) ? deliveredCount : orders.filter((order) => metricStepKey(order) === step.key).length,
   }));
   return {
     lh: orders.filter((order) => order.store === "LH").length,
@@ -492,6 +493,10 @@ function buildCounters(orders: Order[], steps: SystemSettings["production"]["ste
     activeWork: orders.filter((order) => currentStep(order)?.status === "active").length,
     byStep,
   };
+}
+
+function isDeliveredMetricStep(step: Pick<ProductionStep, "key" | "label">) {
+  return /dispatch|despacho|terminado/i.test(`${step.key} ${step.label}`);
 }
 
 function metricStepKey(order: Order) {

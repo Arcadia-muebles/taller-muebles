@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ActiveProductionDashboard } from "@/components/active-production-dashboard";
 import { AppShell } from "@/components/app-shell";
 import { requireSession } from "@/lib/auth";
-import { activeOrders, isReadyForDelivery, readyForDeliveryOrders } from "@/lib/metrics";
+import { activeOrders, completedOrders, isReadyForDelivery, readyForDeliveryOrders } from "@/lib/metrics";
 import { listOrders, listStructureRequests } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 
@@ -13,6 +13,7 @@ export default async function AdminPage() {
   const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
   const active = activeOrders(orders);
   const ready = readyForDeliveryOrders(orders);
+  const delivered = completedOrders(orders);
   const inProduction = active.filter((order) => !isReadyForDelivery(order));
 
   return (
@@ -36,7 +37,13 @@ export default async function AdminPage() {
         </div>
       </header>
 
-      <ActiveProductionDashboard orders={inProduction} steps={settings.production.steps} canMove={canEditOrders} structureRequests={structureRequests} />
+      <ActiveProductionDashboard
+        orders={inProduction}
+        steps={settings.production.steps}
+        canMove={canEditOrders}
+        structureRequests={structureRequests}
+        deliveredCount={delivered.length}
+      />
     </AppShell>
   );
 }
