@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { KeyRound, Mail } from "lucide-react";
 import Image from "next/image";
 import { requestLogin, type LoginState } from "@/app/login/actions";
+import { brand } from "@/lib/brand";
 
 const initialState: LoginState = {
   status: "idle",
@@ -16,10 +17,10 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
   return (
     <form action={formAction} className="panel-pad min-w-0 p-5 shadow-sm">
       <div className="flex items-center gap-3">
-        <Image src="/arcadia-icon.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg" priority />
+        <Image src={brand.icon} alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg" priority unoptimized />
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Acceso interno</h1>
-          <p className="text-sm text-stone-500">ARCADIA · Muebles en cuero</p>
+          <p className="text-sm text-stone-500">{brand.name} · {brand.subtitle}</p>
         </div>
       </div>
 
@@ -49,7 +50,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
             name="password"
             type="password"
             autoComplete="current-password"
-            placeholder={supabaseEnabled ? "Tu clave de acceso" : "Cualquier clave"}
+            placeholder="Tu clave de acceso"
             className="control-lg pl-9"
           />
         </div>
@@ -57,11 +58,8 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
 
       {!supabaseEnabled ? (
         <div className="mt-4 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-5 text-stone-600">
-          <p className="font-semibold text-stone-800">Acceso local</p>
-          <p>Administrador: admin@taller.local</p>
-          <p>Supervisor: supervisor@taller.local</p>
-          <p>Taller: taller@taller.local</p>
-          <p className="mt-1">El sistema abre automáticamente el panel correspondiente.</p>
+          <p className="font-semibold text-stone-800">Supabase no configurado</p>
+          <p>Configura las variables de entorno para usar usuarios y datos reales.</p>
         </div>
       ) : null}
 
@@ -88,7 +86,7 @@ export function LoginForm({ supabaseEnabled }: { supabaseEnabled: boolean }) {
       <p className="mt-4 text-xs leading-5 text-stone-500">
         {supabaseEnabled
           ? "Acceso protegido. Tu perfil determina automáticamente los módulos y acciones disponibles."
-          : "Modo local: usa una cuenta creada por un administrador. La clave puede ser cualquier texto."}
+          : "Entorno local limitado para desarrollo. No lo uses como fuente operativa."}
       </p>
     </form>
   );

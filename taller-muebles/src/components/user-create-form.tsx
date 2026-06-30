@@ -34,7 +34,7 @@ export function UserCreateForm({
     <form ref={formRef} action={action} className="panel-pad mt-5">
       <h2 className="panel-title">Registrar usuario</h2>
       <p className="panel-description">
-        {supabaseEnabled ? "Crea una cuenta protegida y asigna su acceso inicial." : "Crea un perfil para probar roles en modo local."}
+        {supabaseEnabled ? "Crea una cuenta protegida y asigna su acceso inicial." : "Supabase no está configurado. Los perfiles locales sólo sirven para revisión técnica."}
       </p>
       {disabled ? (
         <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -119,7 +119,7 @@ function ActionFeedback({
     <p className="text-xs text-stone-400">
       {supabaseEnabled
         ? "La cuenta se crea confirmada y con perfil operativo asignado."
-        : "El perfil local queda disponible inmediatamente para probar permisos."}
+        : "Configura Supabase para administrar usuarios reales."}
     </p>
   );
 }

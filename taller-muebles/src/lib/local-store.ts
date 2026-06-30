@@ -54,7 +54,7 @@ const defaultLocalUsers: AppUser[] = [
   {
     id: "local-worker-structure",
     email: "estructura@taller.local",
-    name: "Gustavo Rojas",
+    name: "Operador Estructura",
     role: "operator",
     area: "structure",
     active: true,
@@ -62,7 +62,7 @@ const defaultLocalUsers: AppUser[] = [
   {
     id: "local-worker-en-blanco",
     email: "enblanco@taller.local",
-    name: "Equipo En Blanco",
+    name: "Operador En Blanco",
     role: "operator",
     area: "en_blanco",
     active: true,
@@ -70,7 +70,7 @@ const defaultLocalUsers: AppUser[] = [
   {
     id: "local-worker-cutting",
     email: "corte@taller.local",
-    name: "Carolina Soto",
+    name: "Operador Corte",
     role: "operator",
     area: "cutting",
     active: true,
@@ -78,7 +78,7 @@ const defaultLocalUsers: AppUser[] = [
   {
     id: "local-worker-sewing",
     email: "costura@taller.local",
-    name: "Marcela Díaz",
+    name: "Operador Costura",
     role: "operator",
     area: "sewing",
     active: true,
@@ -86,7 +86,7 @@ const defaultLocalUsers: AppUser[] = [
   {
     id: "local-worker-upholstery",
     email: "tapiceria@taller.local",
-    name: "Pedro Morales",
+    name: "Operador Tapicería",
     role: "operator",
     area: "upholstery",
     active: true,
@@ -94,7 +94,7 @@ const defaultLocalUsers: AppUser[] = [
   {
     id: "local-worker-quality",
     email: "calidad@taller.local",
-    name: "Valentina Ruiz",
+    name: "Operador Calidad",
     role: "operator",
     area: "quality",
     active: true,
@@ -102,7 +102,7 @@ const defaultLocalUsers: AppUser[] = [
   {
     id: "local-worker-dispatch",
     email: "despacho@taller.local",
-    name: "Equipo Despacho",
+    name: "Operador Despacho",
     role: "operator",
     area: "dispatch",
     active: true,

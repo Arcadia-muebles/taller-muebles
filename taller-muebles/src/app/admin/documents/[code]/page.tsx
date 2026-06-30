@@ -77,9 +77,9 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
               <Info label="Cliente" value={document.client} />
               <Info label="Tienda" value={document.store} />
               <Info label="RUT" value={document.customerRut} />
-              <Info label="Telefono" value={document.customerPhone} />
+              <Info label="Teléfono" value={document.customerPhone} />
               <Info label="Correo" value={document.customerEmail} />
-              <Info label="Direccion" value={document.customerAddress} />
+              <Info label="Dirección" value={document.customerAddress} />
               <Info label="Comuna" value={document.customerCommune} />
               <Info label="Contacto general" value={document.customerContact} />
               <Info label="Vendedor" value={document.sellerName} />
@@ -232,9 +232,9 @@ function formatCurrency(value?: number) {
 function documentTypeLabel(type: string) {
   const labels: Record<string, string> = {
     sales_note: "Nota de Venta",
-    quote: "Cotizacion",
+    quote: "Cotización",
     purchase_order: "Orden de Compra",
-    warranty: "Garantia",
+    warranty: "Garantía",
   };
   return labels[type] ?? type;
 }

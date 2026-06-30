@@ -190,7 +190,7 @@ export function OrderTable({
           </select>
           <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="control min-w-0 bg-white text-stone-700 md:w-40">
             <option value="all">Toda urgencia</option>
-            <option value="critical">Critica</option>
+            <option value="critical">Crítica</option>
             <option value="high">Alta</option>
             <option value="normal">Normal</option>
           </select>
@@ -205,7 +205,7 @@ export function OrderTable({
             <input
               value={globalFilter}
               onChange={(event) => setGlobalFilter(event.target.value)}
-              placeholder="Buscar cliente, codigo o producto"
+              placeholder="Buscar cliente, código o producto"
               className="control pl-9"
             />
           </label>
@@ -616,7 +616,7 @@ function durationDays(entryDate?: string | null, deliveryDate?: string | null) {
   const end = new Date(deliveryDate.includes("T") ? deliveryDate : `${deliveryDate}T00:00:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Sin plazo";
   const days = Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000));
-  return `${days} dias`;
+  return `${days} días`;
 }
 
 function tonePill(tone: ProductionTone) {

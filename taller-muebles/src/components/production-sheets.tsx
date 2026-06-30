@@ -35,14 +35,14 @@ export function ProductionSheets({ orders, canEditOrders, steps }: ProductionShe
           <SheetButton
             active={sheet === "all"}
             icon={Archive}
-            label="Hoja 1: Todas"
+            label="Todas"
             count={orders.length}
             onClick={() => setSheet("all")}
           />
           <SheetButton
             active={sheet === "active"}
             icon={ClipboardList}
-            label="Hoja 2: Activas"
+            label="Activas"
             count={active.length}
             onClick={() => setSheet("active")}
           />
@@ -64,7 +64,7 @@ export function ProductionSheets({ orders, canEditOrders, steps }: ProductionShe
           canEditOrders={canEditOrders}
           rowLinks
           hideActions
-          title={sheet === "active" ? "Hoja 2: Notas activas" : "Hoja 1: Todas las notas de venta"}
+          title={sheet === "active" ? "Notas activas" : "Todas las notas de venta"}
           description={
             sheet === "active"
               ? "Notas pendientes, en producción, atrasadas o sin iniciar. Las terminadas desaparecen de esta hoja."

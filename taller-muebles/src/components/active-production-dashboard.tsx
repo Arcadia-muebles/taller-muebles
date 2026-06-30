@@ -214,14 +214,14 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar por codigo, cliente o producto..."
+                  placeholder="Buscar por código, cliente o producto..."
                   className="control pl-9"
                 />
               </label>
               <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} className="control bg-white text-stone-700 sm:w-44">
                 <option value="recent">Ingreso reciente</option>
                 <option value="delivery">Entrega cercana</option>
-                <option value="code">Codigo</option>
+                <option value="code">Código</option>
                 <option value="progress">Avance</option>
               </select>
             </div>
@@ -555,7 +555,7 @@ function ObservationAlert({ order }: { order: Order }) {
   return (
     <Link
       href={`/admin/orders/${order.id}#observaciones`}
-      aria-label={`Ver observacion de ${order.code}`}
+      aria-label={`Ver observación de ${order.code}`}
       className="group/comment relative grid size-5 shrink-0 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-700 transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
     >
       <MessageSquare className="size-3" />

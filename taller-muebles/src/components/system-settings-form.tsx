@@ -30,7 +30,7 @@ const sections = [
 ] as const;
 
 const dayOptions = [
-  [1, "Lun"], [2, "Mar"], [3, "Mie"], [4, "Jue"], [5, "Vie"], [6, "Sab"], [0, "Dom"],
+  [1, "Lun"], [2, "Mar"], [3, "Mié"], [4, "Jue"], [5, "Vie"], [6, "Sáb"], [0, "Dom"],
 ] as const;
 
 export function SystemSettingsForm({

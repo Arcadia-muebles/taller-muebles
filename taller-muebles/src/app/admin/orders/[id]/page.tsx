@@ -100,9 +100,9 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               <Info label="Pedido común" value={order.groupCode} />
               {order.customerContact ? <Info label="Contacto / RUT" value={order.customerContact} /> : null}
               {order.customerRut ? <Info label="RUT" value={order.customerRut} /> : null}
-              {order.customerPhone ? <Info label="Telefono" value={order.customerPhone} /> : null}
+              {order.customerPhone ? <Info label="Teléfono" value={order.customerPhone} /> : null}
               {order.customerEmail ? <Info label="Correo" value={order.customerEmail} /> : null}
-              {order.customerAddress ? <Info label="Direccion" value={order.customerAddress} /> : null}
+              {order.customerAddress ? <Info label="Dirección" value={order.customerAddress} /> : null}
               {order.customerCommune ? <Info label="Comuna" value={order.customerCommune} /> : null}
               <Info label="Producto" value={order.product} />
               <Info label="Material" value={order.material} />
@@ -295,9 +295,9 @@ function auditActionLabel(action: string) {
 function documentTypeLabel(type: string) {
   const labels: Record<string, string> = {
     sales_note: "Nota de Venta",
-    quote: "Cotizacion",
+    quote: "Cotización",
     purchase_order: "Orden de Compra",
-    warranty: "Garantia",
+    warranty: "Garantía",
     production_intake: "Ingreso producción",
   };
   return labels[type] ?? type;

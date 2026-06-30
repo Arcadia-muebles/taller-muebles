@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { logout } from "@/app/login/actions";
+import { brand } from "@/lib/brand";
 import type { Role } from "@/lib/types";
 
 export function MobileNavigation({
@@ -24,8 +25,8 @@ export function MobileNavigation({
     <div className="sticky top-0 z-40 -mx-4 mb-4 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
       <div className="flex items-center justify-between">
         <Link href={active === "admin" ? "/admin" : "/taller"} className="flex items-center gap-2">
-          <Image src="/arcadia-icon.png" alt="" width={32} height={32} className="size-8 shrink-0 rounded-md" priority />
-          <span className="text-sm font-semibold">Control Producción</span>
+          <Image src={brand.icon} alt="" width={32} height={32} className="size-8 shrink-0 rounded-md" priority unoptimized />
+          <span className="text-sm font-semibold">{brand.appName}</span>
         </Link>
         <button
           type="button"

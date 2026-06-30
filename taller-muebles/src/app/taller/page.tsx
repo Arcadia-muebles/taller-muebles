@@ -44,8 +44,8 @@ export default async function WorkshopPage() {
           rowLinks
           hideActions
           detailPathPrefix="/taller/orders"
-          title="Hoja 2: Notas activas"
-          description="Notas pendientes, en producción, atrasadas o sin iniciar. Las terminadas desaparecen automaticamente."
+          title="Notas activas"
+          description="Notas pendientes, en producción, atrasadas o sin iniciar. Las terminadas desaparecen automáticamente."
           emptyText="No hay notas activas para producción."
         />
       </div>

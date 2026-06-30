@@ -148,11 +148,11 @@ export function OrderForm({
         <div className="panel-header flex items-center gap-3">
           {isLeatherHouse ? <Factory className="size-5 text-stone-500" /> : <FileText className="size-5 text-stone-500" />}
           <div>
-            <h2 className="panel-title">{isLeatherHouse ? "Ingreso Leather House" : "Fabricacion y venta de muebles - Muebles La Reina"}</h2>
+            <h2 className="panel-title">{isLeatherHouse ? "Ingreso Leather House" : "Fabricación y venta de muebles - Muebles La Reina"}</h2>
             <p className="panel-description">
               {isLeatherHouse
-                ? "Formulario simplificado orientado exclusivamente a fabricacion."
-                : "Documento base para nota de venta, cotizacion, garantia u orden de compra."}
+                ? "Formulario simplificado orientado exclusivamente a fabricación."
+                : "Documento base para nota de venta, cotización, garantía u orden de compra."}
             </p>
           </div>
         </div>
@@ -175,9 +175,9 @@ export function OrderForm({
             <Field label="Tipo de documento" error={typedErrors.documentType?.message}>
               <select {...register("documentType")} className={inputClass}>
                 <option value="sales_note">Nota de Venta</option>
-                <option value="quote">Cotizacion</option>
+                <option value="quote">Cotización</option>
                 <option value="purchase_order">Orden de Compra</option>
-                <option value="warranty">Garantia</option>
+                <option value="warranty">Garantía</option>
               </select>
             </Field>
           ) : (
@@ -192,7 +192,7 @@ export function OrderForm({
               <option value="cancelled">Anulado</option>
             </select>
           </Field>
-          <Field label="Codigo pedido comun" error={typedErrors.groupCode?.message}>
+          <Field label="Código pedido común" error={typedErrors.groupCode?.message}>
             <input {...register("groupCode")} className={inputClass} placeholder="Opcional, ej. LR2101" />
           </Field>
           {isCommercialDocument ? (
@@ -208,13 +208,13 @@ export function OrderForm({
               <Field label="RUT" error={typedErrors.customerRut?.message}>
                 <input {...register("customerRut")} className={inputClass} placeholder="14.567.890-3" />
               </Field>
-              <Field label="Telefono" error={typedErrors.customerPhone?.message}>
+              <Field label="Teléfono" error={typedErrors.customerPhone?.message}>
                 <input {...register("customerPhone")} className={inputClass} placeholder="+56 9 8712 3456" />
               </Field>
               <Field label="Correo" error={typedErrors.customerEmail?.message}>
                 <input {...register("customerEmail")} type="email" className={inputClass} placeholder="cliente@correo.cl" />
               </Field>
-              <Field label="Direccion" error={typedErrors.customerAddress?.message}>
+              <Field label="Dirección" error={typedErrors.customerAddress?.message}>
                 <input {...register("customerAddress")} className={inputClass} placeholder="Av. Providencia 1652, Depto 4B" />
               </Field>
               <Field label="Comuna" error={typedErrors.customerCommune?.message}>
@@ -402,7 +402,7 @@ export function OrderForm({
         <div className="panel-header flex items-center gap-3">
           <CalendarDays className="size-5 text-stone-500" />
           <div>
-            <h2 className="panel-title">Planificacion</h2>
+            <h2 className="panel-title">Planificación</h2>
             <p className="panel-description">Fechas, prioridad y condiciones productivas.</p>
           </div>
         </div>
@@ -420,7 +420,7 @@ export function OrderForm({
           </div>
           <label className="flex h-11 items-center gap-3 rounded-md border border-stone-200 bg-stone-50 px-3 text-sm font-medium">
             <input {...register("isWarranty")} type="checkbox" className="size-4 accent-stone-950" />
-            Es garantia
+            Es garantía
           </label>
           <Field label="Observaciones" error={typedErrors.observations?.message} full>
             <textarea
@@ -451,7 +451,7 @@ export function OrderForm({
                 className="block w-full rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-stone-800"
               />
             </Field>
-            <p className="mt-2 text-xs text-stone-500">Maximo 10 MB. Se puede dejar vacio y adjuntar despues desde el detalle de la orden.</p>
+            <p className="mt-2 text-xs text-stone-500">Máximo 10 MB. Se puede dejar vacío y adjuntar después desde el detalle de la orden.</p>
           </div>
         </section>
       ) : null}

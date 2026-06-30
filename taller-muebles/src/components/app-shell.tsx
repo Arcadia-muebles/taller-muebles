@@ -2,6 +2,7 @@ import { LogIn } from "lucide-react";
 import Image from "next/image";
 import { logout } from "@/app/login/actions";
 import { roleLabel } from "@/lib/auth";
+import { brand } from "@/lib/brand";
 import { hasSupabaseConfig } from "@/lib/env";
 import type { Role } from "@/lib/types";
 import { DesktopShell } from "./desktop-shell";
@@ -26,15 +27,15 @@ export function AppShell({ active, user, children }: AppShellProps) {
       sidebar={(
         <>
         <div className="flex items-center gap-3 border-b border-stone-200 pb-5">
-          <Image src="/arcadia-icon.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg" priority />
+          <Image src={brand.icon} alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg" priority unoptimized />
           <div>
-            <p className="text-sm font-semibold">ARCADIA</p>
-            <p className="text-xs text-stone-500">Muebles en cuero</p>
+            <p className="text-sm font-semibold">{brand.name}</p>
+            <p className="text-xs text-stone-500">{brand.subtitle}</p>
           </div>
         </div>
         {localMode ? (
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-            Modo local
+            Sin Supabase
           </div>
         ) : null}
 

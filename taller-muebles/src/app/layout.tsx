@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { brand } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,8 +17,11 @@ export const metadata: Metadata = {
   title: "ARCADIA | Muebles en cuero",
   description: "Sistema interno para producción, stock y seguimiento de taller.",
   icons: {
-    icon: [{ url: "/arcadia-icon.png", type: "image/png" }],
-    shortcut: "/arcadia-icon.png",
+    icon: [
+      { url: brand.icon, type: "image/svg+xml" },
+      { url: brand.iconPng, type: "image/png" },
+    ],
+    shortcut: brand.icon,
   },
 };
 

@@ -117,7 +117,7 @@ export function OrderLabelPrintButton({
 
             <div className="label-footer-meta">
               <span>{order.material || "Sin material"}</span>
-              <span>{order.isWarranty ? "Garantia" : orderStatusLabel(order.status)}</span>
+              <span>{order.isWarranty ? "Garantía" : orderStatusLabel(order.status)}</span>
             </div>
           </div>
         </div>

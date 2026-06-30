@@ -39,7 +39,7 @@ export default async function DocumentsPage() {
           <p className="page-kicker">Comercial</p>
           <h1 className="page-title">Documentos comerciales</h1>
           <p className="page-description">
-            Notas de venta, cotizaciones, ordenes de compra y garantias vinculadas a producción.
+            Notas de venta, cotizaciones, órdenes de compra y garantías vinculadas a producción.
           </p>
         </div>
         {canEditOrders ? (
@@ -173,8 +173,8 @@ function documentTypeLabel(type: string) {
   const labels: Record<string, string> = {
     sales_note: "Notas de Venta",
     quote: "Cotizaciones",
-    purchase_order: "Ordenes de Compra",
-    warranty: "Garantias",
+    purchase_order: "Órdenes de Compra",
+    warranty: "Garantías",
   };
   return labels[type] ?? type;
 }
