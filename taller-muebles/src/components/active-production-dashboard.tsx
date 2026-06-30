@@ -36,6 +36,26 @@ type ActiveProductionDashboardProps = {
 type DashboardFilter = "all" | "active";
 type SortKey = "recent" | "delivery" | "code" | "progress";
 type Tone = "green" | "blue" | "amber" | "purple" | "rose" | "stone";
+type DashboardColumnKey = "code" | "product" | "color" | "process" | "status" | "delivery" | "progress";
+
+const dashboardColumns: Array<{
+  key: DashboardColumnKey;
+  label: string;
+  width: number;
+  min: number;
+  max: number;
+  align?: "left" | "center";
+}> = [
+  { key: "code", label: "Codigo / cliente", width: 145, min: 120, max: 280 },
+  { key: "product", label: "Producto", width: 190, min: 150, max: 420 },
+  { key: "color", label: "Color", width: 75, min: 65, max: 170 },
+  { key: "process", label: "Procesos", width: 220, min: 190, max: 460, align: "center" },
+  { key: "status", label: "Estado actual", width: 120, min: 110, max: 260 },
+  { key: "delivery", label: "Entrega", width: 100, min: 90, max: 190 },
+  { key: "progress", label: "Avance", width: 70, min: 65, max: 130 },
+];
+
+const defaultColumnWidths = Object.fromEntries(dashboardColumns.map((column) => [column.key, column.width])) as Record<DashboardColumnKey, number>;
 
 export function ActiveProductionDashboard({ orders, steps, canMove, structureRequests = [], deliveredCount = 0 }: ActiveProductionDashboardProps) {
   const enabledSteps = useMemo(() => steps.filter((step) => step.enabled), [steps]);
@@ -53,6 +73,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
   const [sortKey, setSortKey] = useState<SortKey>("recent");
   const [optimisticStage, setOptimisticStage] = useState<Record<string, AreaKey>>({});
   const [optimisticActiveStep, setOptimisticActiveStep] = useState<Record<string, AreaKey>>({});
+  const [columnWidths, setColumnWidths] = useState<Record<DashboardColumnKey, number>>(defaultColumnWidths);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [, startTransition] = useTransition();
 
@@ -76,6 +97,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
     () => new Set(structureRequests.filter((request) => request.status === "requested" || request.status === "in_progress").map((request) => request.orderId)),
     [structureRequests],
   );
+  const tableWidth = useMemo(() => dashboardColumns.reduce((total, column) => total + columnWidths[column.key], 0), [columnWidths]);
 
   function move(order: Order, stepKey: AreaKey) {
     const current = currentStep(order);
@@ -114,6 +136,39 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         return;
       }
     });
+  }
+
+  function startColumnResize(event: React.PointerEvent<HTMLButtonElement>, columnKey: DashboardColumnKey) {
+    const column = dashboardColumns.find((item) => item.key === columnKey);
+    if (!column) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+    const startWidth = columnWidths[columnKey];
+    const minWidth = column.min;
+    const maxWidth = column.max;
+
+    function resize(pointerEvent: PointerEvent) {
+      const nextWidth = clamp(startWidth + pointerEvent.clientX - startX, minWidth, maxWidth);
+      setColumnWidths((current) => ({ ...current, [columnKey]: nextWidth }));
+    }
+
+    function stopResize() {
+      window.removeEventListener("pointermove", resize);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+    }
+
+    window.addEventListener("pointermove", resize);
+    window.addEventListener("pointerup", stopResize, { once: true });
+    window.addEventListener("pointercancel", stopResize, { once: true });
+  }
+
+  function resetColumnWidth(columnKey: DashboardColumnKey) {
+    const column = dashboardColumns.find((item) => item.key === columnKey);
+    if (!column) return;
+    setColumnWidths((current) => ({ ...current, [columnKey]: column.width }));
   }
 
   return (
@@ -189,25 +244,24 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         </div>
 
         <div className="overflow-x-auto bg-stone-50/70 p-1.5">
-          <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-y-1">
+          <table className="table-fixed border-separate border-spacing-y-1" style={{ width: tableWidth, minWidth: tableWidth }}>
             <colgroup>
-              <col className="w-[145px]" />
-              <col className="w-[190px]" />
-              <col className="w-[75px]" />
-              <col className="w-[220px]" />
-              <col className="w-[120px]" />
-              <col className="w-[100px]" />
-              <col className="w-[70px]" />
+              {dashboardColumns.map((column) => (
+                <col key={column.key} style={{ width: columnWidths[column.key] }} />
+              ))}
             </colgroup>
             <thead>
               <tr>
-                <HeaderCell>Codigo / cliente</HeaderCell>
-                <HeaderCell>Producto</HeaderCell>
-                <HeaderCell>Color</HeaderCell>
-                <HeaderCell className="text-center">Procesos</HeaderCell>
-                <HeaderCell>Estado actual</HeaderCell>
-                <HeaderCell>Entrega</HeaderCell>
-                <HeaderCell>Avance</HeaderCell>
+                {dashboardColumns.map((column) => (
+                  <HeaderCell
+                    key={column.key}
+                    className={column.align === "center" ? "text-center" : undefined}
+                    onResize={(event) => startColumnResize(event, column.key)}
+                    onReset={() => resetColumnWidth(column.key)}
+                  >
+                    {column.label}
+                  </HeaderCell>
+                ))}
               </tr>
               <tr>
                 <th />
@@ -261,7 +315,6 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                     </BodyCell>
                     <BodyCell>
                       <p className="whitespace-normal break-words text-xs font-semibold uppercase leading-5 text-stone-950">{order.product}</p>
-                      <p className="mt-1 whitespace-normal break-words text-[11px] font-medium uppercase tracking-[0.04em] text-stone-500">Pedido {order.groupCode}</p>
                     </BodyCell>
                     <BodyCell>
                       <p title={order.color || "Sin color"} className="line-clamp-2 break-words text-xs font-semibold leading-4 text-stone-900">
@@ -430,10 +483,32 @@ function StepDot({
   );
 }
 
-function HeaderCell({ children, className }: { children: React.ReactNode; className?: string }) {
+function HeaderCell({
+  children,
+  className,
+  onResize,
+  onReset,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  onResize?: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onReset?: () => void;
+}) {
   return (
-    <th className={cn("whitespace-nowrap px-2 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500", className)}>
-      {children}
+    <th className={cn("group/header relative whitespace-nowrap px-2 py-3 pr-4 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500", className)}>
+      <span className="block truncate">{children}</span>
+      {onResize ? (
+        <button
+          type="button"
+          aria-label={`Ajustar ancho de ${children}`}
+          title="Arrastrar para ajustar. Doble click para restaurar."
+          onPointerDown={onResize}
+          onDoubleClick={onReset}
+          className="absolute top-1/2 right-0 h-6 w-3 -translate-y-1/2 cursor-col-resize touch-none rounded-sm outline-none transition hover:bg-stone-200 focus-visible:bg-stone-200"
+        >
+          <span className="mx-auto block h-5 w-px bg-stone-300 group-hover/header:bg-stone-500" />
+        </button>
+      ) : null}
     </th>
   );
 }
@@ -564,6 +639,10 @@ function dateTime(value?: string | null) {
   if (!value) return 0;
   const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function statusPresentation(order: Order): { label: string; tone: Tone; icon: React.ElementType } {
