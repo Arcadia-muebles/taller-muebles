@@ -34,7 +34,7 @@ type ActiveProductionDashboardProps = {
 };
 
 type DashboardFilter = "all" | "active";
-type SortKey = "delivery" | "code" | "progress";
+type SortKey = "recent" | "delivery" | "code" | "progress";
 type Tone = "green" | "blue" | "amber" | "purple" | "rose" | "stone";
 
 export function ActiveProductionDashboard({ orders, steps, canMove, structureRequests = [], deliveredCount = 0 }: ActiveProductionDashboardProps) {
@@ -44,9 +44,13 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
     () => orders.map((order) => orderWithConfiguredSteps(order, enabledSteps)),
     [enabledSteps, orders],
   );
+  const activeOrders = useMemo(
+    () => normalizedOrders.filter(isDashboardActiveOrder),
+    [normalizedOrders],
+  );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DashboardFilter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("delivery");
+  const [sortKey, setSortKey] = useState<SortKey>("recent");
   const [optimisticStage, setOptimisticStage] = useState<Record<string, AreaKey>>({});
   const [optimisticActiveStep, setOptimisticActiveStep] = useState<Record<string, AreaKey>>({});
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
@@ -67,7 +71,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
     [filter, normalizedOrders, optimisticActiveStep, optimisticStage, search, sortKey],
   );
 
-  const counters = useMemo(() => buildCounters(normalizedOrders, dashboardSteps, deliveredCount), [dashboardSteps, deliveredCount, normalizedOrders]);
+  const counters = useMemo(() => buildCounters(activeOrders, dashboardSteps, deliveredCount), [activeOrders, dashboardSteps, deliveredCount]);
   const requestedStructureOrders = useMemo(
     () => new Set(structureRequests.filter((request) => request.status === "requested" || request.status === "in_progress").map((request) => request.orderId)),
     [structureRequests],
@@ -117,7 +121,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[repeat(7,minmax(0,1fr))]">
         <MetricCard
           label="Notas activas"
-          value={String(normalizedOrders.length)}
+          value={String(activeOrders.length)}
           helper=""
           icon={CheckCircle2}
           tone="green"
@@ -146,7 +150,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="-mx-1 flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto px-1 pb-1">
               <FilterChip active={filter === "all"} label="Todos" count={normalizedOrders.length} onClick={() => setFilter("all")} />
-              <FilterChip active={filter === "active"} label="Activos" count={counters.activeWork} onClick={() => setFilter("active")} />
+              <FilterChip active={filter === "active"} label="Activos" count={activeOrders.length} onClick={() => setFilter("active")} />
             </div>
 
             <div className="flex min-w-0 flex-col gap-2 sm:flex-row xl:w-[500px]">
@@ -160,6 +164,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                 />
               </label>
               <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} className="control bg-white text-stone-700 sm:w-44">
+                <option value="recent">Ingreso reciente</option>
                 <option value="delivery">Entrega cercana</option>
                 <option value="code">Codigo</option>
                 <option value="progress">Avance</option>
@@ -233,7 +238,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                 const progress = completionPercent(order);
                 const groupOrders = normalizedOrders.filter((item) => item.groupCode === order.groupCode);
                 return (
-                  <tr key={order.id} className="group">
+                  <tr key={order.id} className={cn("group", orderRowClass(order))}>
                     <BodyCell className="rounded-l-lg border-l">
                       <div className="flex min-w-0 items-start gap-2">
                         <Link href={`/admin/orders/${order.id}`} aria-label={`Abrir orden ${order.code}`} className="shrink-0">
@@ -315,7 +320,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
               {!displayedOrders.length ? (
                 <tr>
                   <td colSpan={7} className="rounded-lg border border-dashed border-stone-200 bg-white px-4 py-10 text-center text-sm text-stone-500">
-                    No hay notas activas que coincidan con los filtros.
+                    {filter === "active" ? "No hay notas activas que coincidan con los filtros." : "No hay notas que coincidan con los filtros."}
                   </td>
                 </tr>
               ) : null}
@@ -324,7 +329,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         </div>
 
         <div className="border-t border-stone-200 px-4 py-2.5 text-xs text-stone-500">
-          Mostrando {displayedOrders.length} de {normalizedOrders.length} notas activas
+          Mostrando {displayedOrders.length} de {filter === "active" ? activeOrders.length : normalizedOrders.length} notas
         </div>
       </section>
     </section>
@@ -441,6 +446,13 @@ function BodyCell({ children, className }: { children: React.ReactNode; classNam
   );
 }
 
+function orderRowClass(order: Order) {
+  if (order.status === "completed") {
+    return "[&_td]:border-emerald-100 [&_td]:bg-emerald-50/70 hover:[&_td]:bg-emerald-50";
+  }
+  return "";
+}
+
 function StoreStripe({ store }: { store: Order["store"] }) {
   return (
     <span className={cn("mt-1 h-12 w-2 shrink-0 rounded-full", store === "LH" ? "bg-amber-700" : "bg-blue-700")} aria-hidden />
@@ -522,8 +534,12 @@ function isDashboardHiddenStep(step: Pick<ProductionStep, "key" | "label">) {
 }
 
 function matchesFilter(order: Order, filter: DashboardFilter) {
-  if (filter === "active") return currentStep(order)?.status === "active";
+  if (filter === "active") return isDashboardActiveOrder(order);
   return true;
+}
+
+function isDashboardActiveOrder(order: Order) {
+  return !["completed", "cancelled"].includes(order.status);
 }
 
 function matchesSearch(order: Order, search: string) {
@@ -537,7 +553,17 @@ function matchesSearch(order: Order, search: string) {
 function sortOrders(a: Order, b: Order, sortKey: SortKey) {
   if (sortKey === "code") return a.code.localeCompare(b.code);
   if (sortKey === "progress") return completionPercent(a) - completionPercent(b);
+  if (sortKey === "recent") {
+    const entryDiff = dateTime(b.entryDate) - dateTime(a.entryDate);
+    return entryDiff || b.code.localeCompare(a.code);
+  }
   return a.deliveryDate.localeCompare(b.deliveryDate);
+}
+
+function dateTime(value?: string | null) {
+  if (!value) return 0;
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
 function statusPresentation(order: Order): { label: string; tone: Tone; icon: React.ElementType } {
