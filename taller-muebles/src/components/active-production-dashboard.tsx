@@ -468,11 +468,17 @@ function ObservationAlert({ order }: { order: Order }) {
   return (
     <Link
       href={`/admin/orders/${order.id}#observaciones`}
-      title="Ver observacion"
       aria-label={`Ver observacion de ${order.code}`}
-      className="grid size-5 shrink-0 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-700"
+      className="group/comment relative grid size-5 shrink-0 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-700 transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
     >
       <MessageSquare className="size-3" />
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-60 -translate-x-1/2 rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-left text-sm font-medium leading-5 text-stone-800 shadow-lg shadow-stone-950/10 ring-1 ring-amber-100 group-hover/comment:block group-focus-visible/comment:block"
+      >
+        <span className="absolute -top-1.5 left-1/2 size-3 -translate-x-1/2 rotate-45 border-l border-t border-amber-200 bg-white" />
+        <span className="relative block max-h-32 overflow-y-auto whitespace-pre-line">{order.observations}</span>
+      </span>
     </Link>
   );
 }
