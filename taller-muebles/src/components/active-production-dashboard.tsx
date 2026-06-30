@@ -244,7 +244,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         </div>
 
         <div className="overflow-x-auto bg-stone-50/70 p-1.5">
-          <table className="table-fixed border-separate border-spacing-y-1" style={{ width: tableWidth, minWidth: tableWidth }}>
+          <table className="w-full table-fixed border-separate border-spacing-y-1" style={{ minWidth: tableWidth }}>
             <colgroup>
               {dashboardColumns.map((column) => (
                 <col key={column.key} style={{ width: columnWidths[column.key] }} />
