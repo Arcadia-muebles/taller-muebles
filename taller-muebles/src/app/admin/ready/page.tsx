@@ -1,18 +1,19 @@
 import { CalendarDays, PackageCheck, Truck } from "lucide-react";
 import Link from "next/link";
-import { closeOrder } from "@/app/admin/orders/actions";
+import { scheduleOrderDelivery } from "@/app/admin/agenda/actions";
 import { AppShell } from "@/components/app-shell";
+import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
-import { listOrders } from "@/lib/repositories/production";
+import { listAgendaItems, listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { deliveryLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
 
 export default async function ReadyForDeliveryPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
-  const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
-  const ready = readyForDeliveryOrders(orders).sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
-  const canClose = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
+  const [orders, settings, agendaItems] = await Promise.all([listOrders(), getSystemSettings(), listAgendaItems()]);
+  const ready = readyForDeliveryOrders(orders, agendaItems).sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
+  const canSchedule = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
 
   return (
     <AppShell active="admin" user={user}>
@@ -29,7 +30,7 @@ export default async function ReadyForDeliveryPage() {
       <section className="mt-5 grid gap-3 sm:grid-cols-3">
         <Summary icon={PackageCheck} label="Listas" value={ready.length} />
         <Summary icon={CalendarDays} label="Vencen hoy" value={ready.filter((order) => deliveryLabel(order.deliveryDate, false) === "Hoy").length} />
-        <Summary icon={Truck} label="Por confirmar" value={ready.length} />
+        <Summary icon={Truck} label="Por agendar" value={ready.length} />
       </section>
 
       <section className="panel mt-5 overflow-hidden">
@@ -56,6 +57,7 @@ export default async function ReadyForDeliveryPage() {
             <tbody>
               {ready.map((order) => {
                 const progress = 100;
+                const groupOrders = orders.filter((item) => item.status !== "cancelled" && item.groupCode === order.groupCode);
                 return (
                   <tr key={order.id} className="group">
                     <BodyCell className="rounded-l-lg border-l">
@@ -91,17 +93,20 @@ export default async function ReadyForDeliveryPage() {
                       </div>
                     </BodyCell>
                     <BodyCell className="rounded-r-lg border-r">
-                      {canClose ? (
-                        <form action={closeOrder}>
-                          <input type="hidden" name="orderId" value={order.id} />
-                          <button type="submit" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-stone-950 px-3 text-xs font-semibold uppercase text-white transition hover:bg-stone-800">
-                            <Truck className="size-3.5" />
-                            Entregar
-                          </button>
-                        </form>
-                      ) : (
-                        <span className="text-xs font-medium text-stone-500">Solo lectura</span>
-                      )}
+                      <div className="flex flex-col gap-2">
+                        <OrderLabelPrintButton order={order} groupOrders={groupOrders} className="h-9 w-full justify-center px-2 text-xs" />
+                        {canSchedule ? (
+                          <form action={scheduleOrderDelivery}>
+                            <input type="hidden" name="orderId" value={order.id} />
+                            <button type="submit" className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-emerald-700 px-3 text-xs font-semibold uppercase text-white transition hover:bg-emerald-800">
+                              <Truck className="size-3.5" />
+                              Agendar
+                            </button>
+                          </form>
+                        ) : (
+                          <span className="text-xs font-medium text-stone-500">Solo lectura</span>
+                        )}
+                      </div>
                     </BodyCell>
                   </tr>
                 );

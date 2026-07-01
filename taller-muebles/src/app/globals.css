@@ -130,8 +130,20 @@ select {
     @apply border border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50 hover:text-stone-950;
   }
 
+  .work-action {
+    @apply inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-lg border px-3 py-2 text-center text-sm font-bold uppercase leading-tight transition disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .work-action-primary {
+    @apply border-stone-950 bg-stone-950 text-white hover:bg-stone-800;
+  }
+
   .btn-danger {
     @apply border border-rose-200 bg-white text-rose-700 hover:bg-rose-50;
+  }
+
+  .pagination-button {
+    @apply inline-flex h-8 items-center justify-center rounded-md border border-stone-200 bg-white px-2.5 text-xs font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-stone-50 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .empty-state {

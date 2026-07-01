@@ -110,6 +110,7 @@ export async function createOrder(
     });
     revalidatePath("/admin");
     revalidatePath("/admin/ready");
+    revalidatePath("/admin/agenda");
     revalidatePath("/taller");
     revalidatePath(`/admin/orders/${order.id}`);
 
@@ -234,6 +235,7 @@ export async function createOrder(
 
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
+  revalidatePath("/admin/agenda");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${createdOrders[0].id}`);
 
@@ -362,6 +364,7 @@ export async function updateOrder(
 
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
+  revalidatePath("/admin/agenda");
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders/${orderId}/edit`);
   revalidatePath("/taller");
@@ -394,6 +397,7 @@ export async function cancelOrder(formData: FormData) {
 
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
+  revalidatePath("/admin/agenda");
   revalidatePath("/taller");
   redirect("/admin");
 }
@@ -436,6 +440,7 @@ export async function closeOrder(formData: FormData) {
 
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
+  revalidatePath("/admin/agenda");
   revalidatePath("/admin/history");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${id}`);
@@ -561,6 +566,7 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
 
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
+  revalidatePath("/admin/agenda");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${parsed.data.orderId}`);
   return { ok: true, message: "Orden movida." };

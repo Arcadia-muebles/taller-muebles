@@ -2,7 +2,7 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AppUser, AreaKey, AuditEntry, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
+import type { AgendaItem, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
 import { defaultSystemSettings } from "@/lib/system-settings";
 import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
 
@@ -13,6 +13,7 @@ type LocalData = {
   auditLogs: AuditEntry[];
   comments: OrderComment[];
   attachments: Array<Omit<OrderAttachment, "url"> & { storagePath: string }>;
+  agendaItems: AgendaItem[];
   structureRequests: Array<Omit<StructureRequest, "attachments"> & { attachmentIds: string[] }>;
   suppliers: Supplier[];
   users: AppUser[];
@@ -30,6 +31,7 @@ const emptyData: LocalData = {
   auditLogs: [],
   comments: [],
   attachments: [],
+  agendaItems: [],
   structureRequests: [],
   suppliers: [],
   users: [],
@@ -145,7 +147,7 @@ async function ensureDataFile() {
 async function readData(): Promise<LocalData> {
   await ensureDataFile();
   const raw = await readFile(dataFile, "utf8");
-  const parsed = JSON.parse(raw) as Partial<LocalData>;
+  const parsed = JSON.parse(raw.replace(/^\uFEFF/, "")) as Partial<LocalData>;
 
   const data = {
     orders: parsed.orders ?? [],
@@ -154,6 +156,7 @@ async function readData(): Promise<LocalData> {
     auditLogs: parsed.auditLogs ?? [],
     comments: parsed.comments ?? [],
     attachments: parsed.attachments ?? [],
+    agendaItems: parsed.agendaItems ?? [],
     structureRequests: parsed.structureRequests ?? [],
     suppliers: parsed.suppliers ?? [],
     users: parsed.users ?? [],
@@ -172,6 +175,11 @@ async function writeData(data: LocalData) {
 
 export async function listLocalOrders() {
   return (await readData()).orders;
+}
+
+export async function listLocalAgendaItems(date?: string) {
+  const items = (await readData()).agendaItems;
+  return date ? items.filter((item) => item.scheduledDate === date) : items;
 }
 
 export async function getLocalOrder(id: string) {
@@ -369,8 +377,150 @@ export async function closeLocalOrder(id: string) {
     status: "done",
     completedAt: step.completedAt ?? nowIso(),
   }));
+  for (const item of data.agendaItems) {
+    if (item.orderId === id && item.status === "pending") {
+      item.status = "done";
+      item.updatedAt = nowIso();
+    }
+  }
   addAudit(data, order.id, "close_order", "Orden cerrada y etapas marcadas como terminadas");
   await writeData(data);
+}
+
+export async function scheduleLocalOrderDelivery(input: {
+  orderId: string;
+  scheduledDate: string;
+  timeSlot: AgendaTimeSlot;
+}) {
+  const data = await readData();
+  const order = data.orders.find((item) => item.id === input.orderId);
+  if (!order) return false;
+  scheduleDeliveryAgendaItem(data, {
+    orderId: order.id,
+    orderCode: order.code,
+    client: order.client,
+    product: order.product,
+    scheduledDate: input.scheduledDate,
+    timeSlot: input.timeSlot,
+  });
+  addAudit(data, order.id, "schedule_delivery", `Entrega agendada para ${input.scheduledDate} ${input.timeSlot}`);
+  await writeData(data);
+  return true;
+}
+
+export async function scheduleLocalExternalOrderDelivery(input: {
+  orderId: string;
+  orderCode: string;
+  client: string;
+  product: string;
+  scheduledDate: string;
+  timeSlot: AgendaTimeSlot;
+}) {
+  const data = await readData();
+  scheduleDeliveryAgendaItem(data, input);
+  addAudit(data, input.orderId, "schedule_delivery", `Entrega agendada para ${input.scheduledDate} ${input.timeSlot}`);
+  await writeData(data);
+  return true;
+}
+
+function scheduleDeliveryAgendaItem(
+  data: LocalData,
+  input: {
+    orderId: string;
+    orderCode: string;
+    client: string;
+    product: string;
+    scheduledDate: string;
+    timeSlot: AgendaTimeSlot;
+  },
+) {
+  const times = timeSlotTimes(input.timeSlot);
+  const existing = data.agendaItems.find(
+    (item) => item.kind === "delivery" && item.orderId === input.orderId && item.status === "pending",
+  );
+
+  if (existing) {
+    existing.scheduledDate = input.scheduledDate;
+    existing.timeSlot = input.timeSlot;
+    existing.startTime = times.startTime;
+    existing.endTime = times.endTime;
+    existing.updatedAt = nowIso();
+  } else {
+    data.agendaItems.unshift({
+      id: crypto.randomUUID(),
+      kind: "delivery",
+      orderId: input.orderId,
+      title: `Entrega ${input.orderCode}`,
+      notes: `${input.client} · ${input.product}`,
+      scheduledDate: input.scheduledDate,
+      timeSlot: input.timeSlot,
+      startTime: times.startTime,
+      endTime: times.endTime,
+      status: "pending",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    });
+  }
+}
+
+export async function createLocalAgendaTask(input: {
+  title: string;
+  notes?: string;
+  scheduledDate: string;
+  timeSlot: AgendaTimeSlot;
+}) {
+  const data = await readData();
+  const times = timeSlotTimes(input.timeSlot);
+  data.agendaItems.unshift({
+    id: crypto.randomUUID(),
+    kind: "task",
+    title: input.title,
+    notes: input.notes?.trim() || undefined,
+    scheduledDate: input.scheduledDate,
+    timeSlot: input.timeSlot,
+    startTime: times.startTime,
+    endTime: times.endTime,
+    status: "pending",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  });
+  await writeData(data);
+  return true;
+}
+
+export async function completeLocalAgendaItem(id: string) {
+  const data = await readData();
+  const item = data.agendaItems.find((agendaItem) => agendaItem.id === id);
+  if (!item) return false;
+  item.status = "done";
+  item.updatedAt = nowIso();
+  if (item.kind === "delivery" && item.orderId) {
+    const order = data.orders.find((orderItem) => orderItem.id === item.orderId);
+    if (order) {
+      order.status = "completed";
+      order.condition = "Entregado";
+      order.completedAt = nowIso();
+      order.steps = order.steps.map((step) => ({
+        ...step,
+        status: "done",
+        completedAt: step.completedAt ?? nowIso(),
+      }));
+      addAudit(data, order.id, "close_order", "Entrega cerrada desde agenda");
+    }
+  }
+  await writeData(data);
+  return true;
+}
+
+export async function cancelLocalAgendaItem(id: string) {
+  const data = await readData();
+  const item = data.agendaItems.find((agendaItem) => agendaItem.id === id);
+  if (!item) return false;
+  item.status = "cancelled";
+  item.updatedAt = nowIso();
+  if (item.orderId) addAudit(data, item.orderId, "cancel_agenda_item", "Agenda cancelada");
+  await writeData(data);
+  return true;
 }
 
 export async function updateLocalProductionStep(input: {
@@ -387,6 +537,7 @@ export async function updateLocalProductionStep(input: {
   const previousStatus = step.status;
   const isReversal =
     (previousStatus === "active" && input.status === "pending") ||
+    (previousStatus === "done" && input.status === "pending") ||
     (previousStatus === "done" && input.status === "active") ||
     (previousStatus === "blocked" && input.status === "pending");
   const now = nowIso();
@@ -846,6 +997,12 @@ export async function saveLocalSystemSettings(settings: SystemSettings) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function timeSlotTimes(timeSlot: AgendaTimeSlot) {
+  return timeSlot === "AM"
+    ? { startTime: "09:00", endTime: "13:00" }
+    : { startTime: "14:00", endTime: "18:00" };
 }
 
 function nextPendingStep(order: Order, currentStepKey: AreaKey) {

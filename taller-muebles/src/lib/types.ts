@@ -26,6 +26,27 @@ export type OrderStatus =
 
 export type StepStatus = "pending" | "active" | "done" | "blocked";
 
+export type AgendaItemKind = "delivery" | "task";
+
+export type AgendaItemStatus = "pending" | "done" | "cancelled";
+
+export type AgendaTimeSlot = "AM" | "PM";
+
+export type AgendaItem = {
+  id: string;
+  kind: AgendaItemKind;
+  orderId?: string;
+  title: string;
+  notes?: string;
+  scheduledDate: string;
+  timeSlot: AgendaTimeSlot;
+  startTime: string;
+  endTime: string;
+  status: AgendaItemStatus;
+  createdAt: string;
+  updatedAt?: string;
+};
+
 export type StructureRequestStatus =
   | "draft"
   | "requested"

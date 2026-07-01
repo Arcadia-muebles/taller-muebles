@@ -88,6 +88,69 @@ export type Database = {
           },
         ]
       }
+      agenda_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          end_time: string
+          id: string
+          kind: Database["public"]["Enums"]["agenda_item_kind"]
+          notes: string | null
+          order_id: string | null
+          scheduled_date: string
+          start_time: string
+          status: Database["public"]["Enums"]["agenda_item_status"]
+          time_slot: Database["public"]["Enums"]["agenda_time_slot"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          end_time: string
+          id?: string
+          kind: Database["public"]["Enums"]["agenda_item_kind"]
+          notes?: string | null
+          order_id?: string | null
+          scheduled_date: string
+          start_time: string
+          status?: Database["public"]["Enums"]["agenda_item_status"]
+          time_slot: Database["public"]["Enums"]["agenda_time_slot"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          end_time?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["agenda_item_kind"]
+          notes?: string | null
+          order_id?: string | null
+          scheduled_date?: string
+          start_time?: string
+          status?: Database["public"]["Enums"]["agenda_item_status"]
+          time_slot?: Database["public"]["Enums"]["agenda_time_slot"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agenda_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agenda_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       materials: {
         Row: {
           active: boolean
@@ -603,6 +666,9 @@ export type Database = {
       }
     }
     Enums: {
+      agenda_item_kind: "delivery" | "task"
+      agenda_item_status: "pending" | "done" | "cancelled"
+      agenda_time_slot: "AM" | "PM"
       order_condition:
         | "none"
         | "warehouse"
@@ -755,6 +821,9 @@ export const Constants = {
   },
   public: {
     Enums: {
+      agenda_item_kind: ["delivery", "task"],
+      agenda_item_status: ["pending", "done", "cancelled"],
+      agenda_time_slot: ["AM", "PM"],
       order_condition: [
         "none",
         "warehouse",

@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, BarChart3, Boxes, Building2, FileText, Hammer, Home, LogOut, Menu, PackageCheck, Settings, Users, X } from "lucide-react";
+import { Archive, BarChart3, Boxes, Building2, CalendarDays, FileText, Hammer, Home, LogOut, Menu, PackageCheck, Settings, Users, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -46,6 +46,7 @@ export function MobileNavigation({
             <>
               <NavLink href="/admin/documents" icon={FileText} label="Comercial" active={pathname.startsWith("/admin/documents")} />
               <NavLink href="/admin/structures" icon={Hammer} label="Estructuras" active={pathname.startsWith("/admin/structures")} />
+              <NavLink href="/admin/agenda" icon={CalendarDays} label="Agenda" active={pathname.startsWith("/admin/agenda")} />
               <NavLink href="/admin/ready" icon={PackageCheck} label="Listos para entrega" active={pathname.startsWith("/admin/ready")} />
               <NavLink href="/admin/stock" icon={Boxes} label="Stock" active={pathname.startsWith("/admin/stock")} />
               <details className="mt-1" open={isSecondaryActive(pathname)}>

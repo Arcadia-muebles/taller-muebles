@@ -4,14 +4,14 @@ import { ActiveProductionDashboard } from "@/components/active-production-dashbo
 import { AppShell } from "@/components/app-shell";
 import { requireSession } from "@/lib/auth";
 import { completedOrders, readyForDeliveryOrders } from "@/lib/metrics";
-import { listOrders, listStructureRequests } from "@/lib/repositories/production";
+import { listAgendaItems, listOrders, listStructureRequests } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 
 export default async function AdminPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
-  const [orders, settings, structureRequests] = await Promise.all([listOrders(), getSystemSettings(), listStructureRequests()]);
+  const [orders, settings, structureRequests, agendaItems] = await Promise.all([listOrders(), getSystemSettings(), listStructureRequests(), listAgendaItems()]);
   const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
-  const ready = readyForDeliveryOrders(orders);
+  const ready = readyForDeliveryOrders(orders, agendaItems);
   const delivered = completedOrders(orders);
 
   return (

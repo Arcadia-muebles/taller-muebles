@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   AuditEntry,
+  AgendaItem,
   AppUser,
   Order,
   OrderAttachment,
@@ -18,7 +19,7 @@ import type {
   CommercialDocumentType,
 } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { getLocalOrder, listLocalAuditLogs, listLocalOrderAttachments, listLocalOrderComments, listLocalOrders, listLocalStockItems, listLocalStockMovements, listLocalStructureRequests, listLocalSuppliers } from "@/lib/local-store";
+import { getLocalOrder, listLocalAgendaItems, listLocalAuditLogs, listLocalOrderAttachments, listLocalOrderComments, listLocalOrders, listLocalStockItems, listLocalStockMovements, listLocalStructureRequests, listLocalSuppliers } from "@/lib/local-store";
 import { shortOrderCode } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -27,6 +28,7 @@ import type { Database } from "@/lib/supabase/database.types";
 type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
 type StoreRow = Database["public"]["Tables"]["stores"]["Row"];
 type StepRow = Database["public"]["Tables"]["production_steps"]["Row"];
+type AgendaItemRow = Database["public"]["Tables"]["agenda_items"]["Row"];
 type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
 type LooseDb<T> = {
   from: (table: string) => LooseQuery<T>;
@@ -134,6 +136,30 @@ export async function getOrder(id: string): Promise<Order | undefined> {
   }
 
   return mapOrderRecord(data as OrderRecord);
+}
+
+export async function listAgendaItems(date?: string): Promise<AgendaItem[]> {
+  if (!hasSupabaseConfig()) {
+    return listLocalAgendaItems(date);
+  }
+
+  const supabase = await createClient();
+  let query = supabase
+    .from("agenda_items")
+    .select("*")
+    .neq("status", "cancelled")
+    .order("scheduled_date", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (date) query = query.eq("scheduled_date", date);
+
+  const { data, error } = await query;
+  if (error || !data) {
+    console.error("Supabase agenda query failed:", error?.message);
+    return listLocalAgendaItems(date);
+  }
+
+  return (data as AgendaItemRow[]).map(mapAgendaItemRecord);
 }
 
 export async function listStockItems(): Promise<StockItem[]> {
@@ -439,6 +465,23 @@ function mapStepRecord(record: StepRecord): ProductionStep {
     notes: record.notes ?? record.blocked_reason ?? undefined,
     startedAt: record.started_at ?? undefined,
     completedAt: record.completed_at ?? undefined,
+  };
+}
+
+function mapAgendaItemRecord(record: AgendaItemRow): AgendaItem {
+  return {
+    id: record.id,
+    kind: record.kind,
+    orderId: record.order_id ?? undefined,
+    title: record.title,
+    notes: record.notes ?? undefined,
+    scheduledDate: record.scheduled_date,
+    timeSlot: record.time_slot,
+    startTime: record.start_time.slice(0, 5),
+    endTime: record.end_time.slice(0, 5),
+    status: record.status,
+    createdAt: record.created_at,
+    updatedAt: record.updated_at ?? undefined,
   };
 }
 

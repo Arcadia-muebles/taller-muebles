@@ -86,6 +86,7 @@ export async function createWorkshopOrder(
     });
     revalidatePath("/admin");
     revalidatePath("/admin/ready");
+    revalidatePath("/admin/agenda");
     revalidatePath("/taller");
     return { status: "success", message: "Producto ingresado al flujo de taller.", orderId: order.id };
   }
@@ -160,6 +161,7 @@ export async function createWorkshopOrder(
 
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
+  revalidatePath("/admin/agenda");
   revalidatePath("/taller");
   return { status: "success", message: "Producto ingresado al flujo de taller.", orderId: order.id };
 }
@@ -240,6 +242,7 @@ export async function updateProductionStep(
 
     revalidatePath("/admin");
     revalidatePath("/admin/ready");
+    revalidatePath("/admin/agenda");
     revalidatePath("/taller");
     revalidatePath(`/admin/orders/${parsed.data.orderId}`);
     revalidatePath(`/taller/orders/${parsed.data.orderId}`);
@@ -350,6 +353,7 @@ export async function updateProductionStep(
 
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
+  revalidatePath("/admin/agenda");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${parsed.data.orderId}`);
   revalidatePath(`/taller/orders/${parsed.data.orderId}`);

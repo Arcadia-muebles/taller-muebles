@@ -38,6 +38,8 @@ type SortKey = "recent" | "delivery" | "code" | "progress";
 type Tone = "green" | "blue" | "amber" | "purple" | "rose" | "stone";
 type DashboardColumnKey = "code" | "product" | "color" | "process" | "status" | "delivery" | "progress";
 
+const ORDERS_PER_PAGE = 30;
+
 const dashboardColumns: Array<{
   key: DashboardColumnKey;
   label: string;
@@ -71,6 +73,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DashboardFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("recent");
+  const [page, setPage] = useState(1);
   const [optimisticStage, setOptimisticStage] = useState<Record<string, AreaKey>>({});
   const [optimisticActiveStep, setOptimisticActiveStep] = useState<Record<string, AreaKey>>({});
   const [columnWidths, setColumnWidths] = useState<Record<DashboardColumnKey, number>>(defaultColumnWidths);
@@ -91,6 +94,13 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         .sort((a, b) => sortOrders(a, b, sortKey)),
     [filter, normalizedOrders, optimisticActiveStep, optimisticStage, search, sortKey],
   );
+  const totalPages = Math.max(1, Math.ceil(displayedOrders.length / ORDERS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedOrders = useMemo(
+    () => displayedOrders.slice((currentPage - 1) * ORDERS_PER_PAGE, currentPage * ORDERS_PER_PAGE),
+    [currentPage, displayedOrders],
+  );
+  const pageNumbers = useMemo(() => visiblePageNumbers(currentPage, totalPages), [currentPage, totalPages]);
 
   const counters = useMemo(() => buildCounters(activeOrders, dashboardSteps, deliveredCount), [activeOrders, dashboardSteps, deliveredCount]);
   const requestedStructureOrders = useMemo(
@@ -101,24 +111,17 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
 
   function move(order: Order, stepKey: AreaKey) {
     const current = currentStep(order);
+    const targetStep = order.steps.find((step) => step.key === stepKey);
     if (!canMove || order.status === "completed" || order.status === "cancelled") return;
 
     if (current?.key === stepKey) {
       if (current.status !== "pending" || !isWaitingForStep(order, current)) return;
-      setFeedback(null);
-      setOptimisticActiveStep((currentSteps) => ({ ...currentSteps, [order.id]: stepKey }));
-      startTransition(async () => {
-        const result = await updateProductionStep({ orderId: order.id, stepKey, status: "active" });
-        if (result.status === "error") {
-          setOptimisticActiveStep((currentSteps) => {
-            const next = { ...currentSteps };
-            delete next[order.id];
-            return next;
-          });
-          setFeedback({ tone: "error", message: result.message });
-          return;
-        }
-      });
+      activateStep(order.id, stepKey);
+      return;
+    }
+
+    if (targetStep?.status === "done") {
+      activateStep(order.id, stepKey);
       return;
     }
 
@@ -136,6 +139,27 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         return;
       }
     });
+  }
+
+  function activateStep(orderId: string, stepKey: AreaKey) {
+    setFeedback(null);
+    setOptimisticActiveStep((currentSteps) => ({ ...currentSteps, [orderId]: stepKey }));
+    startTransition(async () => {
+      const result = await updateProductionStep({ orderId, stepKey, status: "active" });
+      if (result.status === "error") {
+        setOptimisticActiveStep((currentSteps) => {
+          const next = { ...currentSteps };
+          delete next[orderId];
+          return next;
+        });
+        setFeedback({ tone: "error", message: result.message });
+      }
+    });
+  }
+
+  function updateFilter(nextFilter: DashboardFilter) {
+    setFilter(nextFilter);
+    setPage(1);
   }
 
   function startColumnResize(event: React.PointerEvent<HTMLButtonElement>, columnKey: DashboardColumnKey) {
@@ -173,14 +197,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
 
   return (
     <section className="mt-5 space-y-3">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[repeat(7,minmax(0,1fr))]">
-        <MetricCard
-          label="Notas activas"
-          value={String(activeOrders.length)}
-          helper=""
-          icon={CheckCircle2}
-          tone="green"
-        />
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[repeat(6,minmax(0,1fr))]">
         {counters.byStep.map((item) => (
           <MetricCard
             key={item.key}
@@ -204,8 +221,8 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         <div className="border-b border-stone-200 p-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="-mx-1 flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto px-1 pb-1">
-              <FilterChip active={filter === "all"} label="Todos" count={normalizedOrders.length} onClick={() => setFilter("all")} />
-              <FilterChip active={filter === "active"} label="Activos" count={activeOrders.length} onClick={() => setFilter("active")} />
+              <FilterChip active={filter === "all"} label="Todos" count={normalizedOrders.length} onClick={() => updateFilter("all")} />
+              <FilterChip active={filter === "active"} label="Activos" count={activeOrders.length} onClick={() => updateFilter("active")} />
             </div>
 
             <div className="flex min-w-0 flex-col gap-2 sm:flex-row xl:w-[500px]">
@@ -213,12 +230,22 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
                 <input
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
                   placeholder="Buscar por código, cliente o producto..."
                   className="control pl-9"
                 />
               </label>
-              <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} className="control bg-white text-stone-700 sm:w-44">
+              <select
+                value={sortKey}
+                onChange={(event) => {
+                  setSortKey(event.target.value as SortKey);
+                  setPage(1);
+                }}
+                className="control bg-white text-stone-700 sm:w-44"
+              >
                 <option value="recent">Ingreso reciente</option>
                 <option value="delivery">Entrega cercana</option>
                 <option value="code">Código</option>
@@ -286,7 +313,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
               </tr>
             </thead>
             <tbody>
-              {displayedOrders.map((order) => {
+              {paginatedOrders.map((order) => {
                 const presentation = statusPresentation(order);
                 const StatusIcon = presentation.icon;
                 const progress = completionPercent(order);
@@ -381,8 +408,29 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
           </table>
         </div>
 
-        <div className="border-t border-stone-200 px-4 py-2.5 text-xs text-stone-500">
-          Mostrando {displayedOrders.length} de {filter === "active" ? activeOrders.length : normalizedOrders.length} notas
+        <div className="flex flex-col gap-3 border-t border-stone-200 px-4 py-3 text-xs text-stone-500 sm:flex-row sm:items-center sm:justify-between">
+          <span>{paginationLabel(displayedOrders.length, currentPage)}</span>
+          {totalPages > 1 ? (
+            <nav className="flex items-center gap-1" aria-label="Paginación de notas">
+              <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1} className="pagination-button">
+                Anterior
+              </button>
+              {pageNumbers.map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  onClick={() => setPage(pageNumber)}
+                  aria-current={pageNumber === currentPage ? "page" : undefined}
+                  className={cn("pagination-button min-w-8", pageNumber === currentPage && "border-stone-950 bg-stone-950 text-white")}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages} className="pagination-button">
+                Siguiente
+              </button>
+            </nav>
+          ) : null}
         </div>
       </section>
     </section>
@@ -643,6 +691,19 @@ function dateTime(value?: string | null) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function paginationLabel(total: number, currentPage: number) {
+  if (!total) return "Mostrando 0 notas";
+  const from = (currentPage - 1) * ORDERS_PER_PAGE + 1;
+  const to = Math.min(currentPage * ORDERS_PER_PAGE, total);
+  return `Mostrando ${from}-${to} de ${total} notas`;
+}
+
+function visiblePageNumbers(currentPage: number, totalPages: number) {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+  const start = Math.min(Math.max(currentPage - 2, 1), totalPages - 4);
+  return Array.from({ length: 5 }, (_, index) => start + index);
 }
 
 function statusPresentation(order: Order): { label: string; tone: Tone; icon: React.ElementType } {

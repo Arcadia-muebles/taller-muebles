@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { createLocalStructureRequest, updateLocalStructureRequestStatus } from "@/lib/local-store";
+import { createLocalStructureRequest, updateLocalProductionStep, updateLocalStructureRequestStatus } from "@/lib/local-store";
+import { getOrder } from "@/lib/repositories/production";
+import { getSystemSettings } from "@/lib/repositories/settings";
 import { createClient } from "@/lib/supabase/server";
 import type { StructureRequestStatus } from "@/lib/types";
 
@@ -37,6 +39,12 @@ const structureSchema = z.object({
   specifications: z.string().trim().min(3, "Ingresa las especificaciones de estructura.").max(1200),
   status: z.enum(["draft", "requested", "in_progress", "done", "cancelled"]),
   assignedTo: z.string().trim().max(80).optional(),
+});
+
+const structureOrderStatusSchema = z.object({
+  orderId: z.string().min(1),
+  specifications: z.string().trim().min(3).max(1200),
+  status: z.enum(["requested", "done"]),
 });
 
 export async function createStructureRequest(formData: FormData) {
@@ -113,6 +121,75 @@ export async function saveStructureSpecification(formData: FormData) {
   await createStructureRequest(formData);
 }
 
+export async function setStructureOrderStatus(formData: FormData) {
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) return;
+
+  const parsed = structureOrderStatusSchema.safeParse({
+    orderId: formData.get("orderId"),
+    specifications: formData.get("specifications"),
+    status: formData.get("status"),
+  });
+  if (!parsed.success) return;
+
+  if (!hasSupabaseConfig()) {
+    await createLocalStructureRequest({
+      orderId: parsed.data.orderId,
+      specifications: parsed.data.specifications,
+      status: parsed.data.status,
+    });
+    await updateLocalProductionStep({
+      orderId: parsed.data.orderId,
+      stepKey: "structure",
+      status: parsed.data.status === "done" ? "done" : "pending",
+      reason: parsed.data.specifications,
+    });
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    const structureDb = supabase as unknown as LooseDb<StructureRow>;
+    const { data: existing } = await structureDb
+      .from("structure_requests")
+      .select("id")
+      .eq("order_id", parsed.data.orderId)
+      .neq("status", "cancelled")
+      .maybeSingle();
+
+    if (existing?.id) {
+      await structureDb.from("structure_requests").update({
+        specifications: parsed.data.specifications,
+        status: parsed.data.status,
+        completed_at: parsed.data.status === "done" ? new Date().toISOString() : null,
+        updated_by: profileId,
+      }).eq("id", existing.id);
+    } else {
+      await structureDb.from("structure_requests").insert({
+        order_id: parsed.data.orderId,
+        specifications: parsed.data.specifications,
+        status: parsed.data.status,
+        requested_by: profileId,
+        updated_by: profileId,
+        completed_at: parsed.data.status === "done" ? new Date().toISOString() : null,
+      });
+    }
+
+    await updateStructureStep({
+      supabase,
+      orderId: parsed.data.orderId,
+      status: parsed.data.status,
+      notes: parsed.data.specifications,
+      profileId,
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/ready");
+  revalidatePath("/admin/structures");
+  revalidatePath("/taller");
+  revalidatePath(`/admin/orders/${parsed.data.orderId}`);
+}
+
 export async function setStructureRequestStatus(formData: FormData) {
   await requireSession(["admin", "manager"]);
   const id = formData.get("id")?.toString();
@@ -166,9 +243,31 @@ async function updateStructureStep({
   const now = new Date().toISOString();
   const patch =
     status === "done"
-      ? { status: "done", started_at: now, completed_at: now, notes, updated_by: profileId }
-      : { notes, updated_by: profileId };
+      ? { status: "done", started_at: now, completed_at: now, blocked_reason: null, notes, updated_by: profileId }
+      : status === "in_progress"
+        ? { status: "active", started_at: now, completed_at: null, blocked_reason: null, notes, updated_by: profileId }
+        : { status: "pending", started_at: null, completed_at: null, blocked_reason: null, notes, updated_by: profileId };
   await (supabase as unknown as LooseDb<ProductionStepRow>).from("production_steps").update(patch).eq("order_id", orderId).eq("step", "structure");
+
+  if (status !== "done") {
+    const order = await getOrder(orderId);
+    const structureIndex = order?.steps.findIndex((step) => step.key === "structure") ?? -1;
+    if (order && structureIndex >= 0) {
+      for (const step of order.steps.slice(structureIndex + 1)) {
+        await (supabase as unknown as LooseDb<ProductionStepRow>)
+          .from("production_steps")
+          .update({
+            status: "pending",
+            started_at: null,
+            completed_at: null,
+            blocked_reason: null,
+            updated_by: profileId,
+          })
+          .eq("order_id", orderId)
+          .eq("step", step.key);
+      }
+    }
+  }
 }
 
 async function saveStructureAttachment({

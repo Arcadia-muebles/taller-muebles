@@ -1,5 +1,5 @@
 import { daysUntil } from "./utils";
-import type { Order, StepStatus } from "./types";
+import type { AgendaItem, Order, StepStatus } from "./types";
 
 export function activeOrders(orders: Order[]) {
   return orders.filter((order) => !["completed", "cancelled"].includes(order.status));
@@ -20,8 +20,13 @@ export function isReadyForDelivery(order: Order) {
   );
 }
 
-export function readyForDeliveryOrders(orders: Order[]) {
-  return activeOrders(orders).filter(isReadyForDelivery);
+export function readyForDeliveryOrders(orders: Order[], agendaItems: AgendaItem[] = []) {
+  const scheduledOrderIds = new Set(
+    agendaItems
+      .filter((item) => item.kind === "delivery" && item.status === "pending" && item.orderId)
+      .map((item) => item.orderId),
+  );
+  return activeOrders(orders).filter((order) => isReadyForDelivery(order) && !scheduledOrderIds.has(order.id));
 }
 
 export function completedOrders(orders: Order[]) {

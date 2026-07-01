@@ -1,6 +1,6 @@
 import { CheckSquare, Paperclip, Pencil, Square } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { saveStructureSpecification } from "@/app/admin/structures/actions";
+import { saveStructureSpecification, setStructureOrderStatus } from "@/app/admin/structures/actions";
 import { requireSession } from "@/lib/auth";
 import { activeOrders } from "@/lib/metrics";
 import { listOrders, listStructureRequests } from "@/lib/repositories/production";
@@ -34,7 +34,7 @@ export default async function StructuresPage() {
             <colgroup>
               <col className="w-[210px]" />
               <col />
-              <col className="w-[150px]" />
+              <col className="w-[230px]" />
               <col className="w-[95px]" />
             </colgroup>
             <thead className="table-head">
@@ -100,7 +100,7 @@ function StructureRow({ row, canEdit }: { row: StructureListRow; canEdit: boolea
           </td>
           <td className="px-3 py-2 align-middle">
             <input form={`structure-${row.order.id}`} type="hidden" name="status" value={status === "in_progress" ? "in_progress" : status === "done" ? "done" : "requested"} />
-            <StatusDisplay status={status} />
+            <StructureStatusControls row={row} />
           </td>
           <td className="px-3 py-2 align-middle">
             <div className="flex items-center gap-1.5">
@@ -148,7 +148,7 @@ function StructureMobileRow({ row, canEdit }: { row: StructureListRow; canEdit: 
           </p>
           <input type="hidden" name="status" value={status === "in_progress" ? "in_progress" : status === "done" ? "done" : "requested"} />
           <div className="grid grid-cols-[1fr_auto_auto] gap-2">
-            <div className="flex h-10 items-center"><StatusDisplay status={status} /></div>
+            <StructureStatusControls row={row} compact />
             <label className="grid size-10 cursor-pointer place-items-center rounded-md border border-stone-200 bg-white text-stone-600">
               <Paperclip className="size-4" />
               <input name="file" type="file" accept="image/*,application/pdf" className="sr-only" />
@@ -165,6 +165,57 @@ function StructureMobileRow({ row, canEdit }: { row: StructureListRow; canEdit: 
         </div>
       )}
     </article>
+  );
+}
+
+function StructureStatusControls({ row, compact = false }: { row: StructureListRow; compact?: boolean }) {
+  const specification = row.request?.specifications || defaultSpecification(row.order);
+  const isDone = row.structureStatus === "done";
+
+  return (
+    <div className={compact ? "min-w-0" : "flex min-w-0 items-center"}>
+      <StructureStatusButton
+        orderId={row.order.id}
+        specifications={specification}
+        status={isDone ? "requested" : "done"}
+        currentStatus={isDone ? "done" : "pending"}
+      />
+    </div>
+  );
+}
+
+function StructureStatusButton({
+  orderId,
+  specifications,
+  status,
+  currentStatus,
+}: {
+  orderId: string;
+  specifications: string;
+  status: "requested" | "done";
+  currentStatus: "pending" | "done";
+}) {
+  const isDone = currentStatus === "done";
+  const Icon = isDone ? CheckSquare : Square;
+  return (
+    <form action={setStructureOrderStatus}>
+      <input type="hidden" name="orderId" value={orderId} />
+      <input type="hidden" name="specifications" value={specifications} />
+      <input type="hidden" name="status" value={status} />
+      <button
+        type="submit"
+        title={isDone ? "Volver a pendiente" : "Marcar como completado"}
+        aria-label={isDone ? "Volver estructura a pendiente" : "Marcar estructura como completada"}
+        className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition ${
+          isDone
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+            : "border-amber-200 bg-amber-50 text-amber-700 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+        }`}
+      >
+        <Icon className="size-3.5" />
+        {isDone ? "Completado" : "Pendiente"}
+      </button>
+    </form>
   );
 }
 
