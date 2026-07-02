@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ActiveProductionDashboard } from "@/components/active-production-dashboard";
 import { AppShell } from "@/components/app-shell";
 import { requireSession } from "@/lib/auth";
-import { completedOrders, readyForDeliveryOrders } from "@/lib/metrics";
+import { isReadyForDelivery, readyForDeliveryOrders } from "@/lib/metrics";
 import { listAgendaItems, listOrders, listStructureRequests } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 
@@ -12,7 +12,7 @@ export default async function AdminPage() {
   const [orders, settings, structureRequests, agendaItems] = await Promise.all([listOrders(), getSystemSettings(), listStructureRequests(), listAgendaItems()]);
   const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
   const ready = readyForDeliveryOrders(orders, agendaItems);
-  const delivered = completedOrders(orders);
+  const productionFinished = orders.filter((order) => !["completed", "cancelled"].includes(order.status) && isReadyForDelivery(order));
 
   return (
     <AppShell active="admin" user={user}>
@@ -40,7 +40,7 @@ export default async function AdminPage() {
         steps={settings.production.steps}
         canMove={canEditOrders}
         structureRequests={structureRequests}
-        deliveredCount={delivered.length}
+        finishedCount={productionFinished.length}
       />
     </AppShell>
   );

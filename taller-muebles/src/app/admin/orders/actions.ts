@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder } from "@/lib/local-store";
+import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
@@ -446,6 +446,67 @@ export async function closeOrder(formData: FormData) {
   revalidatePath(`/admin/orders/${id}`);
 }
 
+export async function markProductionFinished(formData: FormData) {
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) return;
+  const id = formData.get("orderId")?.toString();
+  if (!id) return;
+
+  const order = (await listOrders()).find((item) => item.id === id);
+  const finalStep = order ? finalizableProductionStep(order) : undefined;
+  if (!order || !finalStep) return;
+
+  if (!hasSupabaseConfig()) {
+    await updateLocalProductionStep({
+      orderId: id,
+      stepKey: finalStep.key,
+      status: "done",
+    });
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) return;
+    const completedAt = new Date().toISOString();
+    const { error: stepError } = await supabase
+      .from("production_steps")
+      .update({
+        status: "done",
+        started_at: finalStep.startedAt ?? completedAt,
+        completed_at: completedAt,
+        blocked_reason: null,
+        updated_by: profileId,
+      })
+      .eq("order_id", id)
+      .eq("step", finalStep.key);
+    if (stepError) return;
+
+    await supabase
+      .from("orders")
+      .update({
+        status: "quality_control",
+        condition: "quality_control",
+        completed_at: null,
+      })
+      .eq("id", id);
+    await supabase.from("audit_logs").insert({
+      order_id: id,
+      action: "production_finished",
+      entity: "production_steps",
+      entity_id: id,
+      profile_id: profileId,
+      field_name: "step",
+      new_value: finalStep.key,
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/ready");
+  revalidatePath("/admin/agenda");
+  revalidatePath("/taller");
+  revalidatePath(`/admin/orders/${id}`);
+}
+
 function isReadyForDispatch(order: Awaited<ReturnType<typeof listOrders>>[number]) {
   if (order.steps.length > 0 && order.steps.every((step) => step.status === "done")) return true;
 
@@ -457,6 +518,14 @@ function isReadyForDispatch(order: Awaited<ReturnType<typeof listOrders>>[number
     dispatch.status !== "blocked" &&
     order.steps.slice(0, dispatchIndex).every((step) => step.status === "done")
   );
+}
+
+function finalizableProductionStep(order: Awaited<ReturnType<typeof listOrders>>[number]) {
+  if (order.status === "completed" || order.status === "cancelled" || !order.steps.length) return undefined;
+  const lastStep = order.steps.at(-1);
+  if (!lastStep || lastStep.status === "done" || lastStep.status === "blocked") return undefined;
+  if (!order.steps.slice(0, -1).every((step) => step.status === "done")) return undefined;
+  return lastStep;
 }
 
 const moveOrderStageSchema = z.object({

@@ -18,10 +18,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { closeOrder, moveOrderStage } from "@/app/admin/orders/actions";
+import { moveOrderStage } from "@/app/admin/orders/actions";
 import { updateProductionStep } from "@/app/taller/actions";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
-import { completionPercent, isReadyForDelivery } from "@/lib/metrics";
+import { isReadyForDelivery } from "@/lib/metrics";
 import type { AreaKey, Order, ProductionStep, StepStatus, StructureRequest, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
 
@@ -30,7 +30,7 @@ type ActiveProductionDashboardProps = {
   steps: SystemSettings["production"]["steps"];
   canMove: boolean;
   structureRequests?: StructureRequest[];
-  deliveredCount?: number;
+  finishedCount?: number;
 };
 
 type DashboardFilter = "all" | "active";
@@ -59,16 +59,20 @@ const dashboardColumns: Array<{
 
 const defaultColumnWidths = Object.fromEntries(dashboardColumns.map((column) => [column.key, column.width])) as Record<DashboardColumnKey, number>;
 
-export function ActiveProductionDashboard({ orders, steps, canMove, structureRequests = [], deliveredCount = 0 }: ActiveProductionDashboardProps) {
+export function ActiveProductionDashboard({ orders, steps, canMove, structureRequests = [], finishedCount = 0 }: ActiveProductionDashboardProps) {
   const enabledSteps = useMemo(() => steps.filter((step) => step.enabled), [steps]);
   const dashboardSteps = useMemo(() => enabledSteps.filter((step) => !isDashboardHiddenStep(step)), [enabledSteps]);
   const normalizedOrders = useMemo(
     () => orders.map((order) => orderWithConfiguredSteps(order, enabledSteps)),
     [enabledSteps, orders],
   );
-  const activeOrders = useMemo(
-    () => normalizedOrders.filter(isDashboardActiveOrder),
+  const dashboardOrders = useMemo(
+    () => normalizedOrders.filter(isDashboardVisibleOrder),
     [normalizedOrders],
+  );
+  const activeOrders = useMemo(
+    () => dashboardOrders.filter(isDashboardActiveOrder),
+    [dashboardOrders],
   );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DashboardFilter>("all");
@@ -82,7 +86,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
 
   const displayedOrders = useMemo(
     () =>
-      normalizedOrders
+      dashboardOrders
         .map((order) => {
           const stage = optimisticStage[order.id];
           const activeStep = optimisticActiveStep[order.id];
@@ -91,8 +95,8 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         })
         .filter((order) => matchesFilter(order, filter))
         .filter((order) => matchesSearch(order, search))
-        .sort((a, b) => sortOrders(a, b, sortKey)),
-    [filter, normalizedOrders, optimisticActiveStep, optimisticStage, search, sortKey],
+        .sort((a, b) => sortOrders(a, b, sortKey, dashboardSteps)),
+    [dashboardOrders, dashboardSteps, filter, optimisticActiveStep, optimisticStage, search, sortKey],
   );
   const totalPages = Math.max(1, Math.ceil(displayedOrders.length / ORDERS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
@@ -102,7 +106,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
   );
   const pageNumbers = useMemo(() => visiblePageNumbers(currentPage, totalPages), [currentPage, totalPages]);
 
-  const counters = useMemo(() => buildCounters(activeOrders, dashboardSteps, deliveredCount), [activeOrders, dashboardSteps, deliveredCount]);
+  const counters = useMemo(() => buildCounters(activeOrders, dashboardSteps, finishedCount), [activeOrders, dashboardSteps, finishedCount]);
   const requestedStructureOrders = useMemo(
     () => new Set(structureRequests.filter((request) => request.status === "requested" || request.status === "in_progress").map((request) => request.orderId)),
     [structureRequests],
@@ -111,7 +115,6 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
 
   function move(order: Order, stepKey: AreaKey) {
     const current = currentStep(order);
-    const targetStep = order.steps.find((step) => step.key === stepKey);
     if (!canMove || order.status === "completed" || order.status === "cancelled") return;
 
     if (current?.key === stepKey) {
@@ -120,12 +123,12 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
       return;
     }
 
-    if (targetStep?.status === "done") {
-      activateStep(order.id, stepKey);
-      return;
-    }
-
     setFeedback(null);
+    setOptimisticActiveStep((currentSteps) => {
+      const next = { ...currentSteps };
+      delete next[order.id];
+      return next;
+    });
     setOptimisticStage((currentStages) => ({ ...currentStages, [order.id]: stepKey }));
     startTransition(async () => {
       const result = await moveOrderStage({ orderId: order.id, stepKey });
@@ -143,6 +146,11 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
 
   function activateStep(orderId: string, stepKey: AreaKey) {
     setFeedback(null);
+    setOptimisticStage((currentStages) => {
+      const next = { ...currentStages };
+      delete next[orderId];
+      return next;
+    });
     setOptimisticActiveStep((currentSteps) => ({ ...currentSteps, [orderId]: stepKey }));
     startTransition(async () => {
       const result = await updateProductionStep({ orderId, stepKey, status: "active" });
@@ -203,7 +211,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
             key={item.key}
             label={metricStepLabel(item.label)}
             value={String(item.count)}
-            helper={item.key === "sewing" && item.count > 0 ? "Cuello de botella" : ""}
+            helper=""
             icon={stepIconByKey(item.key, item.label)}
             tone={stepTone({ key: item.key, label: item.label })}
           />
@@ -221,7 +229,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         <div className="border-b border-stone-200 p-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="-mx-1 flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto px-1 pb-1">
-              <FilterChip active={filter === "all"} label="Todos" count={normalizedOrders.length} onClick={() => updateFilter("all")} />
+              <FilterChip active={filter === "all"} label="Todos" count={dashboardOrders.length} onClick={() => updateFilter("all")} />
               <FilterChip active={filter === "active"} label="Activos" count={activeOrders.length} onClick={() => updateFilter("active")} />
             </div>
 
@@ -316,7 +324,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
               {paginatedOrders.map((order) => {
                 const presentation = statusPresentation(order);
                 const StatusIcon = presentation.icon;
-                const progress = completionPercent(order);
+                const progress = dashboardCompletionPercent(order, dashboardSteps);
                 const groupOrders = normalizedOrders.filter((item) => item.groupCode === order.groupCode);
                 return (
                   <tr key={order.id} className={cn("group", orderRowClass(order))}>
@@ -366,23 +374,11 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                       </div>
                     </BodyCell>
                     <BodyCell>
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <div className="flex min-w-0 items-center">
                         <span className={cn("inline-flex max-w-full items-center gap-1.5 rounded-md border px-2.5 py-2 text-[11px] font-semibold uppercase leading-none", tonePill(presentation.tone))}>
                           <StatusIcon className="size-4 shrink-0" />
                           <span className="truncate">{presentation.label}</span>
                         </span>
-                        {canMove && canCloseOrder(order) ? (
-                          <form action={closeOrder}>
-                            <input type="hidden" name="orderId" value={order.id} />
-                            <button
-                              type="submit"
-                              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-stone-950 px-2.5 text-[11px] font-semibold uppercase text-white transition hover:bg-stone-800"
-                            >
-                              <Truck className="size-3.5" />
-                              Entregar
-                            </button>
-                          </form>
-                        ) : null}
                       </div>
                     </BodyCell>
                     <BodyCell>
@@ -618,11 +614,11 @@ function ObservationAlert({ order }: { order: Order }) {
   );
 }
 
-function buildCounters(orders: Order[], steps: SystemSettings["production"]["steps"], deliveredCount: number) {
+function buildCounters(orders: Order[], steps: SystemSettings["production"]["steps"], finishedCount: number) {
   const byStep = steps.map((step) => ({
     key: step.key,
     label: step.label,
-    count: isDeliveredMetricStep(step) ? deliveredCount : orders.filter((order) => metricStepKey(order) === step.key).length,
+    count: isDeliveredMetricStep(step) ? finishedCount : orders.filter((order) => metricStepKey(order) === step.key).length,
   }));
   return {
     lh: orders.filter((order) => order.store === "LH").length,
@@ -662,6 +658,11 @@ function matchesFilter(order: Order, filter: DashboardFilter) {
 }
 
 function isDashboardActiveOrder(order: Order) {
+  if (["completed", "cancelled"].includes(order.status)) return false;
+  return !isReadyForDelivery(order);
+}
+
+function isDashboardVisibleOrder(order: Order) {
   return !["completed", "cancelled"].includes(order.status);
 }
 
@@ -673,14 +674,30 @@ function matchesSearch(order: Order, search: string) {
     .some((value) => value.toLowerCase().includes(query));
 }
 
-function sortOrders(a: Order, b: Order, sortKey: SortKey) {
+function sortOrders(a: Order, b: Order, sortKey: SortKey, steps: SystemSettings["production"]["steps"]) {
   if (sortKey === "code") return a.code.localeCompare(b.code);
-  if (sortKey === "progress") return completionPercent(a) - completionPercent(b);
+  if (sortKey === "progress") return dashboardCompletionPercent(a, steps) - dashboardCompletionPercent(b, steps);
   if (sortKey === "recent") {
     const entryDiff = dateTime(b.entryDate) - dateTime(a.entryDate);
     return entryDiff || b.code.localeCompare(a.code);
   }
   return a.deliveryDate.localeCompare(b.deliveryDate);
+}
+
+function dashboardCompletionPercent(order: Order, steps: SystemSettings["production"]["steps"]) {
+  if (!steps.length) return 0;
+  if (isReadyForDelivery(order)) return 100;
+
+  const visibleSteps = steps
+    .map((step) => order.steps.find((orderStep) => orderStep.key === step.key))
+    .filter((step): step is ProductionStep => Boolean(step));
+  if (!visibleSteps.length) return 0;
+
+  const activeIndex = visibleSteps.findIndex((step) => step.status === "active" || step.status === "blocked");
+  if (activeIndex >= 0) return Math.round(((activeIndex + 1) / visibleSteps.length) * 100);
+
+  const doneCount = visibleSteps.filter((step) => step.status === "done").length;
+  return Math.round((doneCount / visibleSteps.length) * 100);
 }
 
 function dateTime(value?: string | null) {
@@ -709,7 +726,7 @@ function visiblePageNumbers(currentPage: number, totalPages: number) {
 function statusPresentation(order: Order): { label: string; tone: Tone; icon: React.ElementType } {
   if (order.status === "completed") return { label: "Entregada", tone: "green", icon: CheckCircle2 };
   if (order.status === "blocked" || order.steps.some((step) => step.status === "blocked")) return { label: "Bloqueada", tone: "rose", icon: CircleDashed };
-  if (isReadyForDelivery(order)) return { label: "Listo para entrega", tone: "green", icon: CheckCircle2 };
+  if (isReadyForDelivery(order)) return { label: "Terminado", tone: "green", icon: CheckCircle2 };
   const step = currentStep(order);
   if (!step) return { label: "Sin iniciar", tone: "stone", icon: Clock3 };
   if (isWaitingForStep(order, step)) return { label: `En espera de ${cleanStepLabel(step.label)}`, tone: "blue", icon: Clock3 };
@@ -724,22 +741,14 @@ function currentStep(order: Order) {
   );
 }
 
-function canCloseOrder(order: Order) {
-  if (order.status === "completed" || order.status === "cancelled" || !order.steps.length) return false;
-  if (order.steps.every((step) => step.status === "done")) return true;
-
-  const lastStep = order.steps.at(-1);
-  if (!lastStep || lastStep.status === "blocked") return false;
-  return order.steps.slice(0, -1).every((step) => step.status === "done");
-}
-
 function orderWithStage(order: Order, stepKey: AreaKey): Order {
   const targetIndex = order.steps.findIndex((step) => step.key === stepKey);
   if (targetIndex < 0) return order;
+  const now = new Date().toISOString();
   return {
     ...order,
     steps: order.steps.map((step, index) => {
-      if (index < targetIndex) return { ...step, status: "done" };
+      if (index < targetIndex) return { ...step, status: "done", startedAt: step.startedAt ?? step.completedAt ?? now, completedAt: step.completedAt ?? now };
       if (index === targetIndex) return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
       return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
     }),

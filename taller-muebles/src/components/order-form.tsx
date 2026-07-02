@@ -10,25 +10,28 @@ import {
   FileText,
   PackagePlus,
   Paperclip,
+  Plus,
   Save,
   Trash2,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { forwardRef, useActionState, useEffect, useRef, useTransition } from "react";
-import { useFieldArray, useForm, useWatch, type Resolver } from "react-hook-form";
+import { forwardRef, useActionState, useEffect, useMemo, useRef, useTransition } from "react";
+import { useFieldArray, useForm, useWatch, type Resolver, type UseFormRegister } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
 import type { StoreCode } from "@/lib/types";
 import { newOrderSchema, orderSchema, type NewOrderFormValues, type OrderFormValues } from "@/lib/validation/order";
 
 const inputClass = "control-lg bg-white";
 const labelClass = "field-label";
+const deliveryDayOptions = [10, 20, 30, 40, 50];
 const initialState: CreateOrderState = {
   status: "idle",
   message: "",
 };
 
 type FormValues = OrderFormValues | NewOrderFormValues;
+type PaymentFormValue = NonNullable<NewOrderFormValues["payments"]>[number];
 type FieldErrors = Partial<Record<keyof OrderFormValues, { message?: string }>>;
 
 export function OrderForm({
@@ -63,19 +66,27 @@ export function OrderForm({
       entryDate: new Date().toISOString().slice(0, 10),
       discount: 0,
       paidAmount: 0,
+      customerPhone: "+56 ",
       sellerName: "Rodrigo Bravo G.",
       paymentMethod: "Transferencia",
       deliveryTerms: "El despacho dentro de Santiago no tiene costo. En caso de subir o bajar por escalas el costo sera de $7.000.- por piso.",
       products: [{ productName: "", material: "", color: "", quantity: 1 }],
+      payments: [{ paidAt: new Date().toISOString().slice(0, 10), amount: 0, method: "Transferencia", note: "" }],
     },
   });
-  const { fields, append, remove } = useFieldArray({
+  const { fields: productFields, append: appendProduct, remove: removeProduct } = useFieldArray({
     control,
     name: "products",
+  });
+  const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({
+    control,
+    name: "payments",
   });
   const store = useWatch({ control, name: "store" });
   const documentType = useWatch({ control, name: "documentType" });
   const products = useWatch({ control, name: "products" }) ?? [];
+  const watchedPayments = useWatch({ control, name: "payments" });
+  const payments = useMemo(() => watchedPayments ?? [], [watchedPayments]);
   const quantity = useWatch({ control, name: "quantity" });
   const unitPrice = useWatch({ control, name: "unitPrice" });
   const discountValue = useWatch({ control, name: "discount" });
@@ -93,6 +104,12 @@ export function OrderForm({
       color?: { message?: string };
       quantity?: { message?: string };
       unitPrice?: { message?: string };
+    }>;
+    payments?: Array<{
+      paidAt?: { message?: string };
+      amount?: { message?: string };
+      method?: { message?: string };
+      note?: { message?: string };
     }>;
   };
 
@@ -122,10 +139,18 @@ export function OrderForm({
     : 0;
   const computedDiscount = Number(discountValue ?? 0) || 0;
   const computedTotal = Math.max(computedSubtotal - computedDiscount, 0);
-  const computedPaid = Number(paidAmountValue ?? 0) || 0;
+  const computedPaymentsPaid = payments.reduce((sum, payment) => sum + (Number(payment?.amount ?? 0) || 0), 0);
+  const computedPaid = isCommercialDocument && !orderId && payments.length ? computedPaymentsPaid : Number(paidAmountValue ?? 0) || 0;
   const computedBalance = Math.max(computedTotal - computedPaid, 0);
   const computedNet = Math.round(computedTotal / 1.19);
   const computedVat = Math.max(computedTotal - computedNet, 0);
+  const deliveryDays = deliveryDaysBetween(entryDateValue, deliveryDateValue);
+  const customerRutField = register("customerRut", {
+    onChange: (event) => setValue("customerRut", formatRut(event.target.value), { shouldDirty: true, shouldValidate: false }),
+  });
+  const customerPhoneField = register("customerPhone", {
+    onChange: (event) => setValue("customerPhone", formatChileanPhone(event.target.value), { shouldDirty: true, shouldValidate: false }),
+  });
 
   useEffect(() => {
     if (!isCommercialDocument) return;
@@ -133,12 +158,28 @@ export function OrderForm({
     setValue("total", computedTotal, { shouldDirty: false, shouldValidate: true });
   }, [computedSubtotal, computedTotal, isCommercialDocument, setValue]);
 
+  useEffect(() => {
+    if (!isCommercialDocument || orderId) return;
+    setValue("paidAmount", computedPaymentsPaid, { shouldDirty: true, shouldValidate: true });
+    setValue("paymentMethod", paymentSummary(payments), { shouldDirty: true, shouldValidate: false });
+  }, [computedPaymentsPaid, isCommercialDocument, orderId, payments, setValue]);
+
   const submit = handleSubmit((_values, event) => {
     if (!(event?.target instanceof HTMLFormElement)) return;
     const formData = new FormData(event.target);
     if (!orderId) formData.set("productItems", JSON.stringify(products));
+    if (!orderId) {
+      formData.set("paidAmount", String(computedPaid));
+      formData.set("paymentMethod", paymentSummary(payments));
+    }
     startTransition(() => formAction(formData));
   });
+
+  function setDeliveryDays(days: number) {
+    const baseDate = entryDateValue || new Date().toISOString().slice(0, 10);
+    setValue("entryDate", baseDate, { shouldDirty: true, shouldValidate: true });
+    setValue("deliveryDate", addDays(baseDate, days), { shouldDirty: true, shouldValidate: true });
+  }
 
   if (!orderId && state.status === "success") {
     return <OrderSuccessScreen message={state.message} orderId={state.orderId} />;
@@ -234,13 +275,13 @@ export function OrderForm({
                   <DocumentInput {...register("customerAddress")} placeholder="Direccion de despacho o cliente" />
                 </DocumentField>
                 <DocumentField label="RUT" error={typedErrors.customerRut?.message}>
-                  <DocumentInput {...register("customerRut")} placeholder="RUT" />
+                  <DocumentInput {...customerRutField} placeholder="12.345.678-9" />
                 </DocumentField>
                 <DocumentField label="Correo" error={typedErrors.customerEmail?.message}>
                   <DocumentInput {...register("customerEmail")} type="email" placeholder="correo@cliente.cl" />
                 </DocumentField>
                 <DocumentField label="Telefono" error={typedErrors.customerPhone?.message}>
-                  <DocumentInput {...register("customerPhone")} placeholder="+56 9 ..." />
+                  <DocumentInput {...customerPhoneField} placeholder="+56 ..." />
                 </DocumentField>
               </>
             ) : null}
@@ -258,7 +299,7 @@ export function OrderForm({
                 </tr>
               </thead>
               <tbody>
-                {fields.map((field, index) => {
+                {productFields.map((field, index) => {
                   const product = products[index] ?? {};
                   const productTotal = lineTotal(product.quantity, product.unitPrice);
                   return (
@@ -325,8 +366,8 @@ export function OrderForm({
                       <td className="px-2 py-4 align-top">
                         <button
                           type="button"
-                          onClick={() => remove(index)}
-                          disabled={fields.length === 1}
+                          onClick={() => removeProduct(index)}
+                          disabled={productFields.length === 1}
                           className="grid size-8 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="Eliminar producto"
                           title="Eliminar producto"
@@ -345,7 +386,7 @@ export function OrderForm({
             <div>
               <button
                 type="button"
-                onClick={() => append({ productName: "", material: "", color: "", quantity: 1 })}
+                onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
                 className="btn btn-secondary border-dashed"
               >
                 <PackagePlus className="size-4" />
@@ -356,7 +397,7 @@ export function OrderForm({
                   <DocumentInput {...register("groupCode")} placeholder="Opcional" />
                 </DocumentField>
                 <DocumentField label="Plazo de entrega">
-                  <p className="border-b border-stone-200 pb-1 text-sm font-semibold text-stone-950">{deliveryPeriodLabel(entryDateValue, deliveryDateValue)}</p>
+                  <DeliveryDaysControl days={deliveryDays} onSelect={setDeliveryDays} compact />
                 </DocumentField>
                 <DocumentField label="Fecha estimada de entrega" error={typedErrors.deliveryDate?.message}>
                   <input {...register("deliveryDate")} type="date" className="w-full border-0 border-b border-stone-200 bg-transparent pb-1 text-sm font-semibold text-stone-950 outline-none focus:border-stone-500" />
@@ -382,12 +423,15 @@ export function OrderForm({
 
           <div className="grid gap-4 border-b border-stone-200 px-4 py-4 md:grid-cols-2 md:px-7">
             <PaymentDocumentBox title="Abono" amount={formatCurrency(computedPaid)}>
-              <DocumentField label="Medio">
-                <DocumentInput {...register("paymentMethod")} placeholder="Transferencia, efectivo, tarjeta..." />
-              </DocumentField>
-              <DocumentField label="Monto abonado" error={typedErrors.paidAmount?.message}>
-                <input {...register("paidAmount")} type="number" min="0" step="1" className="mt-1 w-full border-0 border-b border-stone-200 bg-transparent pb-1 text-sm font-semibold text-stone-950 outline-none focus:border-stone-500" />
-              </DocumentField>
+              <PaymentRows
+                register={register}
+                fields={paymentFields}
+                errors={typedErrors.payments}
+                onAdd={() => appendPayment({ paidAt: new Date().toISOString().slice(0, 10), amount: 0, method: "Transferencia", note: "" })}
+                onRemove={removePayment}
+                compact
+              />
+              {typedErrors.paidAmount?.message ? <p className="mt-2 text-xs font-medium text-rose-600">{typedErrors.paidAmount.message}</p> : null}
             </PaymentDocumentBox>
             <PaymentDocumentBox title="Saldo" amount={formatCurrency(computedBalance)}>
               <p className="text-xs text-stone-500">Saldo pendiente calculado desde el total y el abono registrado.</p>
@@ -546,10 +590,10 @@ export function OrderForm({
           {isCommercialDocument ? (
             <>
               <Field label="RUT" error={typedErrors.customerRut?.message}>
-                <input {...register("customerRut")} className={inputClass} placeholder="14.567.890-3" />
+                <input {...customerRutField} className={inputClass} placeholder="14.567.890-3" />
               </Field>
               <Field label="Teléfono" error={typedErrors.customerPhone?.message}>
-                <input {...register("customerPhone")} className={inputClass} placeholder="+56 9 8712 3456" />
+                <input {...customerPhoneField} className={inputClass} placeholder="+56 9 8712 3456" />
               </Field>
               <Field label="Correo" error={typedErrors.customerEmail?.message}>
                 <input {...register("customerEmail")} type="email" className={inputClass} placeholder="cliente@correo.cl" />
@@ -614,7 +658,7 @@ export function OrderForm({
             </div>
             <button
               type="button"
-              onClick={() => append({ productName: "", material: "", color: "", quantity: 1 })}
+              onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
               className="btn btn-secondary w-fit"
             >
               <PackagePlus className="size-4" />
@@ -639,7 +683,7 @@ export function OrderForm({
                 </tr>
               </thead>
               <tbody>
-                {fields.map((field, index) => (
+                {productFields.map((field, index) => (
                   <tr key={field.id} className="border-b border-stone-100 last:border-0">
                     <td className="px-3 py-3 align-top font-mono text-sm font-semibold text-stone-500">{index + 1}</td>
                     <td className="px-3 py-3 align-top">
@@ -679,8 +723,8 @@ export function OrderForm({
                     <td className="px-3 py-3 align-top">
                       <button
                         type="button"
-                        onClick={() => remove(index)}
-                        disabled={fields.length === 1}
+                        onClick={() => removeProduct(index)}
+                        disabled={productFields.length === 1}
                         className="grid size-10 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                         aria-label="Eliminar producto"
                         title="Eliminar producto"
@@ -728,9 +772,33 @@ export function OrderForm({
             <PaymentMetric label="Saldo pendiente" value={formatCurrency(computedBalance)} emphasis />
           </div>
           <div className="grid gap-4 border-t border-stone-200 p-4 md:grid-cols-2">
-            <Field label="Medio de pago" error={typedErrors.paymentMethod?.message}>
-              <input {...register("paymentMethod")} className={inputClass} placeholder="Transferencia, efectivo, tarjeta..." />
-            </Field>
+            {!orderId ? (
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className={labelClass}>Abonos</span>
+                  <button
+                    type="button"
+                    onClick={() => appendPayment({ paidAt: new Date().toISOString().slice(0, 10), amount: 0, method: "Transferencia", note: "" })}
+                    className="btn btn-secondary h-9"
+                  >
+                    <Plus className="size-4" />
+                    Agregar abono
+                  </button>
+                </div>
+                <PaymentRows
+                  register={register}
+                  fields={paymentFields}
+                  errors={typedErrors.payments}
+                  onAdd={() => appendPayment({ paidAt: new Date().toISOString().slice(0, 10), amount: 0, method: "Transferencia", note: "" })}
+                  onRemove={removePayment}
+                />
+                {typedErrors.paidAmount?.message ? <p className="mt-2 text-xs font-medium text-rose-600">{typedErrors.paidAmount.message}</p> : null}
+              </div>
+            ) : (
+              <Field label="Medio de pago" error={typedErrors.paymentMethod?.message}>
+                <input {...register("paymentMethod")} className={inputClass} placeholder="Transferencia, efectivo, tarjeta..." />
+              </Field>
+            )}
             <Field label="Condiciones de entrega" error={typedErrors.deliveryTerms?.message} full>
               <textarea {...register("deliveryTerms")} className="textarea-control min-h-24 bg-white" />
             </Field>
@@ -753,6 +821,9 @@ export function OrderForm({
           </Field>
           <Field label="Fecha entrega" error={typedErrors.deliveryDate?.message}>
             <input {...register("deliveryDate")} type="date" className={inputClass} />
+          </Field>
+          <Field label="Plazo de entrega">
+            <DeliveryDaysControl days={deliveryDays} onSelect={setDeliveryDays} />
           </Field>
           <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2">
             <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">Prioridad</p>
@@ -902,6 +973,100 @@ function PaymentMetric({ label, value, emphasis }: { label: string; value: strin
   );
 }
 
+function DeliveryDaysControl({ days, onSelect, compact }: { days: number | undefined; onSelect: (days: number) => void; compact?: boolean }) {
+  return (
+    <div>
+      <p className={compact ? "border-b border-stone-200 pb-1 text-sm font-semibold text-stone-950" : "text-sm font-semibold text-stone-950"}>
+        {days === undefined ? "Por definir" : `${days} dias corridos`}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {deliveryDayOptions.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onSelect(option)}
+            className={`h-8 rounded-md border px-2.5 text-xs font-semibold transition ${
+              days === option
+                ? "border-stone-950 bg-stone-950 text-white"
+                : "border-stone-200 bg-white text-stone-700 hover:border-stone-400"
+            }`}
+          >
+            {option} dias
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PaymentRows({
+  register,
+  fields,
+  errors,
+  onAdd,
+  onRemove,
+  compact,
+}: {
+  register: UseFormRegister<FormValues>;
+  fields: Array<{ id: string }>;
+  errors?: Array<{
+    paidAt?: { message?: string };
+    amount?: { message?: string };
+    method?: { message?: string };
+    note?: { message?: string };
+  }>;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={compact ? "space-y-3" : "mt-2 space-y-3"}>
+      {fields.map((field, index) => (
+        <div key={field.id} className="rounded-md border border-stone-200 bg-stone-50/70 p-3">
+          <div className={compact ? "grid gap-2" : "grid gap-2 md:grid-cols-[150px_150px_1fr_1fr_40px]"}>
+            <label>
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Fecha</span>
+              <input {...register(`payments.${index}.paidAt` as const)} type="date" className={compact ? documentPaymentInputClass : inputClass} />
+              {errors?.[index]?.paidAt?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.paidAt?.message}</p> : null}
+            </label>
+            <label>
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Monto</span>
+              <input {...register(`payments.${index}.amount` as const)} type="number" min="0" step="1" className={compact ? documentPaymentInputClass : inputClass} placeholder="0" />
+              {errors?.[index]?.amount?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.amount?.message}</p> : null}
+            </label>
+            <label>
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Medio</span>
+              <input {...register(`payments.${index}.method` as const)} className={compact ? documentPaymentInputClass : inputClass} placeholder="Transferencia" />
+              {errors?.[index]?.method?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.method?.message}</p> : null}
+            </label>
+            <label>
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Nota</span>
+              <input {...register(`payments.${index}.note` as const)} className={compact ? documentPaymentInputClass : inputClass} placeholder="Operacion, referencia..." />
+              {errors?.[index]?.note?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.note?.message}</p> : null}
+            </label>
+            <button
+              type="button"
+              onClick={() => onRemove(index)}
+              disabled={fields.length === 1}
+              className="mt-4 grid size-9 place-items-center rounded-md text-stone-400 transition hover:bg-white hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label="Eliminar abono"
+              title="Eliminar abono"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+        </div>
+      ))}
+      {compact ? (
+        <button type="button" onClick={onAdd} className="btn btn-secondary h-9 w-full">
+          <Plus className="size-4" />
+          Agregar abono
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function DocumentField({
   label,
   error,
@@ -933,6 +1098,8 @@ const DocumentInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTM
     );
   },
 );
+
+const documentPaymentInputClass = "mt-1 w-full border-0 border-b border-stone-200 bg-transparent pb-1 text-sm font-semibold text-stone-950 outline-none focus:border-stone-500";
 
 function SummaryRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
@@ -975,13 +1142,58 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function deliveryPeriodLabel(entryDate?: string, deliveryDate?: string) {
-  if (!entryDate || !deliveryDate) return "Por definir";
+function deliveryDaysBetween(entryDate?: string, deliveryDate?: string) {
+  if (!entryDate || !deliveryDate) return undefined;
   const start = new Date(`${entryDate}T00:00:00`);
   const end = new Date(`${deliveryDate}T00:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "Por definir";
-  const days = Math.max(Math.round((end.getTime() - start.getTime()) / 86400000), 0);
-  return `${days} dias corridos`;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return undefined;
+  return Math.max(Math.round((end.getTime() - start.getTime()) / 86400000), 0);
+}
+
+function addDays(dateValue: string, days: number) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatRut(value: string) {
+  const clean = value.replace(/[^0-9kK]/g, "").toUpperCase();
+  if (!clean) return "";
+  const body = clean.slice(0, -1);
+  const verifier = clean.slice(-1);
+  const dottedBody = body.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return body ? `${dottedBody}-${verifier}` : verifier;
+}
+
+function formatChileanPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  let local = digits.startsWith("56") ? digits.slice(2) : digits;
+  local = local.slice(0, 9);
+  if (!local) return "+56 ";
+  if (local.startsWith("9")) {
+    const first = local.slice(1, 5);
+    const second = local.slice(5, 9);
+    return `+56 9${first ? ` ${first}` : " "}${second ? ` ${second}` : ""}`;
+  }
+  const first = local.slice(0, 1);
+  const second = local.slice(1, 5);
+  const third = local.slice(5, 9);
+  return `+56 ${first}${second ? ` ${second}` : ""}${third ? ` ${third}` : ""}`;
+}
+
+function paymentSummary(payments: PaymentFormValue[] | undefined) {
+  const validPayments = (payments ?? []).filter((payment) => Number(payment?.amount ?? 0) > 0);
+  if (!validPayments.length) return "";
+  return validPayments
+    .map((payment) => {
+      const amount = formatCurrency(Number(payment.amount ?? 0));
+      const method = payment.method?.trim() || "Sin medio";
+      const date = payment.paidAt || "Sin fecha";
+      const note = payment.note?.trim();
+      return `${date}: ${amount} (${method})${note ? ` - ${note}` : ""}`;
+    })
+    .join(" | ");
 }
 
 function paymentProgress(paid: number, total: number) {

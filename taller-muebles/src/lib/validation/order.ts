@@ -104,9 +104,20 @@ export const orderProductsSchema = z.array(orderProductSchema).min(1, "Agrega al
 
 export type OrderProductFormValues = z.infer<typeof orderProductSchema>;
 
+export const orderPaymentSchema = z.object({
+  paidAt: requiredText("Ingresa fecha de abono."),
+  amount: optionalMoney,
+  method: z.string().trim().max(80, "El medio de pago es demasiado largo.").optional(),
+  note: z.string().trim().max(120, "La nota es demasiado larga.").optional(),
+});
+
+export const orderPaymentsSchema = z.array(orderPaymentSchema);
+
+export type OrderPaymentFormValues = z.infer<typeof orderPaymentSchema>;
+
 export const newOrderSchema = baseOrderSchema
   .omit({ productName: true, material: true, color: true, quantity: true, unitPrice: true })
-  .extend({ products: orderProductsSchema })
+  .extend({ products: orderProductsSchema, payments: orderPaymentsSchema.optional() })
   .superRefine((value, context) => {
     if (value.store === "LR") {
       value.products.forEach((product, index) => {
