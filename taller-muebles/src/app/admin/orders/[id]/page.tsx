@@ -105,7 +105,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               {order.customerAddress ? <Info label="Dirección" value={order.customerAddress} /> : null}
               {order.customerCommune ? <Info label="Comuna" value={order.customerCommune} /> : null}
               <Info label="Producto" value={order.product} />
-              <Info label="Material" value={order.material} />
+              {order.documentType === "production_intake" ? <Info label="Material" value={order.material} /> : null}
               <Info label="Color" value={order.color} />
               {order.quantity ? <Info label="Cantidad" value={String(order.quantity)} /> : null}
               {order.unitPrice !== undefined ? <Info label="Precio unit." value={formatCurrency(order.unitPrice)} /> : null}

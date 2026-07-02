@@ -1,8 +1,8 @@
 import { CalendarDays, PackageCheck, Truck } from "lucide-react";
 import Link from "next/link";
-import { scheduleOrderDelivery } from "@/app/admin/agenda/actions";
 import { AppShell } from "@/components/app-shell";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
+import { ScheduleDeliveryButton } from "@/components/schedule-delivery-button";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
 import { listAgendaItems, listOrders } from "@/lib/repositories/production";
@@ -96,13 +96,7 @@ export default async function ReadyForDeliveryPage() {
                       <div className="flex flex-col gap-2">
                         <OrderLabelPrintButton order={order} groupOrders={groupOrders} className="h-9 w-full justify-center px-2 text-xs" />
                         {canSchedule ? (
-                          <form action={scheduleOrderDelivery}>
-                            <input type="hidden" name="orderId" value={order.id} />
-                            <button type="submit" className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-emerald-700 px-3 text-xs font-semibold uppercase text-white transition hover:bg-emerald-800">
-                              <Truck className="size-3.5" />
-                              Agendar
-                            </button>
-                          </form>
+                          <ScheduleDeliveryButton orderId={order.id} defaultDate={order.deliveryDate} />
                         ) : (
                           <span className="text-xs font-medium text-stone-500">Solo lectura</span>
                         )}

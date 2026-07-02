@@ -16,7 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { forwardRef, useActionState, useEffect, useMemo, useRef, useTransition } from "react";
+import { forwardRef, useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch, type Resolver, type UseFormRegister } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
 import type { StoreCode } from "@/lib/types";
@@ -47,7 +47,9 @@ export function OrderForm({
   const action = orderId ? updateOrder.bind(null, orderId) : createOrder;
   const [state, formAction, actionPending] = useActionState(action, initialState);
   const [formPending, startTransition] = useTransition();
+  const [discountPercent, setDiscountPercent] = useState(0);
   const lastAutoCode = useRef<string | null>(null);
+  const defaultEntryDate = new Date().toISOString().slice(0, 10);
   const {
     register,
     handleSubmit,
@@ -63,7 +65,8 @@ export function OrderForm({
       documentStatus: "issued",
       salesNoteNumber: nextCodes.LR,
       isWarranty: false,
-      entryDate: new Date().toISOString().slice(0, 10),
+      entryDate: defaultEntryDate,
+      deliveryDate: addDays(defaultEntryDate, 30),
       discount: 0,
       paidAmount: 0,
       customerPhone: "+56 ",
@@ -71,7 +74,7 @@ export function OrderForm({
       paymentMethod: "Transferencia",
       deliveryTerms: "El despacho dentro de Santiago no tiene costo. En caso de subir o bajar por escalas el costo sera de $7.000.- por piso.",
       products: [{ productName: "", material: "", color: "", quantity: 1 }],
-      payments: [{ paidAt: new Date().toISOString().slice(0, 10), amount: 0, method: "Transferencia", note: "" }],
+      payments: [{ paidAt: defaultEntryDate, amount: 0, method: "Transferencia", note: "" }],
     },
   });
   const { fields: productFields, append: appendProduct, remove: removeProduct } = useFieldArray({
@@ -137,7 +140,10 @@ export function OrderForm({
       ? lineTotal(quantity, unitPrice)
       : products.reduce((sum, product) => sum + lineTotal(product.quantity, product.unitPrice), 0)
     : 0;
-  const computedDiscount = Number(discountValue ?? 0) || 0;
+  const computedDiscountPercent = clampPercent(discountPercent);
+  const computedDiscount = !orderId && isCommercialDocument
+    ? Math.round((computedSubtotal * computedDiscountPercent) / 100)
+    : Number(discountValue ?? 0) || 0;
   const computedTotal = Math.max(computedSubtotal - computedDiscount, 0);
   const computedPaymentsPaid = payments.reduce((sum, payment) => sum + (Number(payment?.amount ?? 0) || 0), 0);
   const computedPaid = isCommercialDocument && !orderId && payments.length ? computedPaymentsPaid : Number(paidAmountValue ?? 0) || 0;
@@ -155,8 +161,9 @@ export function OrderForm({
   useEffect(() => {
     if (!isCommercialDocument) return;
     setValue("subtotal", computedSubtotal, { shouldDirty: false, shouldValidate: true });
+    setValue("discount", computedDiscount, { shouldDirty: false, shouldValidate: true });
     setValue("total", computedTotal, { shouldDirty: false, shouldValidate: true });
-  }, [computedSubtotal, computedTotal, isCommercialDocument, setValue]);
+  }, [computedDiscount, computedSubtotal, computedTotal, isCommercialDocument, setValue]);
 
   useEffect(() => {
     if (!isCommercialDocument || orderId) return;
@@ -190,6 +197,7 @@ export function OrderForm({
       <form action={formAction} onSubmit={submit} className="space-y-4">
         <input type="hidden" name="productItems" value={JSON.stringify(products)} readOnly />
         <input type="hidden" {...register("subtotal")} value={computedSubtotal} readOnly />
+        <input type="hidden" {...register("discount")} value={computedDiscount} readOnly />
         <input type="hidden" {...register("total")} value={computedTotal} readOnly />
         <input type="hidden" {...register("customerContact")} />
 
@@ -324,21 +332,14 @@ export function OrderForm({
                         {typedErrors.products?.[index]?.productName?.message ? (
                           <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.productName?.message}</p>
                         ) : null}
-                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                          <input
-                            {...register(`products.${index}.material`)}
-                            className="border-0 border-b border-stone-200 bg-transparent pb-1 text-xs text-stone-600 outline-none placeholder:text-stone-400 focus:border-stone-500"
-                            placeholder={isLeatherHouse ? "Material opcional" : "Material"}
-                          />
+                        <input type="hidden" {...register(`products.${index}.material`)} value="Por definir" />
+                        <div className="mt-2">
                           <input
                             {...register(`products.${index}.color`)}
-                            className="border-0 border-b border-stone-200 bg-transparent pb-1 text-xs text-stone-600 outline-none placeholder:text-stone-400 focus:border-stone-500"
+                            className="w-full border-0 border-b border-stone-200 bg-transparent pb-1 text-xs text-stone-600 outline-none placeholder:text-stone-400 focus:border-stone-500"
                             placeholder="Color"
                           />
                         </div>
-                        {typedErrors.products?.[index]?.material?.message ? (
-                          <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.material?.message}</p>
-                        ) : null}
                         {typedErrors.products?.[index]?.color?.message ? (
                           <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.color?.message}</p>
                         ) : null}
@@ -392,10 +393,8 @@ export function OrderForm({
                 <PackagePlus className="size-4" />
                 Agregar producto
               </button>
+              <input type="hidden" {...register("groupCode")} />
               <div className="mt-4 grid max-w-xl gap-4 sm:grid-cols-2">
-                <DocumentField label="Codigo pedido comun" error={typedErrors.groupCode?.message}>
-                  <DocumentInput {...register("groupCode")} placeholder="Opcional" />
-                </DocumentField>
                 <DocumentField label="Plazo de entrega">
                   <DeliveryDaysControl days={deliveryDays} onSelect={setDeliveryDays} compact />
                 </DocumentField>
@@ -411,7 +410,18 @@ export function OrderForm({
                   <SummaryRow label="Subtotal" value={formatCurrency(computedSubtotal)} />
                   <div className="grid grid-cols-[1fr_120px] items-center gap-3 px-4 py-2">
                     <span className="text-stone-500">Descuento</span>
-                    <input {...register("discount")} type="number" min="0" step="1" className="border-0 border-b border-stone-200 bg-transparent text-right font-bold text-stone-950 outline-none focus:border-stone-500" />
+                    <label className="grid grid-cols-[1fr_auto] items-center gap-1 border-b border-stone-200 focus-within:border-stone-500">
+                      <input
+                        value={discountPercent}
+                        onChange={(event) => setDiscountPercent(clampPercent(event.target.value))}
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        className="border-0 bg-transparent text-right font-bold text-stone-950 outline-none"
+                      />
+                      <span className="text-sm font-bold text-stone-500">%</span>
+                    </label>
                   </div>
                   <SummaryRow label="Neto" value={formatCurrency(computedNet)} />
                   <SummaryRow label="IVA 19%" value={formatCurrency(computedVat)} />
@@ -671,7 +681,6 @@ export function OrderForm({
                 <tr className="border-b border-stone-200 bg-stone-50">
                   <th className="w-14 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">N</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producto</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Material</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Color</th>
                   {isCommercialDocument ? (
                     <>
@@ -688,14 +697,9 @@ export function OrderForm({
                     <td className="px-3 py-3 align-top font-mono text-sm font-semibold text-stone-500">{index + 1}</td>
                     <td className="px-3 py-3 align-top">
                       <input {...register(`products.${index}.productName`)} className={inputClass} placeholder="Sofa Chesterfield 200x090 cm" />
+                      <input type="hidden" {...register(`products.${index}.material`)} value="Por definir" />
                       {typedErrors.products?.[index]?.productName?.message ? (
                         <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.productName?.message}</p>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-3 align-top">
-                      <input {...register(`products.${index}.material`)} className={inputClass} placeholder={isLeatherHouse ? "Opcional" : "Cuero natural"} />
-                      {typedErrors.products?.[index]?.material?.message ? (
-                        <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.material?.message}</p>
                       ) : null}
                     </td>
                     <td className="px-3 py-3 align-top">
@@ -974,27 +978,41 @@ function PaymentMetric({ label, value, emphasis }: { label: string; value: strin
 }
 
 function DeliveryDaysControl({ days, onSelect, compact }: { days: number | undefined; onSelect: (days: number) => void; compact?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const label = days === undefined ? "Por definir" : `${days} dias corridos`;
   return (
     <div>
-      <p className={compact ? "border-b border-stone-200 pb-1 text-sm font-semibold text-stone-950" : "text-sm font-semibold text-stone-950"}>
-        {days === undefined ? "Por definir" : `${days} dias corridos`}
-      </p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {deliveryDayOptions.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onSelect(option)}
-            className={`h-8 rounded-md border px-2.5 text-xs font-semibold transition ${
-              days === option
-                ? "border-stone-950 bg-stone-950 text-white"
-                : "border-stone-200 bg-white text-stone-700 hover:border-stone-400"
-            }`}
-          >
-            {option} dias
-          </button>
-        ))}
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label="Cambiar plazo de entrega"
+        className={`flex w-full items-center justify-between gap-3 border-b border-stone-200 pb-1 text-left text-sm font-semibold text-stone-950 transition hover:border-stone-500 ${compact ? "" : "rounded-md border border-stone-200 px-3 py-2"}`}
+      >
+        <span>{label}</span>
+        <span className="text-xs font-medium text-stone-500">{open ? "Cerrar" : "Cambiar"}</span>
+      </button>
+      {open ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {deliveryDayOptions.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => {
+                onSelect(option);
+                setOpen(false);
+              }}
+              className={`h-8 rounded-md border px-2.5 text-xs font-semibold transition ${
+                days === option
+                  ? "border-stone-950 bg-stone-950 text-white"
+                  : "border-stone-200 bg-white text-stone-700 hover:border-stone-400"
+              }`}
+            >
+              {option} dias
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1140,6 +1158,12 @@ function formatCurrency(value: number) {
     currency: "CLP",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function clampPercent(value: number | string) {
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return 0;
+  return Math.min(Math.max(parsed, 0), 100);
 }
 
 function deliveryDaysBetween(entryDate?: string, deliveryDate?: string) {

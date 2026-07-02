@@ -78,9 +78,6 @@ export async function createOrder(
       message: formatZodError(parsed.error),
     };
   }
-  if (parsed.data.store === "LR" && productItems.data.some((product) => !product.material?.trim())) {
-    return { status: "error", message: "Ingresa material en todos los productos LR." };
-  }
   const ruleError = await validateOrderRules(parsed.data, settings);
   if (ruleError) return { status: "error", message: ruleError };
   const orderCode = parsed.data.salesNoteNumber?.trim() || await nextOrderCode(parsed.data.store);

@@ -72,9 +72,6 @@ function refineOrder(value: z.infer<typeof baseOrderSchema>, context: z.Refineme
     return;
   }
 
-  if (!value.material?.trim()) {
-    context.addIssue({ code: "custom", path: ["material"], message: "Ingresa material." });
-  }
   if (!value.color?.trim()) {
     context.addIssue({ code: "custom", path: ["color"], message: "Ingresa color." });
   }
@@ -119,18 +116,6 @@ export const newOrderSchema = baseOrderSchema
   .omit({ productName: true, material: true, color: true, quantity: true, unitPrice: true })
   .extend({ products: orderProductsSchema, payments: orderPaymentsSchema.optional() })
   .superRefine((value, context) => {
-    if (value.store === "LR") {
-      value.products.forEach((product, index) => {
-        if (!product.material?.trim()) {
-          context.addIssue({
-            code: "custom",
-            path: ["products", index, "material"],
-            message: "Ingresa material.",
-          });
-        }
-      });
-    }
-
     if (
       value.documentType !== "quote" &&
       value.total !== undefined &&
