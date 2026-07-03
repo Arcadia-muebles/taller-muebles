@@ -391,6 +391,7 @@ export async function scheduleLocalOrderDelivery(input: {
   orderId: string;
   scheduledDate: string;
   timeSlot: AgendaTimeSlot;
+  notes?: string;
 }) {
   const data = await readData();
   const order = data.orders.find((item) => item.id === input.orderId);
@@ -402,6 +403,7 @@ export async function scheduleLocalOrderDelivery(input: {
     product: order.product,
     scheduledDate: input.scheduledDate,
     timeSlot: input.timeSlot,
+    notes: input.notes,
   });
   addAudit(data, order.id, "schedule_delivery", `Entrega agendada para ${input.scheduledDate} ${input.timeSlot}`);
   await writeData(data);
@@ -415,6 +417,7 @@ export async function scheduleLocalExternalOrderDelivery(input: {
   product: string;
   scheduledDate: string;
   timeSlot: AgendaTimeSlot;
+  notes?: string;
 }) {
   const data = await readData();
   scheduleDeliveryAgendaItem(data, input);
@@ -432,6 +435,7 @@ function scheduleDeliveryAgendaItem(
     product: string;
     scheduledDate: string;
     timeSlot: AgendaTimeSlot;
+    notes?: string;
   },
 ) {
   const times = timeSlotTimes(input.timeSlot);
@@ -444,6 +448,7 @@ function scheduleDeliveryAgendaItem(
     existing.timeSlot = input.timeSlot;
     existing.startTime = times.startTime;
     existing.endTime = times.endTime;
+    existing.notes = input.notes?.trim() || undefined;
     existing.updatedAt = nowIso();
   } else {
     data.agendaItems.unshift({
@@ -451,7 +456,7 @@ function scheduleDeliveryAgendaItem(
       kind: "delivery",
       orderId: input.orderId,
       title: `Entrega ${input.orderCode}`,
-      notes: `${input.client} · ${input.product}`,
+      notes: input.notes?.trim() || undefined,
       scheduledDate: input.scheduledDate,
       timeSlot: input.timeSlot,
       startTime: times.startTime,
@@ -484,6 +489,29 @@ export async function createLocalAgendaTask(input: {
     createdAt: nowIso(),
     updatedAt: nowIso(),
   });
+  await writeData(data);
+  return true;
+}
+
+export async function updateLocalAgendaItem(input: {
+  itemId: string;
+  title?: string;
+  notes?: string;
+  scheduledDate: string;
+  timeSlot: AgendaTimeSlot;
+}) {
+  const data = await readData();
+  const item = data.agendaItems.find((agendaItem) => agendaItem.id === input.itemId);
+  if (!item) return false;
+  const times = timeSlotTimes(input.timeSlot);
+  if (item.kind === "task" && input.title?.trim()) item.title = input.title.trim();
+  item.notes = input.notes?.trim() || undefined;
+  item.scheduledDate = input.scheduledDate;
+  item.timeSlot = input.timeSlot;
+  item.startTime = times.startTime;
+  item.endTime = times.endTime;
+  item.updatedAt = nowIso();
+  if (item.orderId) addAudit(data, item.orderId, "update_agenda_item", "Agenda actualizada");
   await writeData(data);
   return true;
 }

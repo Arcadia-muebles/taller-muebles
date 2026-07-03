@@ -1,7 +1,7 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Plus, Printer, Sun, Truck } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Plus, Printer, Sun, Truck } from "lucide-react";
 import Link from "next/link";
 import type { ElementType, ReactNode } from "react";
-import { cancelAgendaItem, completeAgendaItem, createAgendaTask, scheduleOrderDelivery } from "@/app/admin/agenda/actions";
+import { cancelAgendaItem, completeAgendaItem, createAgendaTask, scheduleOrderDelivery, updateAgendaItem } from "@/app/admin/agenda/actions";
 import { AppShell } from "@/components/app-shell";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
@@ -65,6 +65,10 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
                 </select>
               </label>
               <AgendaFormFields selectedDate={selectedDate} />
+              <label className="block">
+                <span className="field-label">Info de entrega</span>
+                <textarea name="notes" className="textarea-control mt-1 min-h-20" maxLength={500} placeholder="Referencia, contacto, acceso, instrucciones o datos relevantes" disabled={!canEdit || !ready.length} />
+              </label>
               <button type="submit" className="btn btn-primary w-full" disabled={!canEdit || !ready.length}>Agendar</button>
             </form>
           </ActionDetails>
@@ -195,7 +199,7 @@ function AgendaSection({
   const sectionTone = slot === "AM" ? "emerald" : "sky";
 
   return (
-    <section className="overflow-hidden rounded-lg border border-stone-200 bg-white">
+    <section className="relative overflow-visible rounded-lg border border-stone-200 bg-white">
       <header className={cn(
         "flex items-center justify-between border-b px-4 py-3",
         sectionTone === "emerald" ? "border-emerald-100 bg-emerald-50/70 text-emerald-900" : "border-sky-100 bg-sky-50/70 text-sky-900",
@@ -239,7 +243,12 @@ function AgendaCard({ item, order, canEdit }: { item: AgendaItem; order?: Order;
             <Link href={`/admin/orders/${order.id}`} className="text-lg font-semibold text-emerald-800 hover:underline">{order.code}</Link>
             <p className="mt-1 text-sm font-semibold text-stone-950">{order.client}</p>
             <p className="mt-1 text-sm text-stone-600">{order.product}</p>
-            <p className="mt-1 text-xs text-stone-500">{order.material} · Color: {order.color || "Sin color"}</p>
+            {hasDeliveryInfo(item, order) ? (
+              <p className="mt-2 rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm leading-5 text-stone-700">
+                {deliveryInfo(item, order)}
+              </p>
+            ) : null}
+            <p className="mt-1 text-xs text-stone-500">{order.material} Ã‚Â· Color: {order.color || "Sin color"}</p>
           </>
         ) : (
           <>
@@ -258,11 +267,33 @@ function AgendaCard({ item, order, canEdit }: { item: AgendaItem; order?: Order;
           {item.status === "done" ? "Hecha" : "Pendiente"}
         </span>
         {canEdit && item.status === "pending" ? (
-          <details className="relative">
+          <details className="relative z-30 open:z-50">
             <summary className="grid size-8 cursor-pointer list-none place-items-center rounded-md border border-stone-200 bg-white text-stone-500 hover:text-stone-950">
               <MoreVertical className="size-4" />
             </summary>
-            <div className="absolute right-0 z-20 mt-2 w-40 rounded-md border border-stone-200 bg-white p-1 shadow-xl shadow-stone-950/10">
+            <div className="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-md border border-stone-200 bg-white p-1 shadow-xl shadow-stone-950/10">
+              <details>
+                <summary className="flex cursor-pointer list-none items-center gap-2 rounded px-3 py-2 text-left text-xs font-medium text-stone-700 hover:bg-stone-50">
+                  <Pencil className="size-3.5 text-stone-400" />
+                  Editar
+                </summary>
+                <form action={updateAgendaItem} className="space-y-2 border-t border-stone-100 p-3">
+                  <input type="hidden" name="itemId" value={item.id} />
+                  <input type="hidden" name="kind" value={item.kind} />
+                  {item.kind === "task" ? (
+                    <label className="block">
+                      <span className="field-label">Tarea</span>
+                      <input name="title" defaultValue={item.title} className="control mt-1" required minLength={3} maxLength={120} />
+                    </label>
+                  ) : null}
+                  <AgendaFormFields selectedDate={item.scheduledDate} defaultSlot={item.timeSlot} compact />
+                  <label className="block">
+                    <span className="field-label">{isDelivery ? "Info entrega" : "Detalle"}</span>
+                    <textarea name="notes" defaultValue={isDelivery && order ? deliveryInfo(item, order) : item.notes} className="textarea-control mt-1 min-h-20" maxLength={500} placeholder={isDelivery ? "Referencia, contacto, acceso o instruccion" : "Cliente, proveedor o contexto"} />
+                  </label>
+                  <button type="submit" className="h-8 w-full rounded-md bg-stone-950 px-2 text-xs font-semibold text-white hover:bg-stone-800">Guardar cambios</button>
+                </form>
+              </details>
               <form action={completeAgendaItem}>
                 <input type="hidden" name="itemId" value={item.id} />
                 <button type="submit" className="w-full rounded px-3 py-2 text-left text-xs font-medium text-stone-700 hover:bg-stone-50">Marcar hecha</button>
@@ -279,6 +310,30 @@ function AgendaCard({ item, order, canEdit }: { item: AgendaItem; order?: Order;
   );
 }
 
+function hasDeliveryInfo(item: AgendaItem, order: Order) {
+  return Boolean(deliveryInfo(item, order));
+}
+
+function deliveryInfo(item: AgendaItem, order: Order) {
+  const value = item.notes?.trim();
+  if (!value) return "";
+  return isAutoDeliveryInfo(value, order) ? "" : value;
+}
+
+function isAutoDeliveryInfo(value: string, order: Order) {
+  const normalized = normalizeDeliveryInfo(value);
+  return normalized === normalizeDeliveryInfo(`${order.client} ${order.product}`);
+}
+
+function normalizeDeliveryInfo(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
 function ActionDetails({
   icon: Icon,
   label,
@@ -312,7 +367,7 @@ function ActionDetails({
   );
 }
 
-function AgendaFormFields({ selectedDate, compact = false }: { selectedDate: string; compact?: boolean }) {
+function AgendaFormFields({ selectedDate, compact = false, defaultSlot = "AM" }: { selectedDate: string; compact?: boolean; defaultSlot?: AgendaTimeSlot }) {
   return (
     <div className={compact ? "grid gap-2" : "grid grid-cols-2 gap-3"}>
       <label className="block">
@@ -321,7 +376,7 @@ function AgendaFormFields({ selectedDate, compact = false }: { selectedDate: str
       </label>
       <label className="block">
         <span className="field-label">Bloque</span>
-        <select name="timeSlot" defaultValue="AM" className="control mt-1">
+        <select name="timeSlot" defaultValue={defaultSlot} className="control mt-1">
           <option value="AM">AM</option>
           <option value="PM">PM</option>
         </select>
@@ -399,6 +454,10 @@ function ReadySidebarItem({ order, canEdit, selectedDate }: { order: Order; canE
           <form action={scheduleOrderDelivery} className="mt-2 rounded-md border border-emerald-100 bg-emerald-50/60 p-2">
             <input type="hidden" name="orderId" value={order.id} />
             <AgendaFormFields selectedDate={selectedDate} compact />
+            <label className="mt-2 block">
+              <span className="field-label">Info entrega</span>
+              <textarea name="notes" className="textarea-control mt-1 min-h-16" maxLength={500} placeholder="Referencia o instruccion" />
+            </label>
             <button type="submit" className="mt-2 h-8 w-full rounded-md bg-emerald-700 px-2 text-xs font-semibold text-white hover:bg-emerald-800">Confirmar agenda</button>
           </form>
         </details>
