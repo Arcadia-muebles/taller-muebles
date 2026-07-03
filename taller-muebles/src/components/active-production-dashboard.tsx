@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { moveOrderStage } from "@/app/admin/orders/actions";
 import { updateProductionStep } from "@/app/taller/actions";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
@@ -595,25 +595,61 @@ function DeliveryBlock({ order }: { order: Order }) {
 }
 
 function ObservationAlert({ order }: { order: Order }) {
+  const [open, setOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function closeOnPointerDown(event: PointerEvent) {
+      if (popoverRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeOnPointerDown);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnPointerDown);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
   if (!hasMeaningfulObservations(order.observations)) return null;
   return (
-    <Link
-      href={`/admin/orders/${order.id}#observaciones`}
-      aria-label={`Ver observación de ${order.code}`}
-      className="group/comment relative grid size-5 shrink-0 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-700 transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
-    >
-      <MessageSquare className="size-3" />
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-60 -translate-x-1/2 rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-left text-sm font-medium leading-5 text-stone-800 shadow-lg shadow-stone-950/10 ring-1 ring-amber-100 group-hover/comment:block group-focus-visible/comment:block"
+    <div ref={popoverRef} className="group/comment relative shrink-0">
+      <button
+        type="button"
+        aria-label={`Ver observacion de ${order.code}`}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="grid size-7 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-700 transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 md:size-5"
+      >
+        <MessageSquare className="size-3.5 md:size-3" />
+      </button>
+      <div
+        role="dialog"
+        aria-label={`Observacion de ${order.code}`}
+        className={cn(
+          "absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-left text-sm font-medium leading-5 text-stone-800 shadow-lg shadow-stone-950/10 ring-1 ring-amber-100",
+          open ? "block" : "hidden group-hover/comment:block group-focus-within/comment:block",
+        )}
       >
         <span className="absolute -top-1.5 left-1/2 size-3 -translate-x-1/2 rotate-45 border-l border-t border-amber-200 bg-white" />
-        <span className="relative block max-h-32 overflow-y-auto whitespace-pre-line">{order.observations}</span>
-      </span>
-    </Link>
+        <p className="relative max-h-32 overflow-y-auto whitespace-pre-line pr-1">{order.observations}</p>
+        <Link
+          href={`/admin/orders/${order.id}#observaciones`}
+          className="relative mt-2 inline-flex h-8 items-center rounded-md border border-amber-200 px-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-50"
+        >
+          Abrir detalle
+        </Link>
+      </div>
+    </div>
   );
 }
-
 function buildCounters(orders: Order[], steps: SystemSettings["production"]["steps"], finishedCount: number) {
   const byStep = steps.map((step) => ({
     key: step.key,
