@@ -9,22 +9,24 @@ export function cn(...inputs: ClassValue[]) {
 export function formatDate(value?: string | null) {
   const date = parseDate(value);
   if (!date) return "Sin fecha";
-  return new Intl.DateTimeFormat("es-CL", {
+  return normalizeDateLabel(new Intl.DateTimeFormat("es-CL", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(date);
+    timeZone: "America/Santiago",
+  }).format(date));
 }
 
 export function formatDateTime(value?: string) {
   if (!value) return "Sin registro";
   const normalized = value.includes("T") ? value : `${value}T00:00:00`;
-  return new Intl.DateTimeFormat("es-CL", {
+  return normalizeDateLabel(new Intl.DateTimeFormat("es-CL", {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(normalized));
+    timeZone: "America/Santiago",
+  }).format(new Date(normalized)));
 }
 
 export function durationLabel(start?: string, end?: string) {
@@ -93,4 +95,8 @@ function parseDate(value?: string | null) {
   const normalized = value.includes("T") ? value : `${value}T00:00:00`;
   const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeDateLabel(value: string) {
+  return value.replace(/\u00a0/g, " ");
 }

@@ -17,11 +17,13 @@ export function nextWorkStep(order: Order) {
 
 export function canWorkerSeeOrder(user: WorkshopUser, order: Order) {
   if (user.role !== "operator") return true;
-  if (order.status === "cancelled" || order.status === "completed") return false;
+  if (order.status === "cancelled") return false;
+  if (order.status === "completed") return workerCompletedStep(user, order);
   const step = nextWorkStep(order);
   return Boolean(
     (step && workerAreas(user).includes(step.key)) ||
-    reversibleWorkerStep(user, order),
+    reversibleWorkerStep(user, order) ||
+    workerCompletedStep(user, order),
   );
 }
 
@@ -50,10 +52,7 @@ export function filterWorkerFutureOrders(user: WorkshopUser, orders: Order[]) {
 
 export function filterWorkerHistoryOrders(user: WorkshopUser, orders: Order[]) {
   if (user.role !== "operator") return [];
-  const areas = workerAreas(user);
-  return orders.filter((order) => (
-    order.steps.some((step) => areas.includes(step.key) && step.status === "done")
-  ));
+  return orders.filter((order) => workerCompletedStep(user, order));
 }
 
 export function workerActionStep(user: WorkshopUser, order: Order) {
@@ -77,6 +76,11 @@ export function reversibleWorkerStep(user: WorkshopUser, order: Order) {
 
 export function workerAreas(user: WorkshopUser) {
   return user.areas?.length ? user.areas : user.area ? [user.area] : [];
+}
+
+function workerCompletedStep(user: WorkshopUser, order: Order) {
+  const areas = workerAreas(user);
+  return order.steps.some((step) => areas.includes(step.key) && step.status === "done");
 }
 
 function isWithinUndoWindow(completedAt?: string) {

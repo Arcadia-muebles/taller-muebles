@@ -1,9 +1,8 @@
 import {
   ArrowLeft,
   CalendarDays,
+  ChevronDown,
   Clock,
-  FileText,
-  History,
   MessageSquareText,
   ShieldCheck,
 } from "lucide-react";
@@ -13,7 +12,7 @@ import { AppShell } from "@/components/app-shell";
 import { OrderCollaboration } from "@/components/order-collaboration";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { StatusBadge } from "@/components/status-badge";
-import { WorkerQueue } from "@/components/worker-queue";
+import { WorkshopOrderActionPanel } from "@/components/workshop-order-action-panel";
 import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
 import {
@@ -23,8 +22,9 @@ import {
   listOrderAudit,
 } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
+import type { ProductionStep, StepStatus } from "@/lib/types";
 import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel } from "@/lib/utils";
-import { canWorkerSeeOrder, filterWorkerFutureOrders } from "@/lib/workshop-access";
+import { canWorkerSeeOrder, filterWorkerFutureOrders, nextWorkStep, workerActionStep } from "@/lib/workshop-access";
 
 export default async function WorkshopOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession(["operator"]);
@@ -41,174 +41,227 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
 
   const progress = completionPercent(order);
   const groupOrders = orders.filter((item) => item.status !== "cancelled" && item.groupCode === order.groupCode);
+  const actionStep = workerActionStep(user, order);
+  const currentStep = nextWorkStep(order);
+  const visibleAudit = audit.slice(0, 5);
 
   return (
     <AppShell active="taller" user={user}>
-      <header className="flex flex-col gap-4 border-b border-stone-200 pb-5 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <Link href="/taller" className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-950">
+      <div className="mx-auto max-w-5xl pb-20 lg:pb-0">
+      <header className="border-b border-stone-200 pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/taller" className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-950">
             <ArrowLeft className="size-4" />
-            Volver a la cola
+            Cola
           </Link>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <h1 className="font-mono text-3xl font-semibold tracking-tight">{order.code}</h1>
-            <StatusBadge type="order" value={order.status} />
-            {order.isWarranty ? (
-              <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-2.5 text-xs font-medium text-stone-700">
-                <ShieldCheck className="size-3.5" />
-                Garantía
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-            {order.product} · {order.material} · {order.color}
-          </p>
+          <OrderLabelPrintButton order={order} groupOrders={groupOrders} className="h-10 justify-center px-3" />
         </div>
-        <div className="flex flex-col gap-2 lg:w-72">
-          <OrderLabelPrintButton order={order} groupOrders={groupOrders} className="w-full justify-center" />
-          <div className="rounded-lg border border-stone-200 bg-white p-4">
-            <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">Avance</p>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200">
-              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
-            </div>
-            <p className="mt-2 text-sm font-semibold text-stone-900">{progress}% completado</p>
-          </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <h1 className="mr-1 font-mono text-3xl font-semibold tracking-tight text-stone-950">{order.code}</h1>
+          <StatusBadge type="order" value={order.status} />
+          {order.isWarranty ? <WarrantyPill /> : null}
+        </div>
+        <p className="mt-2 line-clamp-2 text-sm font-semibold uppercase leading-5 text-stone-800">{order.product}</p>
+        <p className="mt-1 truncate text-sm text-stone-500">{order.material} · {order.color || "Sin color"}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <TopMetric icon={CalendarDays} label="Entrega" value={formatDate(order.deliveryDate)} helper={deliveryLabel(order.deliveryDate, false)} />
+          <TopMetric label="Urgencia" value={priorityLabel(order.priority)} helper={currentStep ? `Ahora: ${currentStep.label}` : "Sin etapa"} />
+          <TopMetric label="Cliente" value={order.client} helper="Cliente" />
+          <TopMetric label="Avance" value={`${progress}%`} helper="Completado" />
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200">
+          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
         </div>
       </header>
 
-      <section className="mt-5 grid gap-3 md:grid-cols-4">
-        <Info icon={CalendarDays} label="Entrega" value={`${formatDate(order.deliveryDate)} · ${deliveryLabel(order.deliveryDate, false)}`} />
-        <Info label="Urgencia" value={priorityLabel(order.priority)} />
-        <Info label="Cliente" value={order.client} />
-        <Info label="Responsable" value={order.assignedTo} />
-      </section>
+      <main className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <div className="grid gap-4">
+          <WorkshopOrderActionPanel
+            orderId={order.id}
+            orderCode={order.code}
+            step={actionStep ? {
+              key: actionStep.key,
+              label: actionStep.label,
+              status: actionStep.status,
+              notes: actionStep.notes,
+            } : undefined}
+            canStart={settings.permissions.operatorsCanStartSteps}
+            canComplete={settings.permissions.operatorsCanCompleteSteps}
+            canBlock={settings.permissions.operatorsCanBlockSteps}
+            requireBlockReason={settings.permissions.requireBlockReason}
+          />
 
-      <section className="mt-5 rounded-lg border border-stone-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-stone-200 p-4">
-          <FileText className="size-5 text-stone-500" />
-          <div>
-            <h2 className="text-base font-semibold">Datos para producción</h2>
-            <p className="text-sm text-stone-500">Información necesaria para ejecutar el trabajo.</p>
-          </div>
+          <section className="rounded-lg border border-stone-200 bg-white p-3 sm:p-4">
+            <div className="flex items-center gap-2">
+              <MessageSquareText className="size-4 text-stone-500" />
+              <h2 className="text-sm font-semibold text-stone-950">Indicaciones</h2>
+            </div>
+            <p className="mt-2 line-clamp-4 text-sm leading-6 text-stone-600">{order.observations}</p>
+          </section>
         </div>
-        <div className="grid gap-3 p-4 md:grid-cols-3">
-          <Info label="Producto" value={order.product} />
-          <Info label="Pedido" value={order.groupCode} />
-          <Info label="Material" value={order.material} />
-          <Info label="Color" value={order.color} />
-          <Info label="Tienda" value={order.store} />
-          <Info label="Ingreso" value={formatDate(order.entryDate)} />
-          <Info label="Condición" value={order.condition} />
-        </div>
-      </section>
 
-      <section className="mt-5 rounded-lg border border-stone-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-stone-200 p-4">
-          <Clock className="size-5 text-stone-500" />
-          <div>
-            <h2 className="text-base font-semibold">Etapas productivas</h2>
-            <p className="text-sm text-stone-500">Estado completo del mueble en taller.</p>
-          </div>
-        </div>
-        <div className="space-y-3 p-4">
-          {order.steps.map((step, index) => (
-            <div
-              key={step.key}
-              className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4 md:flex-row md:items-center md:justify-between"
-            >
-              <div className="flex items-start gap-3">
-                <div className="grid size-8 shrink-0 place-items-center rounded-md bg-white text-sm font-semibold text-stone-700">
-                  {index + 1}
-                </div>
-                <div>
-                  <p className="font-semibold">{step.label}</p>
-                  <p className="mt-1 text-sm text-stone-500">{step.owner}</p>
-                  <p className="mt-1 text-xs text-stone-500">
-                    Inicio: {formatDateTime(step.startedAt)} · Término: {formatDateTime(step.completedAt)}
+        <aside className="grid gap-3">
+          <section className="rounded-lg border border-stone-200 bg-white p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">Flujo</p>
+                <h2 className="mt-1 text-sm font-semibold text-stone-950">{currentStep ? currentStep.label : "Sin etapa activa"}</h2>
+              </div>
+              <Clock className="size-5 shrink-0 text-stone-500" />
+            </div>
+            <StepRail steps={order.steps} />
+          </section>
+
+          <Disclosure title="Datos" description="Información completa del pedido.">
+            <div className="grid gap-2">
+              <Row label="Producto" value={order.product} />
+              <Row label="Material" value={order.material} />
+              <Row label="Color" value={order.color || "Sin color"} />
+              <Row label="Tienda" value={order.store === "LR" ? "La Reina" : "Leather House"} />
+              <Row label="Ingreso" value={formatDate(order.entryDate)} />
+              <Row label="Condición" value={order.condition} />
+              <Row label="Responsable" value={order.assignedTo} />
+              <Row label="Pedido" value={order.groupCode} />
+            </div>
+          </Disclosure>
+
+          <Disclosure title="Etapas" description="Fechas y responsables por proceso.">
+            <div className="grid gap-2">
+              {order.steps.map((step, index) => (
+                <StepRow key={step.key} step={step} index={index} />
+              ))}
+            </div>
+          </Disclosure>
+
+          <Disclosure title="Actividad" description={`${audit.length} registros visibles.`}>
+            <div className="grid gap-3">
+              {visibleAudit.map((entry) => (
+                <div key={entry.id} className="border-l-2 border-stone-200 pl-3">
+                  <p className="text-sm font-medium text-stone-800">{auditActionLabel(entry.action)}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-stone-500">{entry.summary}</p>
+                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-stone-400">
+                    {formatDateTime(entry.createdAt)}
                   </p>
-                  {step.notes ? (
-                    <p className="mt-2 max-w-xl rounded-md border border-stone-200 bg-white px-2.5 py-2 text-xs font-medium text-stone-700">
-                      {step.notes}
-                    </p>
-                  ) : null}
                 </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <StatusBadge type="step" value={step.status} />
-                <p className="text-xs text-stone-500">
-                  {durationLabel(step.startedAt, step.completedAt)}
-                </p>
-              </div>
+              ))}
+              {!audit.length ? <p className="text-sm text-stone-500">Aún no hay actividad registrada.</p> : null}
             </div>
-          ))}
-        </div>
-      </section>
+          </Disclosure>
 
-      <section className="mt-5 rounded-lg border border-stone-200 bg-white p-4">
-        <div className="flex items-center gap-2">
-          <MessageSquareText className="size-4 text-stone-500" />
-          <h2 className="text-sm font-semibold">Indicaciones de producción</h2>
-        </div>
-        <p className="mt-3 text-sm leading-6 text-stone-600">{order.observations}</p>
-      </section>
-
-      <div className="mt-5">
-        <WorkerQueue
-          orders={[order]}
-          user={user}
-          areaLabels={Object.fromEntries(settings.production.steps.map((step) => [step.key, step.label]))}
-          permissions={{
-            canStart: settings.permissions.operatorsCanStartSteps,
-            canComplete: settings.permissions.operatorsCanCompleteSteps,
-            canBlock: settings.permissions.operatorsCanBlockSteps,
-            requireBlockReason: settings.permissions.requireBlockReason,
-          }}
-        />
-      </div>
-
-      <section className="mt-5 rounded-lg border border-stone-200 bg-white p-4">
-        <div className="flex items-center gap-3">
-          <History className="size-5 text-stone-500" />
-          <div>
-            <h2 className="text-base font-semibold">Actividad reciente</h2>
-            <p className="text-sm text-stone-500">Cambios y registros visibles para taller.</p>
-          </div>
-        </div>
-        <div className="mt-4 space-y-3">
-          {audit.slice(0, 10).map((entry) => (
-            <div key={entry.id} className="border-l-2 border-stone-200 pl-3">
-              <p className="text-sm font-medium text-stone-800">{auditActionLabel(entry.action)}</p>
-              <p className="mt-0.5 text-xs leading-5 text-stone-500">{entry.summary}</p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.12em] text-stone-400">
-                {new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(entry.createdAt))}
-              </p>
-            </div>
-          ))}
-          {!audit.length ? <p className="text-sm text-stone-500">Aún no hay actividad registrada.</p> : null}
-        </div>
-      </section>
-
-      <div className="mt-5">
-        <OrderCollaboration
-          orderId={order.id}
-          attachments={attachments}
-          canUpload
-        />
+          <Disclosure title="Adjuntos" description={`${attachments.length} archivos y comentarios.`}>
+            <OrderCollaboration orderId={order.id} attachments={attachments} canUpload />
+          </Disclosure>
+        </aside>
+      </main>
       </div>
     </AppShell>
   );
 }
 
-function Info({ icon: Icon, label, value }: { icon?: React.ElementType; label: string; value: string }) {
+function TopMetric({ icon: Icon, label, value, helper }: { icon?: React.ElementType; label: string; value: string; helper: string }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-4">
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-stone-500">
-        {Icon ? <Icon className="size-4" /> : null}
-        {label}
+    <div className="min-w-0 rounded-md border border-stone-200 bg-white px-3 py-2">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+        {Icon ? <Icon className="size-3.5 shrink-0" /> : null}
+        <span className="truncate">{label}</span>
       </div>
-      <p className="mt-3 text-sm font-semibold text-stone-900">{value}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-stone-950">{value}</p>
+      <p className="mt-0.5 truncate text-xs text-stone-500">{helper}</p>
     </div>
   );
+}
+
+function StepRail({ steps }: { steps: ProductionStep[] }) {
+  return (
+    <div className="mt-4 flex items-center gap-1 overflow-x-auto pb-1">
+      {steps.map((step, index) => (
+        <div key={step.key} className="flex min-w-14 flex-1 items-center gap-1">
+          <div className="grid min-w-0 flex-1 gap-1">
+            <div className={`h-2 rounded-full ${stepTone(step.status)}`} />
+            <p className="truncate text-center text-[11px] font-semibold text-stone-500">{shortStepLabel(step.label, index)}</p>
+          </div>
+          {index < steps.length - 1 ? <div className="h-px w-3 shrink-0 bg-stone-200" /> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Disclosure({ title, description, defaultOpen, children }: { title: string; description: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  return (
+    <details className="rounded-lg border border-stone-200 bg-white" open={defaultOpen}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3 sm:p-4">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-stone-950">{title}</h2>
+          <p className="mt-0.5 truncate text-xs text-stone-500">{description}</p>
+        </div>
+        <ChevronDown className="size-4 shrink-0 text-stone-500" />
+      </summary>
+      <div className="border-t border-stone-200 p-3 sm:p-4">
+        {children}
+      </div>
+    </details>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-md bg-stone-50 px-3 py-2">
+      <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
+      <p className="min-w-0 truncate text-right text-sm font-semibold text-stone-950">{value}</p>
+    </div>
+  );
+}
+
+function StepRow({ step, index }: { step: ProductionStep; index: number }) {
+  return (
+    <div className="rounded-md border border-stone-200 bg-stone-50 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-stone-950">{index + 1}. {step.label}</p>
+          <p className="mt-0.5 truncate text-xs text-stone-500">{step.owner}</p>
+        </div>
+        <StatusBadge type="step" value={step.status} className="shrink-0" />
+      </div>
+      <p className="mt-2 text-xs text-stone-500">
+        Inicio: {formatDateTime(step.startedAt)} · Termino: {formatDateTime(step.completedAt)} · {durationLabel(step.startedAt, step.completedAt)}
+      </p>
+      {step.notes ? (
+        <p className="mt-2 rounded-md bg-white px-2.5 py-2 text-xs font-medium text-stone-700">{step.notes}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function WarrantyPill() {
+  return (
+    <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-2.5 text-xs font-medium text-stone-700">
+      <ShieldCheck className="size-3.5" />
+      Garantía
+    </span>
+  );
+}
+
+function stepTone(status: StepStatus) {
+  const tones: Record<StepStatus, string> = {
+    pending: "bg-stone-200",
+    active: "bg-blue-500",
+    done: "bg-emerald-500",
+    blocked: "bg-rose-500",
+  };
+  return tones[status];
+}
+
+function shortStepLabel(label: string, index: number) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("estructura")) return "Est";
+  if (normalized.includes("blanco")) return "Bla";
+  if (normalized.includes("corte")) return "Cor";
+  if (normalized.includes("costura")) return "Cos";
+  if (normalized.includes("tapicer")) return "Tap";
+  if (normalized.includes("calidad")) return "Cal";
+  if (normalized.includes("termin") || normalized.includes("despacho")) return "Ter";
+  return String(index + 1);
 }
 
 function auditActionLabel(action: string) {
