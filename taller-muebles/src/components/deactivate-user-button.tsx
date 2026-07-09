@@ -10,7 +10,7 @@ export function DeactivateUserButton({ userId, disabled }: { userId: string; dis
       <input type="hidden" name="userId" value={userId} />
       <ConfirmSubmitButton
         title="Eliminar usuario"
-        description="Esta accion borrara la cuenta del usuario de la base de datos. Las ordenes existentes conservaran sus datos, pero la cuenta ya no estara disponible."
+        description="Esta acción borrará la cuenta del usuario de la base de datos. Las órdenes existentes conservarán sus datos, pero la cuenta ya no estará disponible."
         confirmLabel="Eliminar usuario"
         pendingLabel="Eliminando..."
         disabled={disabled}

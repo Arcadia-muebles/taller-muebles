@@ -21,7 +21,9 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      if (authError) console.error("Supabase session validation failed:", authError.message);
+      if (authError && authError.message !== "Auth session missing!") {
+        console.error("Supabase session validation failed:", authError.message);
+      }
       return null;
     }
 

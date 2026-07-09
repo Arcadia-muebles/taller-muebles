@@ -26,7 +26,7 @@ export function StockCreateForm() {
         <Field label="Material" className="md:col-span-2">
           <input name="name" required placeholder="Ej. Cuero negro" className={inputClass} />
         </Field>
-        <Field label="Categoria">
+        <Field label="Categoría">
           <input name="category" required placeholder="Ej. Cuero" className={inputClass} />
         </Field>
         <Field label="Unidad de medida">

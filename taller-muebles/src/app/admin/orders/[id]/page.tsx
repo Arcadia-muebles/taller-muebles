@@ -110,7 +110,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
               {order.quantity ? <Info label="Cantidad" value={String(order.quantity)} /> : null}
               {order.unitPrice !== undefined ? <Info label="Precio unit." value={formatCurrency(order.unitPrice)} /> : null}
               <Info label="Responsable" value={order.assignedTo} />
-              <Info label="Condicion" value={order.condition} />
+              <Info label="Condición" value={conditionLabel(order.condition)} />
               <Info label="Urgencia por fecha" value={priorityLabel(order.priority)} />
             </div>
           </section>
@@ -312,6 +312,12 @@ function documentStatusLabel(status: string) {
     cancelled: "Anulado",
   };
   return labels[status] ?? status;
+}
+
+function conditionLabel(condition: string) {
+  if (condition === "Sin condicion") return "Sin condición";
+  if (condition === "En exhibicion") return "En exhibición";
+  return condition;
 }
 
 function formatCurrency(value?: number) {

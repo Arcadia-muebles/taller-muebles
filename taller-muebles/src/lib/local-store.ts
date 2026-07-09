@@ -671,7 +671,7 @@ export async function moveLocalOrderToStep(input: {
   }
 
   const target = order.steps[targetIndex];
-  addAudit(data, order.id, "move_step", `${input.actorName} movio la orden a ${target.label}`);
+  addAudit(data, order.id, "move_step", `${input.actorName} movió la orden a ${target.label}`);
   await writeData(data);
   return true;
 }

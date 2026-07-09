@@ -143,7 +143,7 @@ export function OrderLabelPrintButton({
 
             <div className="label-footer-meta">
               <span>{order.material || "Sin material"}</span>
-              <span>{order.isWarranty ? "Garantia" : orderStatusLabel(order.status)}</span>
+              <span>{order.isWarranty ? "Garantía" : orderStatusLabel(order.status)}</span>
             </div>
           </div>
         </div>
@@ -169,7 +169,7 @@ function productionLabel(order: Order) {
     en_blanco: "EN BLANCO",
     cutting: "EN CORTE",
     sewing: "EN COSTURA",
-    upholstery: "EN TAPICERIA",
+    upholstery: "EN TAPICERÍA",
     quality: "TERMINADO",
     dispatch: "TERMINADO",
   };

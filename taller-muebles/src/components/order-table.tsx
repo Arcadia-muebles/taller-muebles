@@ -52,7 +52,7 @@ export function OrderTable({
   detailPathPrefix = "/admin/orders",
   title = "Órdenes de producción",
   description,
-  emptyText = "No hay ordenes que coincidan con los filtros.",
+  emptyText = "No hay órdenes que coincidan con los filtros.",
 }: OrderTableProps) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [storeFilter, setStoreFilter] = useState("all");
@@ -80,7 +80,7 @@ export function OrderTable({
           accessorKey: "code",
           header: ({ column }) => (
             <button className="inline-flex items-center gap-1" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-              Codigo / cliente
+              Código / cliente
               <ArrowUpDown className="size-3.5" />
             </button>
           ),
@@ -180,7 +180,7 @@ export function OrderTable({
       <div className="panel-header flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <h2 className="panel-title">{title}</h2>
-          <p className="panel-description">{description ?? `${table.getFilteredRowModel().rows.length} ordenes visibles.`}</p>
+          <p className="panel-description">{description ?? `${table.getFilteredRowModel().rows.length} órdenes visibles.`}</p>
         </div>
         <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:justify-end">
           <select value={storeFilter} onChange={(event) => setStoreFilter(event.target.value)} className="control min-w-0 bg-white text-stone-700 md:w-44">
@@ -578,7 +578,9 @@ function stepLabel(label: string) {
 function shortStepLabel(label: string) {
   return label
     .replace("Estructura", "Estruct.")
+    .replace("Revisión de calidad", "Calidad")
     .replace("Revision de calidad", "Calidad")
+    .replace("Tapicería", "Tapic.")
     .replace("Tapiceria", "Tapic.")
     .replace("Despacho", "Terminado")
     .trim();

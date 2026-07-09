@@ -119,7 +119,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
               <Row label="Color" value={order.color || "Sin color"} />
               <Row label="Tienda" value={order.store === "LR" ? "La Reina" : "Leather House"} />
               <Row label="Ingreso" value={formatDate(order.entryDate)} />
-              <Row label="Condición" value={order.condition} />
+              <Row label="Condición" value={conditionLabel(order.condition)} />
               <Row label="Responsable" value={order.assignedTo} />
               <Row label="Pedido" value={order.groupCode} />
             </div>
@@ -224,7 +224,7 @@ function StepRow({ step, index }: { step: ProductionStep; index: number }) {
         <StatusBadge type="step" value={step.status} className="shrink-0" />
       </div>
       <p className="mt-2 text-xs text-stone-500">
-        Inicio: {formatDateTime(step.startedAt)} · Termino: {formatDateTime(step.completedAt)} · {durationLabel(step.startedAt, step.completedAt)}
+        Inicio: {formatDateTime(step.startedAt)} · Término: {formatDateTime(step.completedAt)} · {durationLabel(step.startedAt, step.completedAt)}
       </p>
       {step.notes ? (
         <p className="mt-2 rounded-md bg-white px-2.5 py-2 text-xs font-medium text-stone-700">{step.notes}</p>
@@ -278,4 +278,10 @@ function auditActionLabel(action: string) {
     cancel_order: "Orden cancelada",
   };
   return labels[action] ?? action;
+}
+
+function conditionLabel(condition: string) {
+  if (condition === "Sin condicion") return "Sin condición";
+  if (condition === "En exhibicion") return "En exhibición";
+  return condition;
 }

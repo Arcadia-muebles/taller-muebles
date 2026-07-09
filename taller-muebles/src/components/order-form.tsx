@@ -72,7 +72,7 @@ export function OrderForm({
       customerPhone: "+56 ",
       sellerName: "Rodrigo Bravo G.",
       paymentMethod: "Transferencia",
-      deliveryTerms: "El despacho dentro de Santiago no tiene costo. En caso de subir o bajar por escalas el costo sera de $7.000.- por piso.",
+      deliveryTerms: "El despacho dentro de Santiago no tiene costo. En caso de subir o bajar por escalas el costo será de $7.000.- por piso.",
       products: [{ productName: "", material: "", color: "", quantity: 1 }],
       payments: [{ paidAt: defaultEntryDate, amount: 0, method: "Transferencia", note: "" }],
     },
@@ -210,15 +210,15 @@ export function OrderForm({
               </div>
               <div className="grid gap-2 sm:grid-cols-[180px_180px_180px]">
                 <select {...register("store")} className="control bg-white">
-                  <option value="LH">LH - produccion</option>
+                  <option value="LH">LH - producción</option>
                   <option value="LR">LR - comercial</option>
                 </select>
                 {isCommercialDocument ? (
                   <select {...register("documentType")} className="control bg-white">
                     <option value="sales_note">Nota de Venta</option>
-                    <option value="quote">Cotizacion</option>
+                    <option value="quote">Cotización</option>
                     <option value="purchase_order">Orden de Compra</option>
-                    <option value="warranty">Garantia</option>
+                    <option value="warranty">Garantía</option>
                   </select>
                 ) : (
                   <input type="hidden" {...register("documentType")} value="production_intake" />
@@ -239,12 +239,12 @@ export function OrderForm({
               <div>
                 <p className="text-xs font-bold tracking-[0.18em] text-stone-950">{isLeatherHouse ? "LEATHER HOUSE" : "LA REINA"}</p>
                 <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
-                  {isLeatherHouse ? "Produccion" : "Muebles en cuero"}
+                  {isLeatherHouse ? "Producción" : "Muebles en cuero"}
                 </p>
               </div>
             </div>
             <div className="text-center">
-              <h2 className="text-base font-bold uppercase tracking-[0.02em] text-stone-950">Fabricacion y venta de muebles</h2>
+              <h2 className="text-base font-bold uppercase tracking-[0.02em] text-stone-950">Fabricación y venta de muebles</h2>
               <div className="mt-2 space-y-1 text-xs leading-5 text-stone-600">
                 <p>Carmen #2001 - Santiago Centro</p>
                 <p>Fono: 22 555 3795 - 22 556 5988</p>
@@ -279,8 +279,8 @@ export function OrderForm({
             </DocumentField>
             {isCommercialDocument ? (
               <>
-                <DocumentField label="Direccion" error={typedErrors.customerAddress?.message}>
-                  <DocumentInput {...register("customerAddress")} placeholder="Direccion de despacho o cliente" />
+                <DocumentField label="Dirección" error={typedErrors.customerAddress?.message}>
+                  <DocumentInput {...register("customerAddress")} placeholder="Dirección de despacho o cliente" />
                 </DocumentField>
                 <DocumentField label="RUT" error={typedErrors.customerRut?.message}>
                   <DocumentInput {...customerRutField} placeholder="12.345.678-9" />
@@ -288,7 +288,7 @@ export function OrderForm({
                 <DocumentField label="Correo" error={typedErrors.customerEmail?.message}>
                   <DocumentInput {...register("customerEmail")} type="email" placeholder="correo@cliente.cl" />
                 </DocumentField>
-                <DocumentField label="Telefono" error={typedErrors.customerPhone?.message}>
+                <DocumentField label="Teléfono" error={typedErrors.customerPhone?.message}>
                   <DocumentInput {...customerPhoneField} placeholder="+56 ..." />
                 </DocumentField>
               </>
@@ -300,7 +300,7 @@ export function OrderForm({
               <thead>
                 <tr className="border-b border-stone-200 bg-stone-50">
                   <th className="w-14 px-4 py-2 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Cant.</th>
-                  <th className="px-4 py-2 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Descripcion del producto</th>
+                  <th className="px-4 py-2 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Descripción del producto</th>
                   <th className="w-36 px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Valor unitario</th>
                   <th className="w-36 px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Subtotal</th>
                   <th className="w-11 px-2 py-2"></th>
@@ -463,7 +463,7 @@ export function OrderForm({
               </DocumentField>
               <label className="mt-4 flex w-fit items-center gap-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-medium">
                 <input {...register("isWarranty")} type="checkbox" className="size-4 accent-stone-950" />
-                Es garantia
+                Es garantía
               </label>
             </div>
             <div className="self-end text-center">
@@ -489,7 +489,7 @@ export function OrderForm({
                   className="block w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-stone-800"
                 />
               </Field>
-              <p className="mt-2 text-xs text-stone-500">Maximo 10 MB. Se puede dejar vacio y adjuntar despues desde el detalle de la orden.</p>
+            <p className="mt-2 text-xs text-stone-500">Máximo 10 MB. Se puede dejar vacío y adjuntar después desde el detalle de la orden.</p>
             </div>
           </div>
         </section>
@@ -979,7 +979,7 @@ function PaymentMetric({ label, value, emphasis }: { label: string; value: strin
 
 function DeliveryDaysControl({ days, onSelect, compact }: { days: number | undefined; onSelect: (days: number) => void; compact?: boolean }) {
   const [open, setOpen] = useState(false);
-  const label = days === undefined ? "Por definir" : `${days} dias corridos`;
+  const label = days === undefined ? "Por definir" : `${days} días corridos`;
   return (
     <div>
       <button
@@ -1008,7 +1008,7 @@ function DeliveryDaysControl({ days, onSelect, compact }: { days: number | undef
                   : "border-stone-200 bg-white text-stone-700 hover:border-stone-400"
               }`}
             >
-              {option} dias
+              {option} días
             </button>
           ))}
         </div>

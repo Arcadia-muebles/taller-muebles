@@ -206,10 +206,10 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <details className="rounded-lg border border-stone-200 bg-white">
           <summary className="cursor-pointer list-none p-4">
-            <QueueListHeader title="Planificacion" description="Trabajos que vienen despues." count={`${filteredFuture.length} por venir`} />
+            <QueueListHeader title="Planificación" description="Trabajos que vienen después." count={`${filteredFuture.length} por venir`} />
           </summary>
           <div className="border-t border-stone-200 p-4">
-            <SearchField value={planningQuery} onChange={setPlanningQuery} placeholder="Buscar codigo, cliente o producto" />
+            <SearchField value={planningQuery} onChange={setPlanningQuery} placeholder="Buscar código, cliente o producto" />
             <div className="mt-3 grid gap-2">
               {filteredFuture.slice(0, planningLimit).map((order) => {
                 const futureStep = workerFutureStep(user, order);
@@ -231,7 +231,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
             </div>
             {filteredFuture.length > planningLimit ? (
               <button type="button" onClick={() => setPlanningLimit((value) => value + 8)} className="btn btn-secondary mt-3 h-10 w-full">
-                Ver mas
+                Ver más
               </button>
             ) : null}
           </div>
@@ -262,11 +262,11 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
                   </Link>
                 );
               })}
-              {!filteredHistory.length ? <p className="rounded-md border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">Todavia no hay productos terminados por tu proceso.</p> : null}
+              {!filteredHistory.length ? <p className="rounded-md border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">Todavía no hay productos terminados por tu proceso.</p> : null}
             </div>
             {filteredHistory.length > historyLimit ? (
               <button type="button" onClick={() => setHistoryLimit((value) => value + 8)} className="btn btn-secondary mt-3 h-10 w-full">
-                Ver mas
+                Ver más
               </button>
             ) : null}
           </div>
@@ -387,7 +387,7 @@ function WorkCard({
 
       <details className="border-t border-stone-100 bg-stone-50/70">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-stone-700">
-          Mas acciones
+          Más acciones
         </summary>
         <div className="grid gap-3 px-4 pb-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label className="block">

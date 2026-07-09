@@ -158,7 +158,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
             title="Listos para entregar"
             count={ready.length}
             tone="green"
-            empty="No hay ordenes pendientes de agendar."
+            empty="No hay órdenes pendientes de agendar."
           >
             {ready.slice(0, 3).map((order) => (
               <ReadySidebarItem key={order.id} order={order} canEdit={canEdit} selectedDate={selectedDate} />
@@ -248,7 +248,7 @@ function AgendaCard({ item, order, canEdit }: { item: AgendaItem; order?: Order;
                 {deliveryInfo(item, order)}
               </p>
             ) : null}
-            <p className="mt-1 text-xs text-stone-500">{order.material} Ã‚Â· Color: {order.color || "Sin color"}</p>
+            <p className="mt-1 text-xs text-stone-500">{order.material} · Color: {order.color || "Sin color"}</p>
           </>
         ) : (
           <>
@@ -456,7 +456,7 @@ function ReadySidebarItem({ order, canEdit, selectedDate }: { order: Order; canE
             <AgendaFormFields selectedDate={selectedDate} compact />
             <label className="mt-2 block">
               <span className="field-label">Info entrega</span>
-              <textarea name="notes" className="textarea-control mt-1 min-h-16" maxLength={500} placeholder="Referencia o instruccion" />
+              <textarea name="notes" className="textarea-control mt-1 min-h-16" maxLength={500} placeholder="Referencia o instrucción" />
             </label>
             <button type="submit" className="mt-2 h-8 w-full rounded-md bg-emerald-700 px-2 text-xs font-semibold text-white hover:bg-emerald-800">Confirmar agenda</button>
           </form>

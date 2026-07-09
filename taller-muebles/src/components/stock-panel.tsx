@@ -13,7 +13,7 @@ export function StockPanel({ items }: StockPanelProps) {
     <section className="rounded-lg border border-stone-200 bg-white p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold">Stock critico</h2>
+          <h2 className="text-base font-semibold">Stock crítico</h2>
           <p className="text-sm text-stone-500">Materiales que pueden frenar producción.</p>
         </div>
         <Boxes className="size-5 text-stone-400" />

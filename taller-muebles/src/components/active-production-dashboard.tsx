@@ -21,7 +21,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { moveOrderStage } from "@/app/admin/orders/actions";
 import { updateProductionStep } from "@/app/taller/actions";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
-import { isReadyForDelivery } from "@/lib/metrics";
+import { completionPercent, isReadyForDelivery } from "@/lib/metrics";
 import type { AreaKey, Order, ProductionStep, StepStatus, StructureRequest, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
 
@@ -721,19 +721,7 @@ function sortOrders(a: Order, b: Order, sortKey: SortKey, steps: SystemSettings[
 }
 
 function dashboardCompletionPercent(order: Order, steps: SystemSettings["production"]["steps"]) {
-  if (!steps.length) return 0;
-  if (isReadyForDelivery(order)) return 100;
-
-  const visibleSteps = steps
-    .map((step) => order.steps.find((orderStep) => orderStep.key === step.key))
-    .filter((step): step is ProductionStep => Boolean(step));
-  if (!visibleSteps.length) return 0;
-
-  const activeIndex = visibleSteps.findIndex((step) => step.status === "active" || step.status === "blocked");
-  if (activeIndex >= 0) return Math.round(((activeIndex + 1) / visibleSteps.length) * 100);
-
-  const doneCount = visibleSteps.filter((step) => step.status === "done").length;
-  return Math.round((doneCount / visibleSteps.length) * 100);
+  return steps.length ? completionPercent(order) : 0;
 }
 
 function dateTime(value?: string | null) {
