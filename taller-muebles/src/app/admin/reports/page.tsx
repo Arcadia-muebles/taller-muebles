@@ -1,134 +1,159 @@
-import { BarChart3, Clock, Factory, TriangleAlert } from "lucide-react";
-import Link from "next/link";
+import { CheckCircle2, CircleAlert, Clock3, ListChecks } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { StatCard } from "@/components/stat-card";
 import { requireSession } from "@/lib/auth";
-import { activeOrders, areaLoad, blockedOrders, completionPercent, overdueOrders, urgentOrders } from "@/lib/metrics";
-import { listOrders } from "@/lib/repositories/production";
-import type { Order } from "@/lib/types";
-import { deliveryLabel, formatDate } from "@/lib/utils";
+import { productivityByArea } from "@/lib/metrics";
+import { listOrders, listUsers } from "@/lib/repositories/production";
+import { workshopHoursBetween } from "@/lib/utils";
 
 export default async function ReportsPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
-  const orders = await listOrders();
-  const active = activeOrders(orders);
-  const urgent = urgentOrders(orders);
-  const overdue = overdueOrders(orders);
-  const blocked = blockedOrders(orders);
-  const load = areaLoad(active);
-  const riskOrders = [...active]
-    .filter((order) => completionPercent(order) < 80 || blocked.includes(order) || overdue.includes(order))
-    .sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate))
-    .slice(0, 10);
+  const [orders, users] = await Promise.all([listOrders(), listUsers()]);
+  const areas = productivityByArea(orders, users);
+  const totals = areas.reduce(
+    (summary, area) => ({
+      assigned: summary.assigned + area.assigned,
+      completed: summary.completed + area.completed,
+      active: summary.active + area.active,
+      pending: summary.pending + area.pending,
+      blocked: summary.blocked + area.blocked,
+    }),
+    { assigned: 0, completed: 0, active: 0, pending: 0, blocked: 0 },
+  );
+  const cycleHours = orders.flatMap((order) => order.steps.flatMap((step) => {
+    if (!step.startedAt || !step.completedAt) return [];
+    const hours = workshopHoursBetween(step.startedAt, step.completedAt);
+    return Number.isFinite(hours) ? [hours] : [];
+  }));
+  const averageCycleHours = cycleHours.length
+    ? cycleHours.reduce((total, hours) => total + hours, 0) / cycleHours.length
+    : undefined;
+  const workers = areas.flatMap((area) => area.members.map((member) => ({ ...member, area: area.label })));
+  const attentionAreas = areas
+    .filter((area) => area.blocked || area.active + area.pending)
+    .sort((a, b) => b.blocked - a.blocked || (b.active + b.pending) - (a.active + a.pending))
+    .slice(0, 4);
 
   return (
     <AppShell active="admin" user={user}>
       <header className="page-header">
         <div>
           <p className="page-kicker">Reportes</p>
-          <h1 className="page-title">Indicadores del taller</h1>
-          <p className="page-description max-w-2xl">
-          Reportes iniciales para operar. La IA se conectará sobre esta base para explicar atrasos y sugerir prioridades.
-          </p>
+          <h1 className="page-title">Producción, en simple</h1>
+          <p className="page-description max-w-2xl">Revisa qué se terminó, quién tiene carga y dónde se está acumulando el trabajo.</p>
         </div>
       </header>
 
-      <section className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Activas" value={String(active.length)} helper="Órdenes en flujo." icon={Factory} tone="blue" />
-        <StatCard label="Urgentes" value={String(urgent.length)} helper="Seguimiento diario." icon={TriangleAlert} tone="amber" />
-        <StatCard label="Atrasadas" value={String(overdue.length)} helper="Fuera de plazo." icon={Clock} tone={overdue.length ? "rose" : "emerald"} />
-        <StatCard label="Bloqueadas" value={String(blocked.length)} helper="Requieren decision." icon={BarChart3} tone={blocked.length ? "rose" : "neutral"} />
+      <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Etapas terminadas" value={`${totals.completed}`} helper={`De ${totals.assigned} asignadas.`} icon={CheckCircle2} tone="emerald" />
+        <StatCard label="Trabajo en curso" value={`${totals.active + totals.pending}`} helper={`${totals.active} activas ahora.`} icon={ListChecks} tone="blue" />
+        <StatCard label="Bloqueos" value={`${totals.blocked}`} helper={totals.blocked ? "Requieren revisión." : "Sin bloqueos actuales."} icon={CircleAlert} tone={totals.blocked ? "rose" : "neutral"} />
+        <StatCard label="Duración promedio" value={formatDuration(averageCycleHours, true)} helper="Etapas con inicio y término." icon={Clock3} tone="amber" />
       </section>
 
-      <section className="mt-5 grid min-w-0 gap-4 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)]">
-        <div className="panel">
+      <section className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.8fr)]">
+        <div className="panel overflow-hidden">
           <div className="panel-header">
-            <h2 className="panel-title">Carga por área</h2>
-            <p className="panel-description">Etapas activas y bloqueadas.</p>
+            <h2 className="panel-title">Rendimiento de trabajadores</h2>
+            <p className="panel-description">Cada fila representa el trabajo de una persona dentro de su área.</p>
           </div>
-          <div className="divide-y divide-stone-100">
-            {load.map((area) => (
-              <div key={area.label} className="p-4">
-                <div className="flex min-w-0 items-center justify-between gap-3">
-                  <p className="truncate text-sm font-semibold">{area.label}</p>
-                  <p className="shrink-0 text-xs font-medium text-stone-500">{area.active + area.blocked} pendientes</p>
-                </div>
-                <div className="mt-3 flex min-w-0 gap-1">
-                  <span className="h-2 max-w-full rounded-full bg-blue-500" style={{ width: `${Math.min(Math.max(area.active * 18, 8), 220)}px` }} />
-                  {area.blocked ? <span className="h-2 max-w-full rounded-full bg-rose-500" style={{ width: `${Math.min(Math.max(area.blocked * 18, 8), 140)}px` }} /> : null}
-                </div>
-                <p className="mt-2 text-xs text-stone-500">{area.active} activas · {area.blocked} bloqueadas · {area.done} terminadas</p>
-              </div>
-            ))}
-            {!load.length ? <p className="p-5 text-sm text-stone-500">No hay carga productiva activa.</p> : null}
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <h2 className="panel-title">Órdenes en riesgo</h2>
-            <p className="panel-description">Entregas cercanas, bloqueadas o con avance insuficiente.</p>
-          </div>
-
-          <div className="grid gap-3 p-3 lg:hidden">
-            {riskOrders.map((order) => <RiskCard key={order.id} order={order} />)}
-            {!riskOrders.length ? <EmptyState /> : null}
-          </div>
-
-          <div className="hidden lg:block">
-            <table className="w-full table-fixed">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] table-fixed">
               <thead className="table-head">
                 <tr>
-                  <th className="px-3 py-3">Orden</th>
-                  <th className="px-3 py-3">Cliente</th>
-                  <th className="px-3 py-3">Entrega</th>
-                  <th className="px-3 py-3">Avance</th>
+                  <th className="w-[24%] px-4 py-3 text-left">Trabajador</th>
+                  <th className="w-[17%] px-3 py-3 text-left">Área</th>
+                  <th className="w-[15%] px-3 py-3 text-center">Terminadas</th>
+                  <th className="w-[14%] px-3 py-3 text-center">Product.</th>
+                  <th className="w-[12%] px-3 py-3 text-center">En curso</th>
+                  <th className="w-[9%] px-3 py-3 text-center">Bloq.</th>
+                  <th className="w-[9%] px-3 py-3 text-center">Duración</th>
                 </tr>
               </thead>
               <tbody>
-                {riskOrders.map((order) => (
-                  <tr key={order.id} className="border-t border-stone-100">
-                    <td className="px-3 py-3">
-                      <Link href={`/admin/orders/${order.id}`} className="block truncate font-mono text-sm font-semibold hover:underline">{order.code}</Link>
-                    </td>
-                    <td className="px-3 py-3 text-sm"><span className="block truncate">{order.client}</span></td>
-                    <td className="px-3 py-3">
-                      <p className="truncate text-sm font-medium">{formatDate(order.deliveryDate)}</p>
-                      <p className="truncate text-xs font-semibold text-rose-600">{deliveryLabel(order.deliveryDate, false)}</p>
-                    </td>
-                    <td className="px-3 py-3 text-sm font-semibold">{completionPercent(order)}%</td>
+                {workers.map((worker) => (
+                  <tr key={`${worker.area}-${worker.name}`} className="border-t border-stone-100">
+                    <td className="px-4 py-3 text-sm font-semibold text-stone-950"><span className="block truncate">{worker.name}</span></td>
+                    <td className="px-3 py-3 text-sm text-stone-600"><span className="block truncate">{worker.area}</span></td>
+                    <td className="px-3 py-3 text-center text-sm"><span className="font-semibold text-stone-950">{worker.completed}</span><span className="text-stone-400"> / {worker.assigned}</span></td>
+                    <td className="px-3 py-3 text-center text-sm font-semibold text-emerald-700">{worker.completionRate}%</td>
+                    <td className="px-3 py-3 text-center text-sm font-medium text-sky-700">{worker.active + worker.pending || "—"}</td>
+                    <td className="px-3 py-3 text-center text-sm font-semibold text-rose-700">{worker.blocked || "—"}</td>
+                    <td className="px-3 py-3 text-center text-xs text-stone-600">{formatDuration(worker.averageCycleHours)}</td>
                   </tr>
                 ))}
-                {!riskOrders.length ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-sm text-stone-500">No hay órdenes en riesgo.</td>
-                  </tr>
-                ) : null}
+                {!workers.length ? <EmptyRow colSpan={7} message="Aún no hay trabajo asignado a personas." /> : null}
               </tbody>
             </table>
           </div>
+        </div>
+
+        <aside className="panel">
+          <div className="panel-header">
+            <h2 className="panel-title">Para revisar hoy</h2>
+            <p className="panel-description">Áreas con bloqueos o mayor carga pendiente.</p>
+          </div>
+          <div className="divide-y divide-stone-100">
+            {attentionAreas.map((area) => (
+              <div key={area.key} className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-semibold text-stone-950">{area.label}</p>
+                  {area.blocked ? <span className="rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">{area.blocked} bloqueada{area.blocked === 1 ? "" : "s"}</span> : null}
+                </div>
+                <p className="mt-1 text-sm text-stone-600">{area.active + area.pending} etapas por terminar · {area.members.length} persona{area.members.length === 1 ? "" : "s"}</p>
+              </div>
+            ))}
+            {!attentionAreas.length ? <p className="p-5 text-sm text-stone-500">No hay trabajo pendiente ni bloqueos.</p> : null}
+          </div>
+        </aside>
+      </section>
+
+      <section className="mt-5 panel overflow-hidden">
+        <div className="panel-header">
+          <h2 className="panel-title">Estado por etapa</h2>
+            <p className="panel-description">Duración mide el trabajo activo. Sin trabajo mide el tiempo entre un término y el siguiente inicio de esa etapa.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] table-fixed">
+            <thead className="table-head">
+              <tr>
+                <th className="w-[22%] px-4 py-3 text-left">Etapa</th>
+                <th className="w-[14%] px-3 py-3 text-center">Terminadas</th>
+                <th className="w-[14%] px-3 py-3 text-center">En curso</th>
+                <th className="w-[12%] px-3 py-3 text-center">Bloqueadas</th>
+                <th className="w-[14%] px-3 py-3 text-center">Duración media</th>
+                <th className="w-[14%] px-3 py-3 text-center">Sin trabajo</th>
+                <th className="w-[10%] px-3 py-3 text-center">Personas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {areas.map((area) => (
+                <tr key={area.key} className="border-t border-stone-100">
+                  <td className="px-4 py-3 text-sm font-semibold text-stone-950">{area.label}</td>
+                  <td className="px-3 py-3 text-center text-sm"><span className="font-semibold">{area.completed}</span><span className="text-stone-400"> / {area.assigned}</span></td>
+                  <td className="px-3 py-3 text-center text-sm font-medium text-sky-700">{area.active + area.pending || "—"}</td>
+                  <td className="px-3 py-3 text-center text-sm font-semibold text-rose-700">{area.blocked || "—"}</td>
+                  <td className="px-3 py-3 text-center text-sm text-stone-600">{formatDuration(area.averageCycleHours)}</td>
+                  <td className="px-3 py-3 text-center text-sm text-stone-600">{formatDuration(area.averageIdleHours)}</td>
+                  <td className="px-3 py-3 text-center text-sm text-stone-600">{area.members.length}</td>
+                </tr>
+              ))}
+              {!areas.length ? <EmptyRow colSpan={7} message="Aún no hay etapas de producción registradas." /> : null}
+            </tbody>
+          </table>
         </div>
       </section>
     </AppShell>
   );
 }
 
-function RiskCard({ order }: { order: Order }) {
-  return (
-    <article className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link href={`/admin/orders/${order.id}`} className="truncate font-mono text-sm font-semibold hover:underline">{order.code}</Link>
-          <p className="mt-2 truncate text-sm font-semibold text-stone-950">{order.client}</p>
-        </div>
-        <p className="shrink-0 text-sm font-semibold">{completionPercent(order)}%</p>
-      </div>
-      <p className="mt-2 text-sm font-medium">{formatDate(order.deliveryDate)}</p>
-      <p className="text-xs font-semibold text-rose-600">{deliveryLabel(order.deliveryDate, false)}</p>
-    </article>
-  );
+function EmptyRow({ colSpan, message }: { colSpan: number; message: string }) {
+  return <tr><td colSpan={colSpan} className="px-4 py-10 text-center text-sm text-stone-500">{message}</td></tr>;
 }
 
-function EmptyState() {
-  return <div className="empty-state">No hay órdenes en riesgo.</div>;
+function formatDuration(hours?: number, prominent = false) {
+  if (hours === undefined) return prominent ? "—" : "Sin datos";
+  if (hours < 1) return `${Math.round(hours * 60)} min`;
+  if (hours >= 24) return `${(hours / 24).toFixed(1)} días`;
+  return `${hours.toFixed(1)} h`;
 }

@@ -9,6 +9,8 @@ import {
   CircleDashed,
   Clock3,
   MessageSquare,
+  Pencil,
+  Printer,
   Scissors,
   Search,
   ShieldCheck,
@@ -18,7 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { moveOrderStage } from "@/app/admin/orders/actions";
+import { moveOrderStage, updateOrderObservation } from "@/app/admin/orders/actions";
 import { updateProductionStep } from "@/app/taller/actions";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { completionPercent, isReadyForDelivery } from "@/lib/metrics";
@@ -106,7 +108,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
   );
   const pageNumbers = useMemo(() => visiblePageNumbers(currentPage, totalPages), [currentPage, totalPages]);
 
-  const counters = useMemo(() => buildCounters(activeOrders, dashboardSteps, finishedCount), [activeOrders, dashboardSteps, finishedCount]);
+  const counters = useMemo(() => buildCounters(activeOrders, enabledSteps.filter((step) => !isDashboardMetricHiddenStep(step)), finishedCount), [activeOrders, enabledSteps, finishedCount]);
   const requestedStructureOrders = useMemo(
     () => new Set(structureRequests.filter((request) => request.status === "requested" || request.status === "in_progress").map((request) => request.orderId)),
     [structureRequests],
@@ -231,6 +233,14 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
             <div className="-mx-1 flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto px-1 pb-1">
               <FilterChip active={filter === "all"} label="Todos" count={dashboardOrders.length} onClick={() => updateFilter("all")} />
               <FilterChip active={filter === "active"} label="Activos" count={activeOrders.length} onClick={() => updateFilter("active")} />
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-stone-50 hover:text-stone-950"
+              >
+                <Printer className="size-3.5" />
+                Imprimir lista
+              </button>
             </div>
 
             <div className="flex min-w-0 flex-col gap-2 sm:flex-row xl:w-[500px]">
@@ -596,6 +606,11 @@ function DeliveryBlock({ order }: { order: Order }) {
 
 function ObservationAlert({ order }: { order: Order }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(order.observations);
+  const [savedValue, setSavedValue] = useState(order.observations);
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -619,6 +634,26 @@ function ObservationAlert({ order }: { order: Order }) {
   }, [open]);
 
   if (!hasMeaningfulObservations(order.observations)) return null;
+  function saveObservation() {
+    const nextValue = value.trim();
+    if (!nextValue) {
+      setMessage("La observacion no puede quedar vacia.");
+      return;
+    }
+    setMessage(null);
+    startTransition(async () => {
+      const result = await updateOrderObservation({ orderId: order.id, observations: nextValue });
+      if (!result.ok) {
+        setMessage(result.message);
+        return;
+      }
+      setSavedValue(result.observations ?? nextValue);
+      setValue(result.observations ?? nextValue);
+      setEditing(false);
+      setMessage("Guardado.");
+    });
+  }
+
   return (
     <div ref={popoverRef} className="group/comment relative shrink-0">
       <button
@@ -639,13 +674,56 @@ function ObservationAlert({ order }: { order: Order }) {
         )}
       >
         <span className="absolute -top-1.5 left-1/2 size-3 -translate-x-1/2 rotate-45 border-l border-t border-amber-200 bg-white" />
-        <p className="relative max-h-32 overflow-y-auto whitespace-pre-line pr-1">{order.observations}</p>
-        <Link
-          href={`/admin/orders/${order.id}#observaciones`}
-          className="relative mt-2 inline-flex h-8 items-center rounded-md border border-amber-200 px-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-50"
-        >
-          Abrir detalle
-        </Link>
+        {editing ? (
+          <div className="relative">
+            <textarea
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              className="min-h-24 w-full resize-none rounded-md border border-amber-200 bg-white p-2 text-sm outline-none focus:border-amber-500"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={saveObservation}
+                className="inline-flex h-8 items-center rounded-md bg-stone-950 px-2.5 text-xs font-semibold text-white transition hover:bg-stone-800 disabled:opacity-50"
+              >
+                Guardar
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setValue(savedValue);
+                  setEditing(false);
+                  setMessage(null);
+                }}
+                className="inline-flex h-8 items-center rounded-md border border-stone-200 px-2.5 text-xs font-semibold text-stone-700 transition hover:bg-stone-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="relative max-h-32 overflow-y-auto whitespace-pre-line pr-1">{savedValue}</p>
+        )}
+        {message ? <p className="relative mt-2 text-xs font-semibold text-stone-600">{message}</p> : null}
+        <div className="relative mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setEditing((current) => !current)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-amber-200 px-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-50"
+          >
+            <Pencil className="size-3.5" />
+            Editar
+          </button>
+          <Link
+            href={`/admin/orders/${order.id}#observaciones`}
+            className="inline-flex h-8 items-center rounded-md border border-stone-200 px-2.5 text-xs font-semibold text-stone-700 transition hover:bg-stone-50"
+          >
+            Abrir detalle
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -684,6 +762,11 @@ function metricStepKey(order: Order) {
 }
 
 function isDashboardHiddenStep(step: Pick<ProductionStep, "key" | "label">) {
+  const normalized = `${step.key} ${step.label}`.toLowerCase();
+  return normalized.includes("en_blanco") || normalized.includes("blanco") || normalized.includes("quality") || normalized.includes("calidad");
+}
+
+function isDashboardMetricHiddenStep(step: Pick<ProductionStep, "key" | "label">) {
   const normalized = `${step.key} ${step.label}`.toLowerCase();
   return normalized.includes("en_blanco") || normalized.includes("blanco") || normalized.includes("quality") || normalized.includes("calidad");
 }
@@ -769,14 +852,19 @@ function orderWithStage(order: Order, stepKey: AreaKey): Order {
   const targetIndex = order.steps.findIndex((step) => step.key === stepKey);
   if (targetIndex < 0) return order;
   const now = new Date().toISOString();
+  const targetIsFinalStep = targetIndex === order.steps.length - 1 && isFinishedStep(order.steps[targetIndex]);
   return {
     ...order,
     steps: order.steps.map((step, index) => {
-      if (index < targetIndex) return { ...step, status: "done", startedAt: step.startedAt ?? step.completedAt ?? now, completedAt: step.completedAt ?? now };
+      if (index < targetIndex || (targetIsFinalStep && index === targetIndex)) return { ...step, status: "done", startedAt: step.startedAt ?? step.completedAt ?? now, completedAt: step.completedAt ?? now };
       if (index === targetIndex) return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
       return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
     }),
   };
+}
+
+function isFinishedStep(step: Pick<ProductionStep, "key" | "label">) {
+  return /dispatch|despacho|terminado/i.test(`${step.key} ${step.label}`);
 }
 
 function orderWithActiveStep(order: Order, stepKey: AreaKey): Order {

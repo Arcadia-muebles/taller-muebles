@@ -479,14 +479,19 @@ function currentStep(order: Order) {
 function orderWithStage(order: Order, stepKey: AreaKey): Order {
   const targetIndex = order.steps.findIndex((step) => step.key === stepKey);
   if (targetIndex < 0) return order;
+  const targetIsFinalStep = targetIndex === order.steps.length - 1 && isFinishedStep(order.steps[targetIndex]);
   return {
     ...order,
     steps: order.steps.map((step, index) => {
-      if (index < targetIndex) return { ...step, status: "done" };
+      if (index < targetIndex || (targetIsFinalStep && index === targetIndex)) return { ...step, status: "done" };
       if (index === targetIndex) return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
       return { ...step, status: "pending" };
     }),
   };
+}
+
+function isFinishedStep(step: Pick<ProductionStep, "key" | "label">) {
+  return /dispatch|despacho|terminado/i.test(`${step.key} ${step.label}`);
 }
 
 function orderWithConfiguredSteps(

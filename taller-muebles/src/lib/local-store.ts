@@ -410,6 +410,16 @@ export async function scheduleLocalOrderDelivery(input: {
   return true;
 }
 
+export async function updateLocalOrderObservations(id: string, observations: string, actorName: string) {
+  const data = await readData();
+  const order = data.orders.find((item) => item.id === id);
+  if (!order) return false;
+  order.observations = observations.trim();
+  addAudit(data, order.id, "update_observations", `${actorName} actualizo las observaciones`);
+  await writeData(data);
+  return true;
+}
+
 export async function scheduleLocalExternalOrderDelivery(input: {
   orderId: string;
   orderCode: string;
@@ -635,8 +645,9 @@ export async function moveLocalOrderToStep(input: {
   if (targetIndex < 0) return false;
 
   const now = nowIso();
+  const targetIsFinalStep = targetIndex === order.steps.length - 1 && isFinishedStep(order.steps[targetIndex]);
   order.steps = order.steps.map((step, index) => {
-    if (index < targetIndex) {
+    if (index < targetIndex || (targetIsFinalStep && index === targetIndex)) {
       return {
         ...step,
         status: "done",
@@ -1232,6 +1243,10 @@ function normalizeStepLabel(label: string | undefined, fallback: string, key: Ar
   const value = label || fallback;
   if (key === "dispatch" || /despacho/i.test(value)) return "Terminado";
   return value;
+}
+
+function isFinishedStep(step: Pick<ProductionStep, "key" | "label">) {
+  return /dispatch|despacho|terminado/i.test(`${step.key} ${step.label}`);
 }
 
 function isRealLocalOperator(user: AppUser) {

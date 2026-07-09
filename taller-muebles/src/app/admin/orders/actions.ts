@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder, updateLocalProductionStep } from "@/lib/local-store";
+import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder, updateLocalOrderObservations, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
@@ -22,6 +22,12 @@ export type CreateOrderState = {
 export type MoveOrderStageResult = {
   ok: boolean;
   message: string;
+};
+
+export type UpdateOrderObservationResult = {
+  ok: boolean;
+  message: string;
+  observations?: string;
 };
 
 const maxAttachmentSize = 10 * 1024 * 1024;
@@ -525,6 +531,10 @@ function finalizableProductionStep(order: Awaited<ReturnType<typeof listOrders>>
   return lastStep;
 }
 
+function isFinishedGate(step: { key: string; label: string }) {
+  return /dispatch|despacho|terminado/i.test(`${step.key} ${step.label}`);
+}
+
 const moveOrderStageSchema = z.object({
   orderId: z.string().min(1),
   stepKey: z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/),
@@ -570,10 +580,11 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
     const targetIndex = order.steps.findIndex((step) => step.key === parsed.data.stepKey);
     if (targetIndex < 0) return { ok: false, message: "La etapa destino no existe en esta orden." };
     const now = new Date().toISOString();
+    const targetIsFinalStep = targetIndex === order.steps.length - 1 && isFinishedGate(order.steps[targetIndex]);
 
     for (const [index, step] of order.steps.entries()) {
       const patch =
-        index < targetIndex
+        index < targetIndex || (targetIsFinalStep && index === targetIndex)
           ? {
               status: "done" as const,
               started_at: step.startedAt ?? step.completedAt ?? now,
@@ -636,6 +647,52 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${parsed.data.orderId}`);
   return { ok: true, message: "Orden movida." };
+}
+
+const updateOrderObservationSchema = z.object({
+  orderId: z.string().min(1),
+  observations: z.string().trim().min(1, "La observacion no puede quedar vacia.").max(2000),
+});
+
+export async function updateOrderObservation(input: z.infer<typeof updateOrderObservationSchema>): Promise<UpdateOrderObservationResult> {
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
+    return { ok: false, message: "Tu perfil no tiene permiso para editar observaciones." };
+  }
+
+  const parsed = updateOrderObservationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Observacion invalida." };
+  const observations = parsed.data.observations;
+
+  if (!hasSupabaseConfig()) {
+    const updated = await updateLocalOrderObservations(parsed.data.orderId, observations, user.name);
+    if (!updated) return { ok: false, message: "No se encontro la orden." };
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) return { ok: false, message: "No se pudo identificar tu perfil." };
+    const { error } = await supabase
+      .from("orders")
+      .update({ observations })
+      .eq("id", parsed.data.orderId);
+    if (error) return { ok: false, message: error.message };
+    await supabase.from("audit_logs").insert({
+      order_id: parsed.data.orderId,
+      action: "update_observations",
+      entity: "orders",
+      entity_id: parsed.data.orderId,
+      profile_id: profileId,
+      field_name: "observations",
+      new_value: observations,
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/ready");
+  revalidatePath("/taller");
+  revalidatePath(`/admin/orders/${parsed.data.orderId}`);
+  return { ok: true, message: "Observacion actualizada.", observations };
 }
 
 function formatZodError(error: z.ZodError) {

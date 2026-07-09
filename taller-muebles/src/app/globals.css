@@ -165,8 +165,63 @@ select {
 
 @media print {
   @page {
+    size: auto;
+    margin: 12mm;
+  }
+
+  @page order-label {
     size: 150mm 95mm;
     margin: 0;
+  }
+
+  @page sales-note {
+    size: 216mm 330mm;
+    margin: 10mm;
+  }
+
+  body.printing-sales-note * {
+    visibility: hidden;
+  }
+
+  body.printing-sales-note .sales-note-print-area,
+  body.printing-sales-note .sales-note-print-area * {
+    visibility: visible;
+  }
+
+  body.printing-sales-note .sales-note-print-area {
+    page: sales-note;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 196mm;
+    min-height: 310mm;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body.printing-sales-note .sales-note-print-hidden,
+  body.printing-sales-note .sales-note-print-hidden * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  body.printing-sales-note input,
+  body.printing-sales-note textarea {
+    color: #000000 !important;
+    background: transparent !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.printing-sales-note button,
+  body.printing-sales-note select,
+  body.printing-sales-note input[type="file"] {
+    display: none !important;
+  }
+
+  body.printing-sales-note main {
+    padding: 0 !important;
   }
 
   body.printing-label * {
@@ -179,6 +234,7 @@ select {
   }
 
   body.printing-label .label-print-area.is-printing-label {
+    page: order-label;
     display: block !important;
     position: absolute;
     inset: 0 auto auto 0;
@@ -449,12 +505,12 @@ select {
     text-transform: uppercase;
   }
 
-  body:not(.printing-label) aside,
-  button,
-  form,
-  input,
-  select,
-  textarea {
+  body:not(.printing-label):not(.printing-sales-note) aside,
+  body:not(.printing-label):not(.printing-sales-note) button,
+  body:not(.printing-label):not(.printing-sales-note) form,
+  body:not(.printing-label):not(.printing-sales-note) input,
+  body:not(.printing-label):not(.printing-sales-note) select,
+  body:not(.printing-label):not(.printing-sales-note) textarea {
     display: none !important;
   }
 

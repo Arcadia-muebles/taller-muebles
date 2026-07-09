@@ -206,7 +206,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <details className="rounded-lg border border-stone-200 bg-white">
           <summary className="cursor-pointer list-none p-4">
-            <QueueListHeader title="Planificación" description="Trabajos que vienen después." count={`${filteredFuture.length} por venir`} />
+            <QueueListHeader title="Planificación" description="Pedidos que aún pasan por etapas antes de la tuya." count={`${filteredFuture.length} por venir`} />
           </summary>
           <div className="border-t border-stone-200 p-4">
             <SearchField value={planningQuery} onChange={setPlanningQuery} placeholder="Buscar código, cliente o producto" />
@@ -221,7 +221,8 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
                       <p className="mt-1 truncate text-sm font-medium text-stone-800">{order.product}</p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xs font-medium uppercase text-stone-500">Ahora: {current?.label ?? "Sin etapa"}</p>
+                      <p className="text-xs font-medium uppercase text-stone-500">Etapa actual: {current?.label ?? "Sin etapa"}</p>
+                      <p className="mt-0.5 text-xs font-medium text-stone-500">{stepStatusLabel(current?.status)}</p>
                       <p className="mt-1 text-sm font-semibold text-stone-900">Luego: {futureStep?.label ?? "Mi etapa"}</p>
                     </div>
                   </Link>
@@ -463,6 +464,16 @@ function StatusPanel({ status }: { status: StepStatus }) {
       <span>{item.label}</span>
     </div>
   );
+}
+
+function stepStatusLabel(status?: StepStatus) {
+  const labels: Record<StepStatus, string> = {
+    pending: "Por iniciar",
+    active: "En proceso",
+    done: "Terminada",
+    blocked: "Bloqueada",
+  };
+  return status ? labels[status] : "Sin estado";
 }
 
 function QueueListHeader({ title, description, count }: { title: string; description: string; count: string }) {

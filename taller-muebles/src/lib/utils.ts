@@ -41,6 +41,45 @@ export function durationLabel(start?: string, end?: string) {
   return restHours ? `${days}d ${restHours}h` : `${days}d`;
 }
 
+const workshopTimeZone = "America/Santiago";
+
+/**
+ * Returns elapsed time only inside the workshop schedule:
+ * Mon-Fri 09:00-13:00 and 14:00-18:00; Sat 09:00-13:00.
+ */
+export function workshopHoursBetween(start?: string | Date, end?: string | Date) {
+  const startDate = toValidDate(start);
+  const endDate = toValidDate(end);
+  if (!startDate || !endDate || endDate <= startDate) return 0;
+
+  const firstDay = zonedDateParts(startDate);
+  const lastDay = zonedDateParts(endDate);
+  const cursor = new Date(Date.UTC(firstDay.year, firstDay.month - 1, firstDay.day));
+  const lastCursor = Date.UTC(lastDay.year, lastDay.month - 1, lastDay.day);
+  let totalMilliseconds = 0;
+
+  while (cursor.getTime() <= lastCursor) {
+    const day = cursor.getUTCDay();
+    const slots = day >= 1 && day <= 5
+      ? [[9, 13], [14, 18]]
+      : day === 6
+        ? [[9, 13]]
+        : [];
+    const year = cursor.getUTCFullYear();
+    const month = cursor.getUTCMonth() + 1;
+    const date = cursor.getUTCDate();
+
+    for (const [fromHour, toHour] of slots) {
+      const slotStart = zonedDateTimeToUtc(year, month, date, fromHour).getTime();
+      const slotEnd = zonedDateTimeToUtc(year, month, date, toHour).getTime();
+      totalMilliseconds += Math.max(0, Math.min(endDate.getTime(), slotEnd) - Math.max(startDate.getTime(), slotStart));
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return totalMilliseconds / 3_600_000;
+}
+
 export function daysUntil(value?: string | null) {
   const target = parseDate(value);
   if (!target) return Number.POSITIVE_INFINITY;
@@ -95,6 +134,41 @@ function parseDate(value?: string | null) {
   const normalized = value.includes("T") ? value : `${value}T00:00:00`;
   const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toValidDate(value?: string | Date) {
+  if (!value) return undefined;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function zonedDateParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: workshopTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  return { year: value("year"), month: value("month"), day: value("day") };
+}
+
+function zonedDateTimeToUtc(year: number, month: number, day: number, hour: number) {
+  const utcGuess = Date.UTC(year, month - 1, day, hour);
+  const guess = new Date(utcGuess);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: workshopTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(guess);
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const localAsUtc = Date.UTC(value("year"), value("month") - 1, value("day"), value("hour"), value("minute"), value("second"));
+  return new Date(utcGuess - (localAsUtc - utcGuess));
 }
 
 function normalizeDateLabel(value: string) {

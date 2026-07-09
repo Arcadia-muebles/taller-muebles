@@ -11,6 +11,7 @@ import {
   PackagePlus,
   Paperclip,
   Plus,
+  Printer,
   Save,
   Trash2,
   XCircle,
@@ -188,6 +189,17 @@ export function OrderForm({
     setValue("deliveryDate", addDays(baseDate, days), { shouldDirty: true, shouldValidate: true });
   }
 
+  function printSalesNotePdf() {
+    document.body.classList.add("printing-sales-note");
+    const cleanup = () => {
+      document.body.classList.remove("printing-sales-note");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+    window.setTimeout(cleanup, 1000);
+  }
+
   if (!orderId && state.status === "success") {
     return <OrderSuccessScreen message={state.message} orderId={state.orderId} />;
   }
@@ -201,14 +213,18 @@ export function OrderForm({
         <input type="hidden" {...register("total")} value={computedTotal} readOnly />
         <input type="hidden" {...register("customerContact")} />
 
-        <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-          <div className="border-b border-stone-200 bg-stone-50 px-4 py-3">
+        <section className="sales-note-print-area overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+          <div className="sales-note-print-hidden border-b border-stone-200 bg-stone-50 px-4 py-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
                 <FileText className="size-4" />
                 Vista previa editable - nota de venta
               </div>
-              <div className="grid gap-2 sm:grid-cols-[180px_180px_180px]">
+              <div className="grid gap-2 sm:grid-cols-[auto_180px_180px_180px]">
+                <button type="button" onClick={printSalesNotePdf} className="btn btn-secondary h-10 whitespace-nowrap">
+                  <Printer className="size-4" />
+                  Guardar PDF
+                </button>
                 <select {...register("store")} className="control bg-white">
                   <option value="LH">LH - producción</option>
                   <option value="LR">LR - comercial</option>
@@ -480,7 +496,7 @@ export function OrderForm({
                 placeholder="Condiciones especiales, medidas, acuerdos, material pendiente..."
               />
             </Field>
-            <div className="mt-4">
+            <div className="sales-note-print-hidden mt-4">
               <Field label="Adjunto inicial">
                 <input
                   name="file"

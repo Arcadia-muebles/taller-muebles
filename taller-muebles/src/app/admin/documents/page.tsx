@@ -1,4 +1,4 @@
-import { FileText, Plus } from "lucide-react";
+import { ChevronDown, FileText, Plus } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -54,8 +54,8 @@ export default async function DocumentsPage() {
         {documentOrder.map((type) => {
           const rows = documents.filter((document) => document.type === type);
           return (
-            <section key={type} className="panel">
-              <div className="panel-header flex items-center justify-between gap-3">
+            <details key={type} className="panel group/document overflow-hidden">
+              <summary className="panel-header flex cursor-pointer list-none items-center justify-between gap-3 transition hover:bg-stone-50 [&::-webkit-details-marker]:hidden">
                 <div className="flex items-center gap-3">
                   <FileText className="size-5 text-stone-500" />
                   <div>
@@ -63,7 +63,8 @@ export default async function DocumentsPage() {
                     <p className="panel-description">{rows.length} documentos registrados.</p>
                   </div>
                 </div>
-              </div>
+                <ChevronDown className="size-5 shrink-0 text-stone-400 transition group-open/document:rotate-180" />
+              </summary>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px] border-collapse">
                   <thead>
@@ -116,7 +117,7 @@ export default async function DocumentsPage() {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </details>
           );
         })}
       </section>
@@ -166,7 +167,16 @@ function groupDocuments(orders: Order[]): DocumentSummary[] {
       balance: first.balance,
       orders: group.sort((a, b) => a.product.localeCompare(b.product)),
     };
-  }).sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
+  }).sort((a, b) => {
+    const entryDiff = dateTime(b.entryDate) - dateTime(a.entryDate);
+    return entryDiff || b.code.localeCompare(a.code);
+  });
+}
+
+function dateTime(value?: string) {
+  if (!value) return 0;
+  const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
 function documentTypeLabel(type: string) {

@@ -40,13 +40,16 @@ export function filterWorkerFutureOrders(user: WorkshopUser, orders: Order[]) {
   const areas = workerAreas(user);
   return orders.filter((order) => {
     if (order.status === "cancelled" || order.status === "completed") return false;
-    if (canWorkerSeeOrder(user, order)) return false;
-    const next = nextWorkStep(order);
-    return order.steps.some((step) => (
-      areas.includes(step.key) &&
-      step.status === "pending" &&
-      step.key !== next?.key
+
+    // Planificación contains every order that still has work before the
+    // operator's next pending stage. It must not depend on the main-queue
+    // visibility rules, which also include completed and reversible work.
+    const workerStepIndex = order.steps.findIndex((step) => (
+      areas.includes(step.key) && step.status === "pending"
     ));
+    if (workerStepIndex <= 0) return false;
+
+    return order.steps.slice(0, workerStepIndex).some((step) => step.status !== "done");
   });
 }
 
