@@ -104,6 +104,7 @@ export type Order = {
   balance?: number;
   sellerName?: string;
   paymentMethod?: string;
+  payments?: OrderPayment[];
   deliveryTerms?: string;
   status: OrderStatus;
   condition:
@@ -120,6 +121,14 @@ export type Order = {
   assignedTo: string;
   observations: string;
   steps: ProductionStep[];
+};
+
+export type OrderPayment = {
+  id: string;
+  paidAt: string;
+  amount: number;
+  method: string;
+  note?: string;
 };
 
 export type StructureRequest = {

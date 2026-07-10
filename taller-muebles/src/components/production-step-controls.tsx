@@ -10,11 +10,13 @@ export function ProductionStepControls({
   stepKey,
   status,
   canActivate = true,
+  canReopen = true,
 }: {
   orderId: string;
   stepKey: AreaKey;
   status: StepStatus;
   canActivate?: boolean;
+  canReopen?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -53,8 +55,8 @@ export function ProductionStepControls({
           </button>
         </>
       ) : null}
-      {status === "done" ? (
-        <button type="button" disabled={pending} onClick={() => move("active")} className="btn h-8 border border-amber-200 bg-amber-50 text-xs text-amber-800 hover:bg-amber-100">
+      {status === "done" && canReopen ? (
+        <button type="button" disabled={pending} onClick={() => move("pending")} className="btn h-8 border border-amber-200 bg-amber-50 text-xs text-amber-800 hover:bg-amber-100">
           <RotateCcw className="size-3.5" />
           Reabrir etapa
         </button>

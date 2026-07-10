@@ -210,6 +210,7 @@ export async function createLocalOrder(input: {
   paidAmount?: number;
   sellerName?: string;
   paymentMethod?: string;
+  payments?: Array<{ paidAt: string; amount?: number; method?: string; note?: string }>;
   deliveryTerms?: string;
   entryDate: string;
   deliveryDate: string;
@@ -263,6 +264,13 @@ export async function createLocalOrder(input: {
     balance: input.total !== undefined ? Math.max(input.total - (input.paidAmount ?? 0), 0) : undefined,
     sellerName: input.sellerName?.trim() || undefined,
     paymentMethod: input.paymentMethod?.trim() || undefined,
+    payments: input.payments?.filter((payment) => (payment.amount ?? 0) > 0).map((payment) => ({
+      id: crypto.randomUUID(),
+      paidAt: payment.paidAt,
+      amount: payment.amount ?? 0,
+      method: payment.method?.trim() || "Sin especificar",
+      note: payment.note?.trim() || undefined,
+    })),
     deliveryTerms: input.deliveryTerms?.trim() || undefined,
     status: "in_production",
     condition: "Sin condicion",
@@ -385,6 +393,66 @@ export async function closeLocalOrder(id: string) {
   }
   addAudit(data, order.id, "close_order", "Orden cerrada y etapas marcadas como terminadas");
   await writeData(data);
+}
+
+export async function addLocalDocumentPayment(input: { orderId: string; amount: number; paidAt: string; method: string; note?: string }) {
+  const data = await readData();
+  const seed = data.orders.find((order) => order.id === input.orderId);
+  if (!seed) return false;
+  const group = data.orders.filter((order) => order.groupCode === seed.groupCode);
+  const existing = seed.payments ?? (seed.paidAmount ? [{ id: crypto.randomUUID(), paidAt: seed.entryDate, amount: seed.paidAmount, method: seed.paymentMethod || "Abono inicial" }] : []);
+  const nextPayments = [...existing, { id: crypto.randomUUID(), paidAt: input.paidAt, amount: input.amount, method: input.method, note: input.note?.trim() || undefined }];
+  const paidAmount = nextPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const total = seed.total ?? 0;
+  if (paidAmount > total) return false;
+  for (const order of group) {
+    order.payments = nextPayments;
+    order.paidAmount = paidAmount;
+    order.balance = Math.max(total - paidAmount, 0);
+    order.paymentMethod = input.method;
+    addAudit(data, order.id, "add_payment", `Abono registrado: $${input.amount.toLocaleString("es-CL")}`);
+  }
+  await writeData(data);
+  return true;
+}
+
+export async function updateLocalDocumentPayment(input: { orderId: string; paymentId: string; amount: number; paidAt: string; method: string; note?: string }) {
+  const data = await readData();
+  const seed = data.orders.find((order) => order.id === input.orderId);
+  const payment = seed?.payments?.find((item) => item.id === input.paymentId);
+  if (!seed || !payment) return false;
+  payment.amount = input.amount;
+  payment.paidAt = input.paidAt;
+  payment.method = input.method;
+  payment.note = input.note?.trim() || undefined;
+  if (!syncLocalDocumentPaymentTotals(data, seed)) return false;
+  addAudit(data, seed.id, "update_payment", `Abono corregido: $${input.amount.toLocaleString("es-CL")}`);
+  await writeData(data);
+  return true;
+}
+
+export async function deleteLocalDocumentPayment(input: { orderId: string; paymentId: string }) {
+  const data = await readData();
+  const seed = data.orders.find((order) => order.id === input.orderId);
+  if (!seed?.payments?.some((item) => item.id === input.paymentId)) return false;
+  seed.payments = seed.payments.filter((item) => item.id !== input.paymentId);
+  if (!syncLocalDocumentPaymentTotals(data, seed)) return false;
+  addAudit(data, seed.id, "delete_payment", "Abono eliminado");
+  await writeData(data);
+  return true;
+}
+
+function syncLocalDocumentPaymentTotals(data: LocalData, seed: Order) {
+  const paidAmount = (seed.payments ?? []).reduce((sum, payment) => sum + payment.amount, 0);
+  const total = seed.total ?? 0;
+  if (paidAmount > total) return false;
+  for (const order of data.orders.filter((item) => item.groupCode === seed.groupCode)) {
+    order.payments = seed.payments;
+    order.paidAmount = paidAmount;
+    order.balance = Math.max(total - paidAmount, 0);
+    order.paymentMethod = seed.payments?.at(-1)?.method;
+  }
+  return true;
 }
 
 export async function scheduleLocalOrderDelivery(input: {

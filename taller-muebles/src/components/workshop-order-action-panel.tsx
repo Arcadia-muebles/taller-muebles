@@ -18,6 +18,7 @@ type WorkshopOrderActionPanelProps = {
   canStart: boolean;
   canComplete: boolean;
   canBlock: boolean;
+  canReopen?: boolean;
   requireBlockReason: boolean;
 };
 
@@ -28,6 +29,7 @@ export function WorkshopOrderActionPanel({
   canStart,
   canComplete,
   canBlock,
+  canReopen = true,
   requireBlockReason,
 }: WorkshopOrderActionPanelProps) {
   const [statusOverride, setStatusOverride] = useState<StepStatus | null>(null);
@@ -51,7 +53,7 @@ export function WorkshopOrderActionPanel({
   const canFinishStep = canComplete && status === "active";
   const canBlockStep = canBlock && (status === "pending" || status === "active");
   const canUndoStart = canStart && status === "active";
-  const canUndoFinish = canComplete && status === "done";
+  const canUndoFinish = canReopen && canComplete && status === "done";
   const canUndoBlock = canBlock && status === "blocked";
 
   function move(nextStatus: StepStatus) {
@@ -126,7 +128,7 @@ export function WorkshopOrderActionPanel({
           </button>
         ) : null}
         {canUndoFinish ? (
-          <button type="button" disabled={pending} onClick={() => move("active")} className="work-action border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100">
+          <button type="button" disabled={pending} onClick={() => move("pending")} className="work-action border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100">
             <RotateCcw className="size-5" />
             Reabrir
           </button>

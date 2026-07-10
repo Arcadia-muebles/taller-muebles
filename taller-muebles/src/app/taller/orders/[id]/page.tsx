@@ -88,6 +88,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
             canStart={settings.permissions.operatorsCanStartSteps}
             canComplete={settings.permissions.operatorsCanCompleteSteps}
             canBlock={settings.permissions.operatorsCanBlockSteps}
+            canReopen={!isFinalDeliveryStep(order.steps, order.steps.findIndex((step) => step.key === actionStep?.key))}
             requireBlockReason={settings.permissions.requireBlockReason}
           />
 
@@ -278,6 +279,11 @@ function auditActionLabel(action: string) {
     cancel_order: "Orden cancelada",
   };
   return labels[action] ?? action;
+}
+
+function isFinalDeliveryStep(steps: ProductionStep[], stepIndex: number) {
+  const step = steps[stepIndex];
+  return stepIndex === steps.length - 1 && Boolean(step && /dispatch|despacho|entrega|terminado/i.test(`${step.key} ${step.label}`));
 }
 
 function conditionLabel(condition: string) {

@@ -174,6 +174,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                             settings.production.allowParallelSteps ||
                             order.steps.slice(0, index).every((previousStep) => previousStep.status === "done")
                           }
+                          canReopen={!isFinalDeliveryStep(order.steps, index)}
                         />
                       ) : null}
                     </div>
@@ -312,6 +313,11 @@ function documentStatusLabel(status: string) {
     cancelled: "Anulado",
   };
   return labels[status] ?? status;
+}
+
+function isFinalDeliveryStep(steps: { key: string; label: string }[], stepIndex: number) {
+  const step = steps[stepIndex];
+  return stepIndex === steps.length - 1 && Boolean(step && /dispatch|despacho|entrega|terminado/i.test(`${step.key} ${step.label}`));
 }
 
 function conditionLabel(condition: string) {

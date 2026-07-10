@@ -191,6 +191,10 @@ export async function updateProductionStep(
   const laterSteps = currentOrder.steps.slice(currentStepIndex + 1);
   const isReversal = isReverseTransition(currentStep.status, parsed.data.status);
 
+  if (currentStep.status === "done" && parsed.data.status === "pending" && isFinalDeliveryStep(currentOrder.steps, currentStepIndex)) {
+    return { status: "error", message: "La entrega final no se puede reabrir como una etapa de producción." };
+  }
+
   const settings = await getSystemSettings();
   const enteringPendingStep =
     currentStep.status === "pending" &&
@@ -368,13 +372,13 @@ function isAllowedTransition(current: UpdateStepInput["status"], next: UpdateSte
   if (current === "pending") return next === "active" || next === "blocked";
   if (current === "active") return next === "done" || next === "blocked" || next === "pending";
   if (current === "blocked") return next === "active" || next === "pending";
-  return current === "done" && next === "active";
+  return current === "done" && next === "pending";
 }
 
 function isReverseTransition(current: UpdateStepInput["status"], next: UpdateStepInput["status"]) {
   return (
     (current === "active" && next === "pending") ||
-    (current === "done" && next === "active") ||
+    (current === "done" && next === "pending") ||
     (current === "blocked" && next === "pending")
   );
 }
@@ -385,7 +389,7 @@ function isOperatorTransitionAllowed(
   permissions: Awaited<ReturnType<typeof getSystemSettings>>["permissions"],
 ) {
   if (current === "active" && next === "pending") return permissions.operatorsCanStartSteps;
-  if (current === "done" && next === "active") return permissions.operatorsCanCompleteSteps;
+  if (current === "done" && next === "pending") return permissions.operatorsCanCompleteSteps;
   if (current === "blocked" && next === "pending") return permissions.operatorsCanBlockSteps;
   if (next === "active") return permissions.operatorsCanStartSteps;
   if (next === "done") return permissions.operatorsCanCompleteSteps;
@@ -395,6 +399,14 @@ function isOperatorTransitionAllowed(
 
 function hasRecordedWork(step: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"][number]) {
   return step.status !== "pending" || Boolean(step.startedAt || step.completedAt);
+}
+
+function isFinalDeliveryStep(
+  steps: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"],
+  stepIndex: number,
+) {
+  const step = steps[stepIndex];
+  return stepIndex === steps.length - 1 && Boolean(step && /dispatch|despacho|entrega|terminado/i.test(`${step.key} ${step.label}`));
 }
 
 function stepPatch({

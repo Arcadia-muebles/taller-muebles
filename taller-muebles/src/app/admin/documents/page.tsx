@@ -2,7 +2,7 @@ import { ChevronDown, FileText, Plus } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
-import { StatusBadge } from "@/components/status-badge";
+import { SalesNoteDocument } from "@/components/sales-note-document";
 import { requireSession } from "@/lib/auth";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -65,6 +65,36 @@ export default async function DocumentsPage() {
                 </div>
                 <ChevronDown className="size-5 shrink-0 text-stone-400 transition group-open/document:rotate-180" />
               </summary>
+              {type === "sales_note" ? (
+                <div className="grid gap-4 p-4">
+                  {rows.map((document) => {
+                    const firstOrder = document.orders[0];
+                    return (
+                      <details key={document.key} className="group/note overflow-hidden rounded-lg border border-stone-200 bg-white">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 transition hover:bg-stone-50 [&::-webkit-details-marker]:hidden">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <span className="font-mono text-sm font-bold text-stone-950">{document.code}</span>
+                              <span className="text-sm font-medium text-stone-900">{document.client}</span>
+                            </div>
+                            <p className="mt-1 text-xs text-stone-500">
+                              {document.orders.length} {document.orders.length === 1 ? "producto" : "productos"} · Emitida {formatDate(document.entryDate)} · {formatCurrency(document.total)}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3 text-xs font-medium text-stone-500">
+                            <span className="hidden sm:inline">{firstOrder?.documentStatus === "issued" ? "Emitida" : documentStatusLabel(document.status)}</span>
+                            <ChevronDown className="size-4 transition group-open/note:rotate-180" />
+                          </div>
+                        </summary>
+                        <div className="border-t border-stone-200 p-4">
+                          <SalesNoteDocument code={document.code} orders={document.orders} canEdit={canEditOrders} />
+                        </div>
+                      </details>
+                    );
+                  })}
+                  {!rows.length ? <p className="py-4 text-center text-sm text-stone-500">No hay documentos de esta categoría.</p> : null}
+                </div>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px] border-collapse">
                   <thead>
@@ -99,11 +129,7 @@ export default async function DocumentsPage() {
                         <ClickableCell href={documentHref} className="text-sm font-semibold text-stone-900">{formatCurrency(document.total)}</ClickableCell>
                         <ClickableCell href={documentHref} className="text-sm text-stone-600">{formatCurrency(document.paidAmount)}</ClickableCell>
                         <ClickableCell href={documentHref} className="text-sm font-semibold text-stone-900">{formatCurrency(document.balance)}</ClickableCell>
-                        <td className="px-4 py-3 align-middle">
-                          <a href={documentHref} className="inline-block">
-                            <StatusBadge type="order" value={document.orders[0].status} />
-                          </a>
-                        </td>
+                        <ClickableCell href={documentHref} className="text-sm text-stone-600">{document.orders[0].status}</ClickableCell>
                       </tr>
                       );
                     })}
@@ -117,6 +143,7 @@ export default async function DocumentsPage() {
                   </tbody>
                 </table>
               </div>
+              )}
             </details>
           );
         })}

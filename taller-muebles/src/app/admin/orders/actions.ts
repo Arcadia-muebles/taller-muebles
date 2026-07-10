@@ -10,7 +10,7 @@ import { nextOrderCodeForStore } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
-import { orderProductsSchema, orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
+import { orderPaymentsSchema, orderProductsSchema, orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
 import { priorityFromDeliveryDate } from "@/lib/utils";
 
 export type CreateOrderState = {
@@ -45,6 +45,9 @@ export async function createOrder(
   if (!productItems.success) {
     return { status: "error", message: formatZodError(productItems.error) };
   }
+  const paymentItems = parsePaymentItems(formData);
+  if (!paymentItems.success) return { status: "error", message: formatZodError(paymentItems.error) };
+  const recordedPayments = paymentItems.data.filter((payment) => (payment.amount ?? 0) > 0);
   const firstProduct = productItems.data[0];
   const parsed = orderSchema.safeParse({
     store: formData.get("store"),
@@ -103,6 +106,7 @@ export async function createOrder(
         groupCode,
         priority: orderPriority,
         steps: settings.production.steps,
+        payments: recordedPayments,
       }));
     }
     const order = createdOrders[0];
@@ -196,6 +200,19 @@ export async function createOrder(
       status: "error",
       message: orderError?.message ?? "No se pudo crear la orden.",
     };
+  }
+
+  if (recordedPayments.length) {
+    const paymentDb = supabase as unknown as { from: (table: string) => { insert: (rows: Array<Record<string, unknown>>) => Promise<{ error: { message: string } | null }> } };
+    const { error: paymentError } = await paymentDb.from("order_payments").insert(recordedPayments.map((payment) => ({
+      order_id: createdOrders[0].id,
+      paid_at: payment.paidAt,
+      amount: payment.amount,
+      method: payment.method || "Sin especificar",
+      note: payment.note || null,
+      created_by: profileId,
+    })));
+    if (paymentError) return { status: "error", message: `La nota fue creada, pero no se pudo guardar el historial de abonos: ${paymentError.message}` };
   }
 
   const enabledSteps = settings.production.steps.filter((step) => step.enabled);
@@ -716,6 +733,17 @@ function parseProductItems(formData: FormData) {
       color: formData.get("color"),
     },
   ]);
+}
+
+function parsePaymentItems(formData: FormData) {
+  const rows = new Map<number, Record<string, FormDataEntryValue>>();
+  for (const [key, value] of formData.entries()) {
+    const match = key.match(/^payments\.(\d+)\.(paidAt|amount|method|note)$/);
+    if (!match) continue;
+    const index = Number(match[1]);
+    rows.set(index, { ...(rows.get(index) ?? {}), [match[2]]: value });
+  }
+  return orderPaymentsSchema.safeParse([...rows.entries()].sort(([a], [b]) => a - b).map(([, row]) => row));
 }
 
 function normalizedDocumentType(formData: FormData) {

@@ -302,7 +302,7 @@ function WorkCard({
   const canFinish = permissions.canComplete && step.status === "active";
   const canBlock = permissions.canBlock && (step.status === "pending" || step.status === "active");
   const canUndoStart = permissions.canStart && step.status === "active";
-  const canUndoFinish = permissions.canComplete && step.status === "done";
+  const canUndoFinish = permissions.canComplete && step.status === "done" && !isFinalDeliveryStep(order, step);
   const canUndoBlock = permissions.canBlock && step.status === "blocked";
   const isPendingForOrder = pendingAction && pendingTarget?.orderId === order.id;
   const delivery = deliveryLabel(order.deliveryDate, step.status === "done");
@@ -415,7 +415,7 @@ function WorkCard({
               </button>
             ) : null}
             {canUndoFinish ? (
-              <button type="button" onClick={() => updateStep(order, step, "active")} disabled={pendingAction} className="btn h-10 border border-amber-200 bg-white text-amber-800 hover:bg-amber-50">
+              <button type="button" onClick={() => updateStep(order, step, "pending")} disabled={pendingAction} className="btn h-10 border border-amber-200 bg-white text-amber-800 hover:bg-amber-50">
                 <RotateCcw className="size-4" />
                 Reabrir
               </button>
@@ -561,4 +561,9 @@ function completedTime(value?: string) {
   if (!value) return 0;
   const time = new Date(value).getTime();
   return Number.isFinite(time) ? time : 0;
+}
+
+function isFinalDeliveryStep(order: Order, step: ProductionStep) {
+  const stepIndex = order.steps.findIndex((item) => item.key === step.key);
+  return stepIndex === order.steps.length - 1 && /dispatch|despacho|entrega|terminado/i.test(`${step.key} ${step.label}`);
 }

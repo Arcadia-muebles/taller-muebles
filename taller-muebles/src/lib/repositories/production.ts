@@ -76,6 +76,9 @@ type OrderRecord = OrderRow & {
   production_steps: StepRecord[] | null;
 };
 
+type OrderPaymentRecord = { id: string; order_id: string; paid_at: string; amount: number | string; method: string; note: string | null };
+type PaymentQuery = { select: (columns: string) => { in: (column: string, values: string[]) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: OrderPaymentRecord[] | null; error: { message: string } | null }> } } };
+
 const conditionLabels: Record<string, Order["condition"]> = {
   none: "Sin condicion",
   warehouse: "En bodega",
@@ -108,7 +111,8 @@ export async function listOrders(): Promise<Order[]> {
     return [];
   }
 
-  return (data as OrderRecord[]).map(mapOrderRecord);
+  const orders = (data as OrderRecord[]).map(mapOrderRecord);
+  return attachOrderPayments(supabase, orders);
 }
 
 export async function getOrder(id: string): Promise<Order | undefined> {
@@ -135,7 +139,19 @@ export async function getOrder(id: string): Promise<Order | undefined> {
     return undefined;
   }
 
-  return mapOrderRecord(data as OrderRecord);
+  const order = mapOrderRecord(data as OrderRecord);
+  return (await attachOrderPayments(supabase, [order]))[0];
+}
+
+async function attachOrderPayments(supabase: Awaited<ReturnType<typeof createClient>>, orders: Order[]) {
+  if (!orders.length) return orders;
+  const paymentDb = supabase as unknown as { from: (table: string) => PaymentQuery };
+  const paymentsTable = paymentDb.from("order_payments");
+  const { data, error } = await paymentsTable.select("id, order_id, paid_at, amount, method, note").in("order_id", orders.map((order) => order.id)).order("paid_at", { ascending: true });
+  if (error || !data) return orders;
+  const paymentsByOrder = new Map<string, OrderPaymentRecord[]>();
+  for (const payment of data) paymentsByOrder.set(payment.order_id, [...(paymentsByOrder.get(payment.order_id) ?? []), payment]);
+  return orders.map((order) => ({ ...order, payments: (paymentsByOrder.get(order.id) ?? []).map((payment) => ({ id: payment.id, paidAt: payment.paid_at, amount: Number(payment.amount), method: payment.method, note: payment.note ?? undefined })) }));
 }
 
 export async function listAgendaItems(date?: string): Promise<AgendaItem[]> {
