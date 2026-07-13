@@ -44,11 +44,13 @@ const structureSchema = z.object({
 const structureOrderStatusSchema = z.object({
   orderId: z.string().min(1),
   specifications: z.string().trim().min(3).max(1200),
-  status: z.enum(["requested", "done"]),
+  status: z.enum(["requested", "in_progress", "done"]),
 });
 
 export async function createStructureRequest(formData: FormData) {
-  await requireSession(["admin", "manager"]);
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) return;
   const parsed = structureSchema.safeParse({
     orderId: formData.get("orderId"),
     specifications: formData.get("specifications"),
@@ -142,7 +144,7 @@ export async function setStructureOrderStatus(formData: FormData) {
     await updateLocalProductionStep({
       orderId: parsed.data.orderId,
       stepKey: "structure",
-      status: parsed.data.status === "done" ? "done" : "pending",
+      status: parsed.data.status === "done" ? "done" : parsed.data.status === "in_progress" ? "active" : "pending",
       reason: parsed.data.specifications,
     });
   } else {

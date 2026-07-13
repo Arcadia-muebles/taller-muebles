@@ -935,6 +935,14 @@ export async function createLocalStructureRequest(input: {
       step.status = "done";
       step.startedAt = step.startedAt ?? nowIso();
       step.completedAt = nowIso();
+    } else if (input.status === "in_progress") {
+      step.status = "active";
+      step.startedAt = step.startedAt ?? nowIso();
+      step.completedAt = undefined;
+    } else {
+      step.status = "pending";
+      step.startedAt = undefined;
+      step.completedAt = undefined;
     }
   }
   addAudit(data, order.id, "structure_request", `Estructura: ${input.status}`);
@@ -958,6 +966,9 @@ export async function updateLocalStructureRequestStatus(id: string, status: Stru
       step.completedAt = nowIso();
     } else if (status === "requested" || status === "in_progress") {
       step.notes = request.specifications;
+      step.status = status === "in_progress" ? "active" : "pending";
+      step.startedAt = status === "in_progress" ? (step.startedAt ?? nowIso()) : undefined;
+      step.completedAt = undefined;
     }
   }
   addAudit(data, order.id, "structure_status", `Estructura actualizada a ${status}`);
