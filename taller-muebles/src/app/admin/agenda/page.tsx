@@ -1,8 +1,9 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Plus, Printer, Sun, Truck } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Plus, Sun, Truck } from "lucide-react";
 import Link from "next/link";
 import type { ElementType, ReactNode } from "react";
 import { cancelAgendaItem, completeAgendaItem, createAgendaTask, scheduleOrderDelivery, updateAgendaItem } from "@/app/admin/agenda/actions";
 import { AppShell } from "@/components/app-shell";
+import { PrintPageButton } from "@/components/print-page-button";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
 import { isProductionOrder, productionOrderGroup } from "@/lib/orders";
@@ -146,10 +147,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
             </div>
             <div className="flex gap-2">
               <Link href={`/admin/agenda?date=${todayLocalDate()}`} className="btn btn-secondary">Hoy</Link>
-              <button type="button" className="btn btn-secondary">
-                <Printer className="size-4" />
-                Imprimir
-              </button>
+              <PrintPageButton />
             </div>
           </div>
 
