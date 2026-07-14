@@ -32,7 +32,7 @@ export function WorkshopOrderActionPanel({
   canReopen = true,
   requireBlockReason,
 }: WorkshopOrderActionPanelProps) {
-  const [statusOverride, setStatusOverride] = useState<StepStatus | null>(null);
+  const [statusOverride, setStatusOverride] = useState<{ status: StepStatus; previousStatus: StepStatus } | null>(null);
   const [reason, setReason] = useState(step?.notes ?? "");
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [pendingTarget, setPendingTarget] = useState<StepStatus | null>(null);
@@ -48,7 +48,9 @@ export function WorkshopOrderActionPanel({
   }
 
   const activeStep = step;
-  const status = statusOverride ?? step.status;
+  const status = statusOverride && step.status === statusOverride.previousStatus
+    ? statusOverride.status
+    : step.status;
   const canStartStep = canStart && (status === "pending" || status === "blocked");
   const canFinishStep = canComplete && status === "active";
   const canBlockStep = canBlock && (status === "pending" || status === "active");
@@ -63,23 +65,31 @@ export function WorkshopOrderActionPanel({
       return;
     }
 
+    const previousOverride = statusOverride;
     setFeedback(null);
+    setStatusOverride({ status: nextStatus, previousStatus: activeStep.status });
     setPendingTarget(nextStatus);
     startTransition(async () => {
-      const result = await updateProductionStep({
-        orderId,
-        stepKey: activeStep.key,
-        status: nextStatus,
-        reason: trimmedReason || undefined,
-      });
+      try {
+        const result = await updateProductionStep({
+          orderId,
+          stepKey: activeStep.key,
+          status: nextStatus,
+          reason: trimmedReason || undefined,
+        });
 
-      if (result.status === "success") {
-        setStatusOverride(nextStatus);
-        setFeedback({ tone: "success", text: `${orderCode}: ${activeStep.label} actualizado.` });
-      } else {
-        setFeedback({ tone: "error", text: result.message });
+        if (result.status === "success") {
+          setFeedback({ tone: "success", text: `${orderCode}: ${activeStep.label} actualizado.` });
+        } else {
+          setStatusOverride(previousOverride);
+          setFeedback({ tone: "error", text: result.message });
+        }
+      } catch {
+        setStatusOverride(previousOverride);
+        setFeedback({ tone: "error", text: "No fue posible guardar el proceso. Intenta nuevamente." });
+      } finally {
+        setPendingTarget(null);
       }
-      setPendingTarget(null);
     });
   }
 

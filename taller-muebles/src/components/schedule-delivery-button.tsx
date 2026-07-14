@@ -4,7 +4,7 @@ import { CalendarDays, Truck } from "lucide-react";
 import { useRef, useState } from "react";
 import { scheduleOrderDelivery } from "@/app/admin/agenda/actions";
 
-export function ScheduleDeliveryButton({ orderId, defaultDate }: { orderId: string; defaultDate: string }) {
+export function ScheduleDeliveryButton({ orderId, defaultDate, itemCount = 1 }: { orderId: string; defaultDate: string; itemCount?: number }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -30,7 +30,7 @@ export function ScheduleDeliveryButton({ orderId, defaultDate }: { orderId: stri
         className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-emerald-700 px-3 text-xs font-semibold uppercase text-white transition hover:bg-emerald-800"
       >
         <Truck className="size-3.5" />
-        Agendar
+        {itemCount > 1 ? `Agendar pedido (${itemCount})` : "Agendar"}
       </button>
 
       {open ? (

@@ -24,6 +24,7 @@ import { moveOrderStage, updateOrderObservation } from "@/app/admin/orders/actio
 import { updateProductionStep } from "@/app/taller/actions";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { completionPercent, isReadyForDelivery } from "@/lib/metrics";
+import { compareOrderGroupMembers, isIndependentStartStep, isProductionOrder, orderGroupPositions, productionOrderGroup, productionStepPrerequisitesMet } from "@/lib/orders";
 import type { AreaKey, Order, ProductionStep, StepStatus, StructureRequest, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
 
@@ -39,6 +40,7 @@ type DashboardFilter = "all" | "active";
 type SortKey = "recent" | "delivery" | "code" | "progress";
 type Tone = "green" | "blue" | "amber" | "purple" | "rose" | "stone";
 type DashboardColumnKey = "code" | "product" | "color" | "process" | "status" | "delivery" | "progress";
+type OptimisticStepStatus = { status: StepStatus; previousStatus: StepStatus };
 
 const ORDERS_PER_PAGE = 30;
 
@@ -68,38 +70,44 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
     () => orders.map((order) => orderWithConfiguredSteps(order, enabledSteps)),
     [enabledSteps, orders],
   );
+  const groupPositions = useMemo(() => orderGroupPositions(normalizedOrders), [normalizedOrders]);
   const dashboardOrders = useMemo(
     () => normalizedOrders.filter(isDashboardVisibleOrder),
     [normalizedOrders],
-  );
-  const activeOrders = useMemo(
-    () => dashboardOrders.filter(isDashboardActiveOrder),
-    [dashboardOrders],
   );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DashboardFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("recent");
   const [page, setPage] = useState(1);
   const [optimisticStage, setOptimisticStage] = useState<Record<string, AreaKey>>({});
-  const [optimisticActiveStep, setOptimisticActiveStep] = useState<Record<string, AreaKey>>({});
+  const [optimisticStepStatuses, setOptimisticStepStatuses] = useState<Record<string, OptimisticStepStatus>>({});
+  const [pendingStepStatuses, setPendingStepStatuses] = useState<Record<string, true>>({});
   const [columnWidths, setColumnWidths] = useState<Record<DashboardColumnKey, number>>(defaultColumnWidths);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [, startTransition] = useTransition();
 
+  const optimisticOrders = useMemo(
+    () => dashboardOrders.map((order) => {
+      const stage = optimisticStage[order.id];
+      const stagedOrder = stage ? orderWithStage(order, stage) : order;
+      return orderWithStepStatuses(stagedOrder, optimisticStepStatuses);
+    }),
+    [dashboardOrders, optimisticStage, optimisticStepStatuses],
+  );
+  const activeOrders = useMemo(
+    () => optimisticOrders.filter(isDashboardActiveOrder),
+    [optimisticOrders],
+  );
+
   const displayedOrders = useMemo(
     () =>
-      dashboardOrders
-        .map((order) => {
-          const stage = optimisticStage[order.id];
-          const activeStep = optimisticActiveStep[order.id];
-          const stagedOrder = stage ? orderWithStage(order, stage) : order;
-          return activeStep ? orderWithActiveStep(stagedOrder, activeStep) : stagedOrder;
-        })
+      optimisticOrders
         .filter((order) => matchesFilter(order, filter))
         .filter((order) => matchesSearch(order, search))
         .sort((a, b) => sortOrders(a, b, sortKey, dashboardSteps)),
-    [dashboardOrders, dashboardSteps, filter, optimisticActiveStep, optimisticStage, search, sortKey],
+    [dashboardSteps, filter, optimisticOrders, search, sortKey],
   );
+
   const totalPages = Math.max(1, Math.ceil(displayedOrders.length / ORDERS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
   const paginatedOrders = useMemo(
@@ -117,20 +125,25 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
 
   function move(order: Order, stepKey: AreaKey) {
     const current = currentStep(order);
+    const target = order.steps.find((step) => step.key === stepKey);
+    const statusKey = optimisticStepStatusKey(order.id, stepKey);
     if (!canMove || order.status === "completed" || order.status === "cancelled") return;
+    if (pendingStepStatuses[statusKey]) return;
+
+    if (target && isIndependentStartStep(stepKey)) {
+      const nextStatus = target.status === "active" ? "done" : target.status === "done" ? "pending" : "active";
+      updateStepStatus(order.id, stepKey, target.status, nextStatus);
+      return;
+    }
 
     if (current?.key === stepKey) {
       if (current.status !== "pending" || !isWaitingForStep(order, current)) return;
-      activateStep(order.id, stepKey);
+      updateStepStatus(order.id, stepKey, current.status, "active");
       return;
     }
 
     setFeedback(null);
-    setOptimisticActiveStep((currentSteps) => {
-      const next = { ...currentSteps };
-      delete next[order.id];
-      return next;
-    });
+    setOptimisticStepStatuses((currentStatuses) => removeOrderStepStatuses(currentStatuses, order.id));
     setOptimisticStage((currentStages) => ({ ...currentStages, [order.id]: stepKey }));
     startTransition(async () => {
       const result = await moveOrderStage({ orderId: order.id, stepKey });
@@ -146,23 +159,49 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
     });
   }
 
-  function activateStep(orderId: string, stepKey: AreaKey) {
+  function updateStepStatus(orderId: string, stepKey: AreaKey, previousStatus: StepStatus, status: StepStatus) {
+    const statusKey = optimisticStepStatusKey(orderId, stepKey);
+    const persistedStatus = dashboardOrders
+      .find((order) => order.id === orderId)
+      ?.steps.find((step) => step.key === stepKey)
+      ?.status ?? previousStatus;
+    if (pendingStepStatuses[statusKey]) return;
     setFeedback(null);
     setOptimisticStage((currentStages) => {
       const next = { ...currentStages };
       delete next[orderId];
       return next;
     });
-    setOptimisticActiveStep((currentSteps) => ({ ...currentSteps, [orderId]: stepKey }));
+    setOptimisticStepStatuses((currentStatuses) => ({
+      ...currentStatuses,
+      [statusKey]: { status, previousStatus: persistedStatus },
+    }));
+    setPendingStepStatuses((currentStatuses) => ({ ...currentStatuses, [statusKey]: true }));
     startTransition(async () => {
-      const result = await updateProductionStep({ orderId, stepKey, status: "active" });
-      if (result.status === "error") {
-        setOptimisticActiveStep((currentSteps) => {
-          const next = { ...currentSteps };
-          delete next[orderId];
+      try {
+        const result = await updateProductionStep({ orderId, stepKey, status });
+        if (result.status !== "error") {
+          return;
+        }
+        setOptimisticStepStatuses((currentStatuses) => {
+          const next = { ...currentStatuses };
+          delete next[statusKey];
           return next;
         });
         setFeedback({ tone: "error", message: result.message });
+      } catch {
+        setOptimisticStepStatuses((currentStatuses) => {
+          const next = { ...currentStatuses };
+          delete next[statusKey];
+          return next;
+        });
+        setFeedback({ tone: "error", message: "No fue posible guardar el proceso. Intenta nuevamente." });
+      } finally {
+        setPendingStepStatuses((currentStatuses) => {
+          const next = { ...currentStatuses };
+          delete next[statusKey];
+          return next;
+        });
       }
     });
   }
@@ -335,7 +374,8 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                 const presentation = statusPresentation(order);
                 const StatusIcon = presentation.icon;
                 const progress = dashboardCompletionPercent(order, dashboardSteps);
-                const groupOrders = normalizedOrders.filter((item) => item.groupCode === order.groupCode);
+                const groupOrders = productionOrderGroup(normalizedOrders, order);
+                const groupPosition = groupPositions.get(order.id);
                 return (
                   <tr key={order.id} className={cn("group", orderRowClass(order))}>
                     <BodyCell className="rounded-l-lg border-l">
@@ -353,7 +393,14 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                           </div>
                           <Link href={`/admin/orders/${order.id}`} className="block min-w-0">
                             <p className="mt-1 truncate text-xs font-medium text-stone-600">{order.store === "LH" ? "Leather House" : "La Reina"}</p>
-                            <p className="mt-0.5 truncate text-xs text-stone-500">{order.client}</p>
+                            <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-stone-500">
+                              <span className="truncate">{order.client}</span>
+                              {groupPosition ? (
+                                <span className="shrink-0 rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-stone-700">
+                                  {groupPosition.index}/{groupPosition.total}
+                                </span>
+                              ) : null}
+                            </p>
                           </Link>
                         </div>
                       </div>
@@ -377,6 +424,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                               step={orderStep ?? { key: step.key, label: step.label, owner: step.label, status: "pending" }}
                               requested={step.key === "structure" && requestedStructureOrders.has(order.id)}
                               canMove={canMove}
+                              pending={Boolean(pendingStepStatuses[optimisticStepStatusKey(order.id, step.key)])}
                               onMove={() => move(order, step.key)}
                             />
                           );
@@ -507,29 +555,42 @@ function StepDot({
   step,
   requested,
   canMove,
+  pending,
   onMove,
 }: {
   order: Order;
   step: ProductionStep;
   requested?: boolean;
   canMove: boolean;
+  pending: boolean;
   onMove: () => void;
 }) {
-  const disabled = !canMove || order.status === "completed" || order.status === "cancelled";
+  const disabled = pending || !canMove || order.status === "completed" || order.status === "cancelled";
   const waiting = isWaitingForStep(order, step);
+  const requestedAndPending = requested && step.status === "pending";
+  const independentAction = isIndependentStartStep(step.key)
+    ? step.status === "active"
+      ? `Marcar ${step.label} como listo`
+      : step.status === "done"
+        ? `Reabrir ${step.label}`
+        : `Iniciar ${step.label}`
+    : undefined;
   const Icon = step.status === "done" ? Check : step.status === "active" ? Circle : step.status === "blocked" ? X : Circle;
   return (
     <button
       type="button"
+      data-order-id={order.id}
+      data-step-key={step.key}
+      data-step-status={step.status}
       disabled={disabled}
       onClick={onMove}
-      title={requested ? `${step.label}: solicitada` : waiting ? `En espera de ${cleanStepLabel(step.label)}` : disabled ? step.label : `Mover a ${step.label}`}
-      aria-label={requested ? `${step.label}: solicitada` : disabled ? `${step.label}: ${step.status}` : `Mover ${order.code} a ${step.label}`}
+      title={independentAction ?? (requestedAndPending ? `${step.label}: solicitada, pendiente` : waiting ? `${step.label}: disponible para iniciar` : disabled ? step.label : `Mover a ${step.label}`)}
+      aria-label={independentAction ? `${independentAction} para ${order.code}` : requestedAndPending ? `${step.label}: solicitada, pendiente` : disabled ? `${step.label}: ${step.status}` : `Mover ${order.code} a ${step.label}`}
       className={cn(
-        "mx-auto grid size-6 place-items-center rounded-md border transition",
-        requested ? "border-sky-200 bg-sky-50 text-sky-800" : waiting ? "border-sky-200 bg-sky-50 text-sky-800" : stepDotClass(step.status, stepTone(step)),
+        "production-process-indicator mx-auto grid size-6 place-items-center rounded-md border transition",
+        requestedAndPending ? "border-amber-300 bg-amber-50 text-amber-700" : stepDotClass(step.status, stepTone(step)),
         !disabled && "hover:-translate-y-0.5 hover:border-stone-400 hover:shadow-sm",
-        disabled && "cursor-default opacity-80",
+        disabled && "cursor-default opacity-60",
       )}
     >
       <Icon className="size-3.5" />
@@ -782,7 +843,7 @@ function isDashboardActiveOrder(order: Order) {
 }
 
 function isDashboardVisibleOrder(order: Order) {
-  return !["completed", "cancelled"].includes(order.status);
+  return isProductionOrder(order) && !["completed", "cancelled"].includes(order.status);
 }
 
 function matchesSearch(order: Order, search: string) {
@@ -794,13 +855,17 @@ function matchesSearch(order: Order, search: string) {
 }
 
 function sortOrders(a: Order, b: Order, sortKey: SortKey, steps: SystemSettings["production"]["steps"]) {
-  if (sortKey === "code") return a.code.localeCompare(b.code);
-  if (sortKey === "progress") return dashboardCompletionPercent(a, steps) - dashboardCompletionPercent(b, steps);
+  if (sortKey === "code") return a.code.localeCompare(b.code) || stableOrderTieBreaker(a, b);
+  if (sortKey === "progress") return dashboardCompletionPercent(a, steps) - dashboardCompletionPercent(b, steps) || stableOrderTieBreaker(a, b);
   if (sortKey === "recent") {
     const entryDiff = dateTime(b.entryDate) - dateTime(a.entryDate);
-    return entryDiff || b.code.localeCompare(a.code);
+    return entryDiff || b.code.localeCompare(a.code) || stableOrderTieBreaker(a, b);
   }
-  return a.deliveryDate.localeCompare(b.deliveryDate);
+  return a.deliveryDate.localeCompare(b.deliveryDate) || stableOrderTieBreaker(a, b);
+}
+
+function stableOrderTieBreaker(a: Order, b: Order) {
+  return a.store.localeCompare(b.store) || a.code.localeCompare(b.code) || compareOrderGroupMembers(a, b);
 }
 
 function dashboardCompletionPercent(order: Order, steps: SystemSettings["production"]["steps"]) {
@@ -834,8 +899,9 @@ function statusPresentation(order: Order): { label: string; tone: Tone; icon: Re
   if (order.status === "completed") return { label: "Entregada", tone: "green", icon: CheckCircle2 };
   if (order.status === "blocked" || order.steps.some((step) => step.status === "blocked")) return { label: "Bloqueada", tone: "rose", icon: CircleDashed };
   if (isReadyForDelivery(order)) return { label: "Terminado", tone: "green", icon: CheckCircle2 };
+  if (order.steps.length && order.steps.every((step) => step.status === "pending")) return { label: "Sin empezar", tone: "stone", icon: Clock3 };
   const step = currentStep(order);
-  if (!step) return { label: "Sin iniciar", tone: "stone", icon: Clock3 };
+  if (!step) return { label: "Sin empezar", tone: "stone", icon: Clock3 };
   if (isWaitingForStep(order, step)) return { label: `En espera de ${cleanStepLabel(step.label)}`, tone: "blue", icon: Clock3 };
   return { label: currentStepStatusLabel(step), tone: stepTone(step), icon: stepIconByKey(step.key, step.label) };
 }
@@ -867,21 +933,30 @@ function isFinishedStep(step: Pick<ProductionStep, "key" | "label">) {
   return /dispatch|despacho|terminado/i.test(`${step.key} ${step.label}`);
 }
 
-function orderWithActiveStep(order: Order, stepKey: AreaKey): Order {
-  const targetIndex = order.steps.findIndex((step) => step.key === stepKey);
-  if (targetIndex < 0) return order;
+function orderWithStepStatuses(order: Order, statuses: Record<string, OptimisticStepStatus>): Order {
+  const now = new Date().toISOString();
   return {
     ...order,
-    steps: order.steps.map((step, index) => {
-      if (index < targetIndex) {
-        return { ...step, status: "done", startedAt: step.startedAt ?? new Date().toISOString(), completedAt: step.completedAt ?? new Date().toISOString() };
-      }
-      if (index === targetIndex) {
-        return { ...step, status: "active", startedAt: step.startedAt ?? new Date().toISOString(), completedAt: undefined };
-      }
-      return { ...step, status: "pending", startedAt: undefined, completedAt: undefined };
+    steps: order.steps.map((step) => {
+      const optimisticStatus = statuses[optimisticStepStatusKey(order.id, step.key)];
+      if (!optimisticStatus || step.status !== optimisticStatus.previousStatus) return step;
+      const { status } = optimisticStatus;
+      if (status === "pending") return { ...step, status, startedAt: undefined, completedAt: undefined };
+      if (status === "active") return { ...step, status, startedAt: step.startedAt ?? now, completedAt: undefined };
+      if (status === "done") return { ...step, status, startedAt: step.startedAt ?? now, completedAt: now };
+      return { ...step, status };
     }),
   };
+}
+
+function optimisticStepStatusKey(orderId: string, stepKey: AreaKey) {
+  return `${orderId}:${stepKey}`;
+}
+
+function removeOrderStepStatuses(statuses: Record<string, OptimisticStepStatus>, orderId: string) {
+  return Object.fromEntries(
+    Object.entries(statuses).filter(([key]) => !key.startsWith(`${orderId}:`)),
+  ) as Record<string, OptimisticStepStatus>;
 }
 
 function orderWithConfiguredSteps(order: Order, enabledSteps: SystemSettings["production"]["steps"]): Order {
@@ -932,7 +1007,7 @@ function isWaitingForStep(order: Order, step: ProductionStep) {
   if (step.status !== "pending") return false;
   const stepIndex = order.steps.findIndex((item) => item.key === step.key);
   if (stepIndex < 0) return false;
-  return order.steps.slice(0, stepIndex).every((item) => item.status === "done");
+  return productionStepPrerequisitesMet(order.steps, stepIndex);
 }
 
 function processColumnLabel(label: string) {

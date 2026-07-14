@@ -5,6 +5,7 @@ import { cancelAgendaItem, completeAgendaItem, createAgendaTask, scheduleOrderDe
 import { AppShell } from "@/components/app-shell";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
+import { isProductionOrder, productionOrderGroup } from "@/lib/orders";
 import { listAgendaItems, listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import type { AgendaItem, AgendaTimeSlot, Order } from "@/lib/types";
@@ -32,10 +33,14 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
     listAgendaItems(),
   ]);
 
+  const productionOrders = orders.filter(isProductionOrder);
   const canEdit = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
-  const ready = readyForDeliveryOrders(orders, allAgendaItems).sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
-  const ordersById = new Map(orders.map((order) => [order.id, order]));
-  const visibleItems = filterAgendaItems(dayAgendaItems.filter((item) => item.status !== "cancelled"), filters);
+  const ready = readyForDeliveryOrders(productionOrders, allAgendaItems).sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
+  const ordersById = new Map(productionOrders.map((order) => [order.id, order]));
+  const visibleItems = filterAgendaItems(
+    dayAgendaItems.filter((item) => item.status !== "cancelled" && (!item.orderId || ordersById.has(item.orderId))),
+    filters,
+  );
   const pendingTasks = allAgendaItems
     .filter((item) => item.kind === "task" && item.status === "pending")
     .sort((a, b) => `${a.scheduledDate}${a.startTime}`.localeCompare(`${b.scheduledDate}${b.startTime}`));
@@ -60,7 +65,9 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
                 <span className="field-label">Orden lista</span>
                 <select name="orderId" className="control mt-1" required disabled={!canEdit || !ready.length}>
                   {ready.map((order) => (
-                    <option key={order.id} value={order.id}>{order.code} - {order.client}</option>
+                    <option key={order.id} value={order.id}>
+                      {order.code} - {order.client} ({productionOrderGroup(productionOrders, order).length} producto{productionOrderGroup(productionOrders, order).length === 1 ? "" : "s"})
+                    </option>
                   ))}
                 </select>
               </label>
@@ -161,7 +168,13 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
             empty="No hay órdenes pendientes de agendar."
           >
             {ready.slice(0, 3).map((order) => (
-              <ReadySidebarItem key={order.id} order={order} canEdit={canEdit} selectedDate={selectedDate} />
+              <ReadySidebarItem
+                key={order.id}
+                order={order}
+                groupOrders={productionOrderGroup(productionOrders, order)}
+                canEdit={canEdit}
+                selectedDate={selectedDate}
+              />
             ))}
             {ready.length > 3 ? <Link href="/admin/ready" className="block rounded-md bg-stone-50 py-2 text-center text-xs font-medium text-stone-700">Ver todas</Link> : null}
           </SidebarList>
@@ -242,7 +255,7 @@ function AgendaCard({ item, order, canEdit }: { item: AgendaItem; order?: Order;
           <>
             <Link href={`/admin/orders/${order.id}`} className="text-lg font-semibold text-emerald-800 hover:underline">{order.code}</Link>
             <p className="mt-1 text-sm font-semibold text-stone-950">{order.client}</p>
-            <p className="mt-1 text-sm text-stone-600">{order.product}</p>
+            <p className="mt-1 text-sm text-stone-600">{item.title.includes("productos") ? item.title : order.product}</p>
             {hasDeliveryInfo(item, order) ? (
               <p className="mt-2 rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm leading-5 text-stone-700">
                 {deliveryInfo(item, order)}
@@ -435,7 +448,17 @@ function SidebarList({ title, count, tone, empty, children }: { title: string; c
   );
 }
 
-function ReadySidebarItem({ order, canEdit, selectedDate }: { order: Order; canEdit: boolean; selectedDate: string }) {
+function ReadySidebarItem({
+  order,
+  groupOrders,
+  canEdit,
+  selectedDate,
+}: {
+  order: Order;
+  groupOrders: Order[];
+  canEdit: boolean;
+  selectedDate: string;
+}) {
   return (
     <div className="rounded-md border border-stone-100 bg-white p-3">
       <div className="flex items-start gap-2">
@@ -443,13 +466,13 @@ function ReadySidebarItem({ order, canEdit, selectedDate }: { order: Order; canE
         <div className="min-w-0 flex-1">
           <Link href={`/admin/orders/${order.id}`} className="text-xs font-semibold text-emerald-800 hover:underline">{order.code}</Link>
           <p className="truncate text-xs font-medium text-stone-700">{order.client}</p>
-          <p className="truncate text-xs text-stone-500">{order.product}</p>
+          <p className="truncate text-xs text-stone-500">{groupOrders.length > 1 ? `${groupOrders.length} productos` : order.product}</p>
         </div>
       </div>
       {canEdit ? (
         <details className="mt-2">
           <summary className="grid h-8 w-full cursor-pointer list-none place-items-center rounded-md bg-emerald-700 px-2 text-xs font-semibold text-white hover:bg-emerald-800">
-            Agendar
+            {groupOrders.length > 1 ? `Agendar pedido (${groupOrders.length})` : "Agendar"}
           </summary>
           <form action={scheduleOrderDelivery} className="mt-2 rounded-md border border-emerald-100 bg-emerald-50/60 p-2">
             <input type="hidden" name="orderId" value={order.id} />

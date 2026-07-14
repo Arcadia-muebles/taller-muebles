@@ -1,8 +1,9 @@
 import { daysUntil, workshopHoursBetween } from "./utils";
 import type { AgendaItem, AppUser, Order, StepStatus } from "./types";
+import { isProductionOrder, orderGroupKey, productionOrderGroup } from "./orders";
 
 export function activeOrders(orders: Order[]) {
-  return orders.filter((order) => !["completed", "cancelled"].includes(order.status));
+  return orders.filter((order) => isProductionOrder(order) && !["completed", "cancelled"].includes(order.status));
 }
 
 export function isReadyForDelivery(order: Order) {
@@ -21,16 +22,28 @@ export function isReadyForDelivery(order: Order) {
 }
 
 export function readyForDeliveryOrders(orders: Order[], agendaItems: AgendaItem[] = []) {
-  const scheduledOrderIds = new Set(
+  const ordersById = new Map(orders.map((order) => [order.id, order]));
+  const scheduledGroups = new Set(
     agendaItems
       .filter((item) => item.kind === "delivery" && item.status === "pending" && item.orderId)
-      .map((item) => item.orderId),
+      .flatMap((item) => {
+        const order = item.orderId ? ordersById.get(item.orderId) : undefined;
+        return order ? [orderGroupKey(order)] : [];
+      }),
   );
-  return activeOrders(orders).filter((order) => isReadyForDelivery(order) && !scheduledOrderIds.has(order.id));
+  const seenGroups = new Set<string>();
+
+  return activeOrders(orders).filter((order) => {
+    const groupKey = orderGroupKey(order);
+    if (seenGroups.has(groupKey)) return false;
+    seenGroups.add(groupKey);
+    if (scheduledGroups.has(groupKey)) return false;
+    return productionOrderGroup(orders, order).every(isReadyForDelivery);
+  });
 }
 
 export function completedOrders(orders: Order[]) {
-  return orders.filter((order) => order.status === "completed");
+  return orders.filter((order) => isProductionOrder(order) && order.status === "completed");
 }
 
 export function overdueOrders(orders: Order[]) {
@@ -59,7 +72,7 @@ export function completionPercent(order: Order) {
 }
 
 export function statusCount(orders: Order[], status: StepStatus) {
-  return orders.flatMap((order) => order.steps).filter((step) => step.status === status)
+  return orders.filter(isProductionOrder).flatMap((order) => order.steps).filter((step) => step.status === status)
     .length;
 }
 
@@ -125,7 +138,7 @@ export function productivityByArea(orders: Order[], users: AppUser[] = []): Area
     }
   };
 
-  for (const order of orders) {
+  for (const order of orders.filter(isProductionOrder)) {
     for (const step of order.steps) {
       const area: ProductivityAreaEntry = areas.get(step.key) ?? {
         label: step.label,

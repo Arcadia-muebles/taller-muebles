@@ -7,9 +7,11 @@ import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder, updateLocalOrderObservations, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
+import { isIndependentStartStep, isProductionOrder } from "@/lib/orders";
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
+import type { CommercialDocumentType } from "@/lib/types";
 import { orderPaymentsSchema, orderProductsSchema, orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
 import { priorityFromDeliveryDate } from "@/lib/utils";
 
@@ -17,6 +19,7 @@ export type CreateOrderState = {
   status: "idle" | "success" | "error";
   message: string;
   orderId?: string;
+  documentType?: CommercialDocumentType;
 };
 
 export type MoveOrderStageResult = {
@@ -87,9 +90,12 @@ export async function createOrder(
       message: formatZodError(parsed.error),
     };
   }
+  const isQuote = parsed.data.documentType === "quote";
   const ruleError = await validateOrderRules(parsed.data, settings);
   if (ruleError) return { status: "error", message: ruleError };
-  const orderCode = parsed.data.salesNoteNumber?.trim() || await nextOrderCode(parsed.data.store);
+  const orderCode = parsed.data.store === "LH"
+    ? await nextOrderCode("LH")
+    : parsed.data.salesNoteNumber?.trim() || await nextOrderCode(parsed.data.store);
   const orderPriority = priorityFromDeliveryDate(parsed.data.deliveryDate, {
     urgentDays: settings.alerts.urgentDeliveryDays,
     upcomingDays: settings.alerts.upcomingDeliveryDays,
@@ -118,15 +124,17 @@ export async function createOrder(
     revalidatePath("/admin");
     revalidatePath("/admin/ready");
     revalidatePath("/admin/agenda");
+    revalidatePath("/admin/documents");
     revalidatePath("/taller");
     revalidatePath(`/admin/orders/${order.id}`);
 
     return {
       status: "success",
       message: attachmentResult.message
-        ? `Orden creada correctamente. ${attachmentResult.message}`
-        : "Orden creada correctamente.",
+        ? `${isQuote ? "Cotización guardada en Comercial" : "Orden creada correctamente"}. ${attachmentResult.message}`
+        : isQuote ? "Cotización guardada en Comercial, sin ingresar a producción." : "Orden creada correctamente.",
       orderId: order.id,
+      documentType: parsed.data.documentType,
     };
   }
 
@@ -183,14 +191,14 @@ export async function createOrder(
       seller_name: parsed.data.sellerName || null,
       payment_method: parsed.data.paymentMethod || null,
       delivery_terms: parsed.data.deliveryTerms || null,
-      status: "in_production",
+      status: isQuote ? "draft" : "scheduled",
       condition: "none",
       priority: orderPriority,
       is_warranty: parsed.data.isWarranty,
       entry_date: parsed.data.entryDate,
       delivery_date: parsed.data.deliveryDate,
       observations: parsed.data.observations,
-      assigned_to: assignee?.id ?? null,
+      assigned_to: isQuote ? null : assignee?.id ?? null,
       created_by: profileId,
     } as never)))
     .select("id");
@@ -215,31 +223,33 @@ export async function createOrder(
     if (paymentError) return { status: "error", message: `La nota fue creada, pero no se pudo guardar el historial de abonos: ${paymentError.message}` };
   }
 
-  const enabledSteps = settings.production.steps.filter((step) => step.enabled);
-  const operatorByArea = operatorMapByArea(await listUsers());
-  const { error: stepsError } = await supabase.from("production_steps").insert(
-    createdOrders.flatMap((order) => enabledSteps.map((step, index) => ({
-      order_id: order.id,
-      step: step.key,
-      step_label: step.label,
-      sort_order: index + 1,
-      status: index === 0 ? "active" : "pending",
-      started_at: index === 0 ? new Date().toISOString() : null,
-      assigned_to: index === 0 ? assignee?.id ?? operatorByArea.get(step.key) ?? null : operatorByArea.get(step.key) ?? null,
-    }))),
-  );
+  if (!isQuote) {
+    const enabledSteps = settings.production.steps.filter((step) => step.enabled);
+    const operatorByArea = operatorMapByArea(await listUsers());
+    const { error: stepsError } = await supabase.from("production_steps").insert(
+      createdOrders.flatMap((order) => enabledSteps.map((step, index) => ({
+        order_id: order.id,
+        step: step.key,
+        step_label: step.label,
+        sort_order: index + 1,
+        status: "pending",
+        started_at: null,
+        assigned_to: operatorByArea.get(step.key) ?? (index === 0 ? assignee?.id ?? null : null),
+      }))),
+    );
 
-  if (stepsError) {
-    await supabase.from("orders").update({ status: "cancelled" }).in("id", createdOrders.map((order) => order.id));
-    return {
-      status: "error",
-      message: stepsError.message,
-    };
+    if (stepsError) {
+      await supabase.from("orders").update({ status: "cancelled" }).in("id", createdOrders.map((order) => order.id));
+      return {
+        status: "error",
+        message: stepsError.message,
+      };
+    }
   }
 
   await supabase.from("audit_logs").insert({
     order_id: createdOrders[0].id,
-    action: "create_order",
+    action: isQuote ? "create_quote" : "create_order",
     entity: "orders",
     entity_id: createdOrders[0].id,
     profile_id: profileId,
@@ -256,15 +266,17 @@ export async function createOrder(
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
   revalidatePath("/admin/agenda");
+  revalidatePath("/admin/documents");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${createdOrders[0].id}`);
 
   return {
     status: "success",
     message: attachmentResult.message
-      ? `Orden creada y etapas productivas generadas. ${attachmentResult.message}`
-      : "Orden creada y etapas productivas generadas.",
+      ? `${isQuote ? "Cotización guardada en Comercial" : "Orden creada y etapas productivas generadas"}. ${attachmentResult.message}`
+      : isQuote ? "Cotización guardada en Comercial, sin ingresar a producción." : "Orden creada y etapas productivas generadas.",
     orderId: createdOrders[0].id,
+    documentType: parsed.data.documentType,
   };
 }
 
@@ -278,6 +290,8 @@ export async function updateOrder(
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
     return { status: "error", message: "Tu perfil no tiene permiso para editar órdenes." };
   }
+  const previousOrder = (await listOrders()).find((order) => order.id === orderId);
+  if (!previousOrder) return { status: "error", message: "No se encontró la orden." };
   const parsed = orderSchema.safeParse({
     store: formData.get("store"),
     documentType: normalizedDocumentType(formData),
@@ -310,6 +324,8 @@ export async function updateOrder(
     isWarranty: parseBooleanFormValue(formData.get("isWarranty")) || normalizedDocumentType(formData) === "warranty",
   });
   if (!parsed.success) return { status: "error", message: formatZodError(parsed.error) };
+  const isQuote = parsed.data.documentType === "quote";
+  const wasQuote = previousOrder.documentType === "quote";
   const ruleError = await validateOrderRules(parsed.data, settings, orderId);
   if (ruleError) return { status: "error", message: ruleError };
   const orderPriority = priorityFromDeliveryDate(parsed.data.deliveryDate, {
@@ -323,6 +339,7 @@ export async function updateOrder(
       material: parsed.data.material || defaultMaterial(parsed.data.store),
       color: parsed.data.color || "Por definir",
       priority: orderPriority,
+      steps: settings.production.steps,
     });
     if (!updated) return { status: "error", message: "No se encontró la orden." };
   } else {
@@ -369,9 +386,29 @@ export async function updateOrder(
       entry_date: parsed.data.entryDate,
       delivery_date: parsed.data.deliveryDate,
       observations: parsed.data.observations,
-      assigned_to: assignee?.id ?? null,
+      assigned_to: isQuote ? null : assignee?.id ?? null,
+      status: isQuote ? "draft" : wasQuote ? "scheduled" : previousOrder.status,
     } as never).eq("id", orderId);
     if (error) return { status: "error", message: error.message };
+    if (wasQuote && !isQuote && !previousOrder.steps.length) {
+      const enabledSteps = settings.production.steps.filter((step) => step.enabled);
+      const operatorByArea = operatorMapByArea(await listUsers());
+      const { error: stepsError } = await supabase.from("production_steps").insert(
+        enabledSteps.map((step, index) => ({
+          order_id: orderId,
+          step: step.key,
+          step_label: step.label,
+          sort_order: index + 1,
+          status: "pending",
+          started_at: null,
+          assigned_to: operatorByArea.get(step.key) ?? (index === 0 ? assignee?.id ?? null : null),
+        })),
+      );
+      if (stepsError) {
+        await supabase.from("orders").update({ status: "draft" }).eq("id", orderId);
+        return { status: "error", message: `No se pudieron generar las etapas productivas: ${stepsError.message}` };
+      }
+    }
     await supabase.from("audit_logs").insert({
       order_id: orderId,
       action: "update_order",
@@ -385,6 +422,7 @@ export async function updateOrder(
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
   revalidatePath("/admin/agenda");
+  revalidatePath("/admin/documents");
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders/${orderId}/edit`);
   revalidatePath("/taller");
@@ -430,7 +468,7 @@ export async function closeOrder(formData: FormData) {
   if (!id) return;
 
   const order = (await listOrders()).find((item) => item.id === id);
-  if (!order || !isReadyForDispatch(order)) return;
+  if (!order || !isProductionOrder(order) || !isReadyForDispatch(order)) return;
 
   if (!hasSupabaseConfig()) {
     await closeLocalOrder(id);
@@ -475,7 +513,7 @@ export async function markProductionFinished(formData: FormData) {
 
   const order = (await listOrders()).find((item) => item.id === id);
   const finalStep = order ? finalizableProductionStep(order) : undefined;
-  if (!order || !finalStep) return;
+  if (!order || !isProductionOrder(order) || !finalStep) return;
 
   if (!hasSupabaseConfig()) {
     await updateLocalProductionStep({
@@ -569,6 +607,10 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
 
   let order = (await listOrders()).find((item) => item.id === parsed.data.orderId);
   if (!order) return { ok: false, message: "No se encontró la orden." };
+  if (!isProductionOrder(order)) return { ok: false, message: "Las cotizaciones no pertenecen al flujo de producción." };
+  if (isIndependentStartStep(parsed.data.stepKey)) {
+    return { ok: false, message: "Estructura y Corte se actualizan individualmente desde su propio control." };
+  }
   if (!hasSupabaseConfig()) {
     const targetIndex = order.steps.findIndex((step) => step.key === parsed.data.stepKey);
     if (targetIndex < 0) return { ok: false, message: "La etapa destino no existe en esta orden." };

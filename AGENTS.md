@@ -1,382 +1,361 @@
-# Project Context For Future Agents
+# AGENTS.md — Contexto del proyecto ARCADIA
 
-## Project Summary
+Este documento es el punto de entrada para cualquier agente que trabaje en este repositorio. Léelo antes de modificar código. Las instrucciones más específicas de `taller-muebles/AGENTS.md` también aplican dentro de la aplicación.
 
-This repository contains a web platform for a furniture workshop owned by Rodrigo. The client has two stores/workshops:
+## 1. Resumen del producto
 
-- `LH`: Leather House
-- `LR`: La Reina
+ARCADIA es una plataforma interna de control para el taller de muebles de Rodrigo. Sustituye y mejora un flujo basado en Excel para administrar notas de venta, producción, entregas, stock y trazabilidad.
 
-The goal is to replace/improve an existing Excel workflow used to control sales notes and production. The product must feel professional, minimal, operational, and worthy of a paid custom project. It must not be a direct copy of the reference/prototype the client shared; that prototype is only a source of business data and process cues.
+El cliente opera con dos tiendas/talleres:
 
-The system should behave like a robust internal production platform:
+- `LH`: Leather House.
+- `LR`: La Reina.
 
-- Admin users manage sales notes, historical orders, production status, stock, users, reports, and settings.
-- Workshop operators see a simpler production queue and only update the stages they need.
-- Finished orders leave the active production view but remain in historical records.
-- Data should be traceable, permissioned, and eventually ready for AI summaries/recommendations.
+La aplicación debe sentirse como una herramienta operacional profesional, sobria, rápida y confiable. El prototipo o planilla de referencia sirve para entender el negocio, pero no debe copiarse literalmente.
 
-## Repository Layout
+Principios esenciales:
 
-The Next.js app lives inside:
+- La tabla y las colas de trabajo son el centro de la operación.
+- Administración y taller son experiencias distintas.
+- El panel administrativo conserva el contexto comercial y operacional completo.
+- El taller debe ser móvil/tablet-first, simple y orientado a la tarea actual.
+- Los registros importantes no se eliminan físicamente: se archivan, cancelan o completan.
+- Todo cambio crítico debe poder auditarse.
+- La IA se incorpora sólo cuando los datos operacionales sean confiables.
+
+## 2. Ubicación y Git
+
+Raíz real del repositorio en este equipo:
+
+```text
+C:\Users\ninch\OneDrive\Escritorio\Códigos Hackers\Taller de Muebles
+```
+
+La aplicación Next.js está en:
 
 ```text
 taller-muebles/
 ```
 
-The git repository root is the parent folder:
+Estado conocido al actualizar este documento:
 
-```text
-C:\Users\ninch\OneDrive\Documents\Taller de Muebles
+- Rama: `master`.
+- Remoto: `https://github.com/Arcadia-muebles/taller-muebles.git`.
+- El árbol de trabajo estaba limpio.
+
+Antes de editar o publicar, ejecutar desde la raíz:
+
+```powershell
+git status --short
+git branch --show-current
+git remote -v
 ```
 
-GitHub remote:
+No incluir archivos `.env*`, `.next`, `node_modules`, `.local-data`, logs, capturas de QA ni otros artefactos generados salvo que la tarea los solicite expresamente.
 
-```text
-origin https://github.com/martinbaumann-sky/taller-muebles.git
-```
+## 3. Stack
 
-Current branch:
+- Next.js App Router `16.2.7`.
+- React `19.2.4`.
+- TypeScript 5.
+- Tailwind CSS v4.
+- TanStack Table.
+- React Hook Form + Zod.
+- `lucide-react`.
+- Supabase: PostgreSQL, Auth, Storage y RLS.
+- Vercel como destino de despliegue.
+- OpenAI API / Vercel AI SDK reservado para funcionalidades posteriores.
 
-```text
-master
-```
+Esta versión de Next.js puede diferir de patrones antiguos. Antes de tocar routing, cookies, middleware/proxy, Server Actions, caché o APIs del framework, leer la guía correspondiente dentro de `taller-muebles/node_modules/next/dist/docs/` y atender las advertencias de deprecación.
 
-## Stack
+## 4. Roles y modelos mentales
 
-- Next.js App Router, currently `next@16.2.7`
-- React `19.2.4`
-- TypeScript
-- Tailwind CSS v4
-- TanStack Table
-- React Hook Form
-- Zod
-- lucide-react
-- Supabase:
-  - PostgreSQL
-  - Auth
-  - Storage
-  - RLS
-- Vercel intended for deployment
-- OpenAI API / Vercel AI SDK intended later for AI features
+Roles de aplicación:
 
-Important Next.js note: this project uses a new Next.js version. Do not rely blindly on older App Router habits. Check current Next.js docs/patterns when touching routing, cookies, middleware/proxy, Server Actions, or caching.
+- `admin`: administración completa.
+- `manager`: supervisión y operación administrativa permitida.
+- `operator`: trabajador de una o más áreas productivas.
+- `viewer`: consulta sin edición operacional.
 
-## Main Product Areas
+Reglas de acceso:
 
-### Admin Panel
+- Los operadores no deben editar información comercial o administrativa.
+- Admin y manager gestionan órdenes y configuración según las políticas vigentes.
+- Los operadores sólo actualizan pasos y órdenes dentro de sus áreas autorizadas.
+- Una validación en la interfaz nunca reemplaza RLS ni la autorización del servidor.
+- El `SUPABASE_SERVICE_ROLE_KEY` es exclusivamente de servidor.
 
-Route:
+`src/lib/auth.ts` resuelve sesión y redirección por rol. Con Supabase configurado valida el usuario mediante Auth y busca un perfil activo; en modo local usa una cookie HTTP-only y usuarios guardados localmente.
 
-```text
-/admin
-```
+## 5. Áreas principales y rutas
 
-Admin sees:
+### Acceso
 
-- Active production orders
-- KPIs
-- Urgent orders
-- Blocked orders
-- Delivery risks
-- Stock alerts
-- Production load by process
-- Links to stock, reports, users, and settings
+- `/login`: autenticación.
+- `/`: punto de entrada/redirección según sesión y rol.
+- `/demo-login/[profile]`: acceso de demostración; tratarlo como funcionalidad local/controlada, no como autenticación de producción.
 
-Admin order routes:
+### Administración
 
-```text
-/admin/orders/new
-/admin/orders/[id]
-```
+- `/admin`: panel principal de producción activa y KPIs.
+- `/admin/orders/new`: crear orden.
+- `/admin/orders/[id]`: detalle de orden.
+- `/admin/orders/[id]/edit`: editar orden.
+- `/admin/history`: historial.
+- `/admin/ready`: órdenes listas.
+- `/admin/agenda`: agenda operativa.
+- `/admin/documents`: documentos comerciales.
+- `/admin/documents/[code]`: documento individual.
+- `/admin/stock`: stock y movimientos.
+- `/admin/structures`: solicitudes de estructuras.
+- `/admin/suppliers`: proveedores.
+- `/admin/reports`: reportes.
+- `/admin/users`: usuarios, roles y áreas.
+- `/admin/settings`: reglas y configuración del sistema.
 
-Secondary admin modules:
+### Taller
 
-```text
-/admin/stock
-/admin/reports
-/admin/users
-/admin/settings
-```
+- `/taller`: cola de producción del operario.
+- `/taller/orders/[id]`: detalle y acciones de la orden para taller.
 
-### Workshop Panel
+No redirigir una experiencia propia del taller hacia una pantalla administrativa salvo que sea una decisión explícita de producto.
 
-Route:
+## 6. Conceptos de negocio
 
-```text
-/taller
-```
+Campos principales de una orden:
 
-This is intentionally simpler than admin. Operators should see:
+- Tienda.
+- Código interno.
+- Número de nota de venta.
+- Cliente.
+- Producto/modelo.
+- Material y color.
+- Fecha de ingreso y fecha de entrega.
+- Prioridad, condición y estado general.
+- Garantía.
+- Responsable.
+- Observaciones y adjuntos.
+- Pagos y documentos comerciales cuando corresponda.
 
-- Work queue
-- Area filters
-- Current production step
-- Delivery deadline
-- Minimal product/client data
-- Buttons to start, complete, or block a step
+Pasos productivos base:
 
-Do not route workshop-specific detail experiences back into admin unless it is explicitly meant for managers. Keep admin and workshop mental models separate.
+- `structure`: estructura.
+- `cutting`: corte.
+- `sewing`: costura.
+- `upholstery`: tapicería.
+- `quality`: revisión de calidad.
 
-### Login
+El código también contempla áreas/etapas adicionales derivadas del flujo acordado con Rodrigo, como en blanco y despacho. Antes de cambiar la secuencia, revisar tipos, configuración, migraciones y el documento de reunión.
 
-Route:
+Estados de paso:
 
-```text
-/login
-```
+- `pending`.
+- `active`.
+- `done`.
+- `blocked`.
 
-The login screen is visually implemented and prepared for Supabase OTP. In demo mode it returns a success message without sending an actual email. With Supabase environment variables configured, it should use Supabase auth.
+Estados de orden:
 
-## Key Business Concepts
+- `draft`.
+- `scheduled`.
+- `in_production`.
+- `blocked`.
+- `urgent`.
+- `quality_control`.
+- `completed`.
+- `cancelled`.
 
-### Stores
+No asumir que una lista de este documento reemplaza los tipos actuales. Para implementar lógica, confirmar siempre en `src/lib/types.ts`, validaciones y migraciones.
 
-- `LH`: Leather House
-- `LR`: La Reina
+## 7. Arquitectura de datos y modos de ejecución
 
-### Order Fields
+La capa central de lectura está en `src/lib/repositories/production.ts`. La aplicación soporta dos modos:
 
-Core order data should include:
+1. Supabase, cuando existen `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+2. Modo local persistente, cuando falta esa configuración o `LOCAL_DEMO_MODE=1`.
 
-- Store
-- Internal code
-- Sales note number
-- Client name
-- Product/model
-- Material
-- Color
-- Entry date
-- Delivery date
-- Priority
-- General status
-- Condition
-- Warranty flag
-- Assigned person
-- Observations
-- Attachments
+El modo local usa `src/lib/local-store.ts` y guarda datos en `taller-muebles/.local-data/`. Es útil para desarrollo y QA, pero no debe tratarse como fuente operacional de producción.
 
-### Production Steps
+No asumir que la mera existencia de `.env.local` significa que todas las migraciones estén aplicadas o que RLS esté verificado. Antes de trabajar contra Supabase real, comprobar de forma explícita:
 
-Initial steps:
+- Proyecto y entorno correctos.
+- Migraciones aplicadas y en orden.
+- Tipos alineados con el esquema real.
+- Políticas RLS verificadas por rol.
+- Bucket y permisos de adjuntos.
+- Ausencia de claves sensibles en código cliente o logs.
 
-- Structure / `structure`
-- Cutting / `cutting`
-- Sewing / `sewing`
-- Upholstery / `upholstery`
-- Quality review / `quality`
-
-Step statuses:
-
-- `pending`
-- `active`
-- `done`
-- `blocked`
-
-Order statuses:
-
-- `draft`
-- `scheduled`
-- `in_production`
-- `blocked`
-- `urgent`
-- `quality_control`
-- `completed`
-- `cancelled`
-
-## Current Implementation State
-
-Already implemented:
-
-- Professional Next.js app scaffold inside `taller-muebles/`
-- Admin panel
-- Workshop panel
-- Login view and login Server Action
-- Order list with search/table
-- Order creation form
-- Order detail view
-- Stock page
-- Reports page
-- Users/roles page
-- Settings/rules page
-- Demo production queue actions
-- Server Actions prepared for:
-  - creating orders
-  - updating production steps
-- Data repository layer:
-  - uses Supabase when env vars exist
-  - falls back to mock data otherwise
-- Supabase migration with:
-  - stores
-  - profiles
-  - orders
-  - production steps
-  - comments
-  - attachments
-  - materials
-  - stock movements
-  - audit logs
-  - RLS policies
-  - private storage bucket for order attachments
-- Product blueprint in:
-
-```text
-taller-muebles/docs/product-blueprint.md
-```
-
-Important: Supabase has not yet been linked/executed against a real project in this workspace. The migration exists but has not been applied.
-
-## Important Files
-
-```text
-taller-muebles/src/app/admin/page.tsx
-taller-muebles/src/app/taller/page.tsx
-taller-muebles/src/app/login/page.tsx
-taller-muebles/src/app/admin/orders/actions.ts
-taller-muebles/src/app/taller/actions.ts
-taller-muebles/src/components/app-shell.tsx
-taller-muebles/src/components/order-table.tsx
-taller-muebles/src/components/order-form.tsx
-taller-muebles/src/components/worker-queue.tsx
-taller-muebles/src/lib/repositories/production.ts
-taller-muebles/src/lib/mock-data.ts
-taller-muebles/src/lib/types.ts
-taller-muebles/src/lib/supabase/server.ts
-taller-muebles/src/lib/supabase/browser.ts
-taller-muebles/src/lib/supabase/admin.ts
-taller-muebles/supabase/migrations/20260601213000_initial_production_schema.sql
-```
-
-## Environment Variables
-
-Example file:
-
-```text
-taller-muebles/.env.example
-```
-
-Expected values:
+Variables documentadas en `.env.example`:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+LOCAL_DEMO_MODE=
 SUPABASE_SERVICE_ROLE_KEY=
 OPENAI_API_KEY=
 ```
 
-Do not expose `SUPABASE_SERVICE_ROLE_KEY` to browser code. Never prefix it with `NEXT_PUBLIC_`.
+Nunca mostrar ni copiar valores reales de `.env.local` en respuestas, commits, capturas o logs. Nunca usar el prefijo `NEXT_PUBLIC_` para la service role.
 
-## Commands
+## 8. Estado funcional actual
 
-Run from:
+La base existente incluye, como mínimo:
+
+- Login y control de sesión por rol.
+- Dashboard administrativo y métricas.
+- Listado, creación, edición y detalle de órdenes.
+- Cola y detalle específico para taller.
+- Acciones sobre etapas de producción y comentarios.
+- Historial y vista de órdenes listas.
+- Adjuntos con ruta local y soporte previsto para Storage.
+- Agenda.
+- Documentos comerciales y nota de venta imprimible.
+- Registro de pagos y correcciones.
+- Stock y movimientos.
+- Solicitudes de estructuras.
+- Proveedores.
+- Usuarios, roles y múltiples áreas.
+- Configuración del sistema.
+- Auditoría consultable desde la capa de datos.
+- Soporte dual Supabase / almacenamiento local.
+
+No declarar que un flujo está terminado sólo porque exista su pantalla. Verificar persistencia, permisos, errores, estados vacíos, comportamiento responsive y correspondencia con el esquema.
+
+## 9. Archivos importantes
+
+Documentación:
 
 ```text
-taller-muebles/
+taller-muebles/docs/product-blueprint.md
+taller-muebles/docs/reunion-rodrigo-2026-06-22.md
+taller-muebles/docs/formulario-reunion-dueno.md
 ```
 
-Install:
+Autenticación, entorno y acceso:
 
 ```text
+taller-muebles/src/lib/auth.ts
+taller-muebles/src/lib/env.ts
+taller-muebles/src/lib/workshop-access.ts
+taller-muebles/src/lib/supabase/server.ts
+taller-muebles/src/lib/supabase/browser.ts
+taller-muebles/src/lib/supabase/admin.ts
+taller-muebles/src/lib/supabase/database.types.ts
+```
+
+Datos y dominio:
+
+```text
+taller-muebles/src/lib/repositories/production.ts
+taller-muebles/src/lib/repositories/settings.ts
+taller-muebles/src/lib/local-store.ts
+taller-muebles/src/lib/types.ts
+taller-muebles/src/lib/orders.ts
+taller-muebles/src/lib/metrics.ts
+taller-muebles/src/lib/validation/order.ts
+taller-muebles/src/lib/validation/production.ts
+```
+
+Acciones y componentes clave:
+
+```text
+taller-muebles/src/app/admin/orders/actions.ts
+taller-muebles/src/app/admin/orders/collaboration-actions.ts
+taller-muebles/src/app/taller/actions.ts
+taller-muebles/src/components/order-table.tsx
+taller-muebles/src/components/order-form.tsx
+taller-muebles/src/components/active-production-dashboard.tsx
+taller-muebles/src/components/worker-queue.tsx
+taller-muebles/src/components/workshop-order-action-panel.tsx
+taller-muebles/src/components/production-step-controls.tsx
+taller-muebles/src/components/production-timeline.tsx
+```
+
+Esquema:
+
+```text
+taller-muebles/supabase/migrations/
+```
+
+Las migraciones cubren el esquema inicial, endurecimiento de acceso de operadores, cambios del flujo acordado con Rodrigo, documentos comerciales, estructuras/proveedores, agenda y pagos. Revisarlas cronológicamente antes de modificar la base.
+
+## 10. Comandos y validación
+
+Ejecutar desde `taller-muebles/`:
+
+```powershell
 npm install
-```
-
-Dev server:
-
-```text
 npm run dev
-```
-
-Build:
-
-```text
+npm run lint
 npm run build
 ```
 
-Lint:
+Para una modificación normal:
 
-```text
-npm run lint
-```
+1. Leer este archivo, `taller-muebles/AGENTS.md` y la documentación relevante.
+2. Revisar `git status` y preservar cambios ajenos.
+3. Identificar si el flujo usa Supabase, modo local o ambos.
+4. Implementar la mínima solución completa sin romper permisos ni el modelo admin/taller.
+5. Ejecutar lint y build en proporción al cambio.
+6. Probar manualmente el flujo y los roles afectados cuando sea posible.
+7. Revisar el diff antes de entregar o publicar.
 
-Previous validation status:
+No afirmar que lint o build pasan basándose en una ejecución antigua; indicar sólo lo verificado en el turno actual.
 
-- `npm run build` passed.
-- `npm run lint` passed.
+## 11. Reglas de diseño y experiencia
 
-## Supabase Notes
+- Mantener una estética minimalista, silenciosa, densa y profesional.
+- Priorizar claridad operacional por encima de decoración.
+- Usar iconos reales de `lucide-react`.
+- Evitar patrones propios de una landing page.
+- Mantener acciones peligrosas explícitas y confirmadas.
+- Mostrar sólo la información necesaria al operario.
+- Diseñar el taller para uso táctil y pantallas pequeñas sin degradar escritorio.
+- Preservar consistencia con componentes y tokens existentes antes de crear variantes nuevas.
 
-Supabase CLI was not installed when the initial work was done. The migration file was written manually and should be reviewed/applied once the client creates or provides a Supabase project.
+## 12. Seguridad y calidad
 
-Next technical steps for Supabase:
+- RLS debe permanecer habilitado en tablas expuestas.
+- Las Server Actions deben validar entrada y autorización; no confiar en datos del cliente.
+- La service role sólo puede importarse en módulos server-only.
+- Validar IDs, estados permitidos y transiciones de producción.
+- Pedir y persistir una razón al bloquear cuando el flujo lo requiera.
+- Registrar acciones críticas en auditoría.
+- Tratar adjuntos como privados y validar acceso tanto en Storage como en rutas locales.
+- No borrar historial de pagos, órdenes, stock o producción para “corregir” datos; usar movimientos o correcciones trazables.
+- Mantener compatibilidad entre Supabase y modo local cuando el módulo admita ambos.
 
-1. Create/link Supabase project.
-2. Add `.env.local`.
-3. Run migration.
-4. Generate real Supabase TypeScript types.
-5. Replace manual `database.types.ts` with generated types.
-6. Verify RLS with admin, manager, operator, and viewer users.
-7. Replace remaining demo-only behavior with persistent Server Actions.
+## 13. Trabajo pendiente y criterio de terminado
 
-Security priorities:
+El proyecto sigue en evolución. Para cualquier módulo, considerar terminado sólo cuando se haya verificado:
 
-- RLS must remain enabled on exposed tables.
-- Operators should not edit commercial/admin fields.
-- Admin/manager can create and update orders.
-- Operators can update their assigned/area production steps.
-- Critical changes should be recorded in `audit_logs`.
+- Persistencia real y modo local aplicable.
+- Autorización de servidor y RLS por `admin`, `manager`, `operator` y `viewer` según corresponda.
+- Manejo de errores, duplicados y estados vacíos.
+- Trazabilidad/auditoría.
+- Responsive en escritorio y móvil/tablet, especialmente en taller.
+- Migraciones y tipos sincronizados.
+- Lint y build actuales.
 
-## Product Principles
+Áreas que requieren especial atención continua:
 
-- The table is the center of admin operations.
-- The workshop UI must be simpler than the admin UI.
-- Do not overwhelm operators with sales/admin data.
-- Never truly delete critical records; archive, cancel, or mark completed.
-- Keep visual style minimal, quiet, dense, and professional.
-- Prefer practical workflow clarity over decorative UI.
-- Use real icons from lucide-react.
-- Avoid making this look like a landing page.
-- Avoid a direct copy of the Claude artifact/prototype.
-- Treat the reference spreadsheet/prototype as a business-process reference only.
+- Confirmar el estado real del proyecto Supabase y sus migraciones.
+- Generar o regenerar tipos desde el esquema real cuando cambie.
+- Auditar políticas RLS y privilegios de funciones.
+- Verificar carga/descarga privada de adjuntos en producción.
+- Completar y validar reportes con datos reales.
+- Probar flujos de bloqueo, cierre, despacho, pagos y correcciones de punta a punta.
+- Validar UX del taller en dispositivos reales.
+- Incorporar funciones de IA únicamente después de estabilizar calidad, permisos y trazabilidad de datos.
 
-## Known Gaps / Next Work
+## 14. Publicación y handoff
 
-The project is not complete. Do not mark it complete until these areas are implemented and verified:
+Antes de commit, push o PR:
 
-- Real Supabase project connected.
-- Auth/session protection added.
-- Role-based routing and permissions enforced.
-- Generated Supabase types used.
-- Admin order create/edit/close flows persist real data.
-- Workshop actions persist real production updates.
-- Blocked step flow asks for a reason.
-- Dedicated workshop order detail route exists.
-- Attachments upload to Supabase Storage.
-- Stock movement create/update flows implemented.
-- Audit log visible or at least queryable.
-- Historical completed orders view implemented.
-- IA features added only after reliable operational data exists.
-- Mobile/tablet behavior verified for workshop usage.
+- Revisar `git diff` y `git status`.
+- No mezclar cambios ajenos o artefactos de desarrollo.
+- No incluir secretos ni datos reales de clientes.
+- Describir qué se cambió y qué se verificó realmente.
+- Señalar cualquier supuesto, migración pendiente o validación que dependa de infraestructura externa.
 
-## Git / Publishing
-
-Initial commit:
-
-```text
-792a2af Initial furniture workshop platform
-```
-
-Remote:
-
-```text
-https://github.com/martinbaumann-sky/taller-muebles.git
-```
-
-When committing, avoid logs/build artifacts. The app `.gitignore` ignores:
-
-- `node_modules`
-- `.next`
-- env files
-- dev-server logs
-
-There may be untracked files at the repo root created by local dev tooling, such as logs or scripts. Inspect `git status` before staging and do not commit unrelated generated files.
-
+Si el código contradice este documento, investigar primero. Actualizar `AGENTS.md` cuando cambien de forma material la arquitectura, rutas, roles, fuente de datos, seguridad o estado funcional.

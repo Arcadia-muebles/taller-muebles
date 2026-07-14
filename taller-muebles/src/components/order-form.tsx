@@ -49,7 +49,7 @@ export function OrderForm({
   const [state, formAction, actionPending] = useActionState(action, initialState);
   const [formPending, startTransition] = useTransition();
   const [discountPercent, setDiscountPercent] = useState(0);
-  const lastAutoCode = useRef<string | null>(null);
+  const lastAutoCode = useRef<string | null>(initialValues?.salesNoteNumber ?? nextCodes.LR);
   const defaultEntryDate = new Date().toISOString().slice(0, 10);
   const {
     register,
@@ -78,7 +78,7 @@ export function OrderForm({
       payments: [{ paidAt: defaultEntryDate, amount: 0, method: "Transferencia", note: "" }],
     },
   });
-  const { fields: productFields, append: appendProduct, remove: removeProduct } = useFieldArray({
+  const { fields: productFields, append: appendProduct, remove: removeProduct, replace: replaceProducts } = useFieldArray({
     control,
     name: "products",
   });
@@ -131,10 +131,12 @@ export function OrderForm({
   useEffect(() => {
     if (store === "LH") {
       setValue("documentType", "production_intake", { shouldDirty: false, shouldValidate: true });
+      const firstProduct = getValues("products")?.[0] ?? { productName: "", material: "", color: "", quantity: 1 };
+      if ((getValues("products")?.length ?? 0) > 1) replaceProducts([firstProduct]);
     } else if (documentType === "production_intake") {
       setValue("documentType", "sales_note", { shouldDirty: false, shouldValidate: true });
     }
-  }, [documentType, setValue, store]);
+  }, [documentType, getValues, replaceProducts, setValue, store]);
 
   const computedSubtotal = isCommercialDocument
     ? orderId
@@ -190,23 +192,125 @@ export function OrderForm({
   }
 
   function printSalesNotePdf() {
-    document.body.classList.add("printing-sales-note");
+    const root = document.documentElement;
+    const body = document.body;
+    const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
+    if (!printArea) return;
+
+    const preparePrintScale = () => {
+      root.style.setProperty("--sales-note-print-scale", "1");
+      void printArea.offsetHeight;
+
+      const pixelsPerMillimeter = 96 / 25.4;
+      const printableWidth = 198 * pixelsPerMillimeter;
+      const printableHeight = 285 * pixelsPerMillimeter;
+      const contentWidth = Math.max(printArea.scrollWidth, printArea.offsetWidth);
+      const contentHeight = Math.max(printArea.scrollHeight, printArea.offsetHeight);
+      const scale = Math.min(1, printableWidth / contentWidth, printableHeight / contentHeight);
+
+      root.style.setProperty("--sales-note-print-scale", String(scale));
+    };
+
+    body.classList.add("printing-sales-note");
+    preparePrintScale();
     const cleanup = () => {
-      document.body.classList.remove("printing-sales-note");
+      body.classList.remove("printing-sales-note");
+      root.style.removeProperty("--sales-note-print-scale");
+      window.removeEventListener("beforeprint", preparePrintScale);
       window.removeEventListener("afterprint", cleanup);
     };
+    window.addEventListener("beforeprint", preparePrintScale);
     window.addEventListener("afterprint", cleanup);
     window.print();
-    window.setTimeout(cleanup, 1000);
+    window.setTimeout(cleanup, 60_000);
   }
 
   if (!orderId && state.status === "success") {
-    return <OrderSuccessScreen message={state.message} orderId={state.orderId} />;
+    return <OrderSuccessScreen message={state.message} orderId={state.orderId} isQuote={state.documentType === "quote"} />;
+  }
+
+  if (!orderId && isLeatherHouse) {
+    return (
+      <form key="leather-house-intake" action={formAction} onSubmit={submit} className="space-y-4">
+        <input type="hidden" name="productItems" value={JSON.stringify(products.slice(0, 1))} readOnly />
+        <input type="hidden" {...register("documentType")} value="production_intake" />
+        <input type="hidden" {...register("documentStatus")} value="issued" />
+        <input type="hidden" {...register("salesNoteNumber")} />
+        <input type="hidden" {...register("groupCode")} />
+        <input type="hidden" {...register("products.0.material")} value="Por definir" />
+        <input type="hidden" {...register("products.0.quantity")} value={1} />
+
+        <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-stone-200 bg-stone-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="grid size-10 place-items-center rounded-md border border-stone-200 bg-white">
+                <Factory className="size-5 text-stone-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-stone-950">Ingreso de producto Leather House</h2>
+                <p className="mt-0.5 text-sm text-stone-500">Ingreso directo a producción; no genera una nota de venta.</p>
+              </div>
+            </div>
+            <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
+              Tienda
+              <select {...register("store")} className="control min-w-56 bg-white text-sm normal-case tracking-normal">
+                <option value="LH">Leather House - producción</option>
+                <option value="LR">La Reina - documento comercial</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="grid gap-5 p-5 sm:grid-cols-2">
+            <Field label="Nombre cliente" error={typedErrors.clientName?.message} full>
+              <input {...register("clientName")} className={inputClass} placeholder="Nombre del cliente" autoFocus />
+            </Field>
+            <Field label="Producto" error={typedErrors.products?.[0]?.productName?.message}>
+              <input {...register("products.0.productName")} className={inputClass} placeholder="Producto o modelo" />
+            </Field>
+            <Field label="Color" error={typedErrors.products?.[0]?.color?.message}>
+              <input {...register("products.0.color")} className={inputClass} placeholder="Color" />
+            </Field>
+            <Field label="Fecha de ingreso" error={typedErrors.entryDate?.message}>
+              <input {...register("entryDate")} type="date" className={inputClass} />
+            </Field>
+            <Field label="Fecha de entrega" error={typedErrors.deliveryDate?.message}>
+              <input {...register("deliveryDate")} type="date" className={inputClass} />
+            </Field>
+          </div>
+        </section>
+
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+          <Link href="/admin" className="btn-lg btn-secondary">
+            <ArrowLeft className="size-4" />
+            Volver
+          </Link>
+          <button type="submit" disabled={pending} className="btn-lg btn-primary">
+            <Save className="size-4" />
+            {pending ? "Guardando..." : "Ingresar a producción"}
+          </button>
+        </div>
+        {showValidationSummary ? (
+          <div aria-live="polite" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950">
+            <p className="text-sm font-semibold">Faltan datos obligatorios</p>
+            <p className="mt-1 text-sm">Completa los cinco campos para ingresar el producto.</p>
+          </div>
+        ) : null}
+        {state.message ? (
+          <div aria-live="polite" className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-950">
+            <XCircle className="mt-0.5 size-5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold">No se pudo guardar</p>
+              <p className="mt-1 text-sm">{state.message}</p>
+            </div>
+          </div>
+        ) : null}
+      </form>
+    );
   }
 
   if (!orderId) {
     return (
-      <form action={formAction} onSubmit={submit} className="space-y-4">
+      <form key="la-reina-document" action={formAction} onSubmit={submit} className="space-y-4">
         <input type="hidden" name="productItems" value={JSON.stringify(products)} readOnly />
         <input type="hidden" {...register("subtotal")} value={computedSubtotal} readOnly />
         <input type="hidden" {...register("discount")} value={computedDiscount} readOnly />
@@ -239,13 +343,7 @@ export function OrderForm({
                 ) : (
                   <input type="hidden" {...register("documentType")} value="production_intake" />
                 )}
-                <select {...register("documentStatus")} className="control bg-white">
-                  <option value="draft">Borrador</option>
-                  <option value="issued">Emitido</option>
-                  <option value="approved">Aprobado</option>
-                  <option value="closed">Cerrado</option>
-                  <option value="cancelled">Anulado</option>
-                </select>
+                <input type="hidden" {...register("documentStatus")} value="issued" />
               </div>
             </div>
           </div>
@@ -312,7 +410,7 @@ export function OrderForm({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse">
+            <table className="sales-note-products-table w-full min-w-[860px] border-collapse">
               <thead>
                 <tr className="border-b border-stone-200 bg-stone-50">
                   <th className="w-14 px-4 py-2 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Cant.</th>
@@ -929,7 +1027,7 @@ export function OrderForm({
   );
 }
 
-function OrderSuccessScreen({ message, orderId }: { message: string; orderId?: string }) {
+function OrderSuccessScreen({ message, orderId, isQuote }: { message: string; orderId?: string; isQuote: boolean }) {
   return (
     <section className="panel overflow-hidden">
       <div className="border-b border-emerald-200 bg-emerald-50 px-5 py-6">
@@ -938,17 +1036,19 @@ function OrderSuccessScreen({ message, orderId }: { message: string; orderId?: s
             <CheckCircle2 className="size-6" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Orden emitida</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-stone-950">La orden fue emitida correctamente</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{isQuote ? "Cotización guardada" : "Orden emitida"}</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-stone-950">
+              {isQuote ? "La cotización quedó en Comercial" : "La orden fue emitida correctamente"}
+            </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">{message}</p>
           </div>
         </div>
       </div>
       <div className="grid gap-3 p-5 sm:grid-cols-3">
         {orderId ? (
-          <Link href={`/admin/orders/${orderId}`} className="btn-lg btn-primary sm:col-span-1">
+          <Link href={isQuote ? "/admin/documents" : `/admin/orders/${orderId}`} className="btn-lg btn-primary sm:col-span-1">
             <FileText className="size-4" />
-            Ver orden
+            {isQuote ? "Ver cotizaciones" : "Ver orden"}
           </Link>
         ) : null}
         <button type="button" onClick={() => window.location.assign("/admin/orders/new")} className="btn-lg btn-secondary">

@@ -6,7 +6,8 @@ import { requireSession } from "@/lib/auth";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
 import { createLocalOrder, nextLocalOrderCode, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
-import { getOrder, listUsers } from "@/lib/repositories/production";
+import { canProductionStepsRunTogether, isProductionOrder, productionStepPrerequisitesMet, productionStepsResetByReversal } from "@/lib/orders";
+import { getOrderProductionState, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -117,7 +118,7 @@ export async function createWorkshopOrder(
       product_name: input.productName,
       material: input.material,
       color: input.color,
-      status: "in_production",
+      status: "scheduled",
       condition: "none",
       priority: input.priority,
       is_warranty: input.isWarranty,
@@ -139,10 +140,10 @@ export async function createWorkshopOrder(
       step: step.key,
       step_label: step.label,
       sort_order: index + 1,
-      status: index === 0 ? "active" : "pending",
-      started_at: index === 0 ? new Date().toISOString() : null,
-      notes: index === 0 ? `Ingresado por ${user.name}` : null,
-      assigned_to: index === 0 ? profileId : operatorByArea.get(step.key) ?? profileId,
+      status: "pending",
+      started_at: null,
+      notes: null,
+      assigned_to: operatorByArea.get(step.key) ?? profileId,
     })),
   );
   if (stepsError) {
@@ -179,30 +180,32 @@ export async function updateProductionStep(
     };
   }
 
-  const currentOrder = await getOrder(parsed.data.orderId);
+  const [currentOrder, settings] = await Promise.all([
+    getOrderProductionState(parsed.data.orderId),
+    getSystemSettings(),
+  ]);
   const currentStep = currentOrder?.steps.find((step) => step.key === parsed.data.stepKey);
   if (!currentOrder || !currentStep) return { status: "error", message: "No se encontró la etapa seleccionada." };
+  if (!isProductionOrder(currentOrder)) return { status: "error", message: "Las cotizaciones no pertenecen al flujo de producción." };
   if (!isAllowedTransition(currentStep.status, parsed.data.status)) {
     return { status: "error", message: "La etapa cambió de estado. Actualiza la vista e intenta nuevamente." };
   }
 
   const currentStepIndex = currentOrder.steps.findIndex((step) => step.key === parsed.data.stepKey);
-  const previousSteps = currentOrder.steps.slice(0, currentStepIndex);
-  const laterSteps = currentOrder.steps.slice(currentStepIndex + 1);
+  const laterStepsToReset = productionStepsResetByReversal(currentOrder.steps, currentStepIndex);
   const isReversal = isReverseTransition(currentStep.status, parsed.data.status);
 
   if (currentStep.status === "done" && parsed.data.status === "pending" && isFinalDeliveryStep(currentOrder.steps, currentStepIndex)) {
     return { status: "error", message: "La entrega final no se puede reabrir como una etapa de producción." };
   }
 
-  const settings = await getSystemSettings();
   const enteringPendingStep =
     currentStep.status === "pending" &&
     (parsed.data.status === "active" || parsed.data.status === "blocked");
   if (
     !settings.production.allowParallelSteps &&
     enteringPendingStep &&
-    previousSteps.some((step) => step.status !== "done")
+    !productionStepPrerequisitesMet(currentOrder.steps, currentStepIndex)
   ) {
     return { status: "error", message: "Termina las etapas anteriores antes de operar esta etapa." };
   }
@@ -210,7 +213,11 @@ export async function updateProductionStep(
     !settings.production.allowParallelSteps &&
     parsed.data.status === "active" &&
     !isReversal &&
-    currentOrder.steps.some((step) => step.key !== currentStep.key && step.status === "active")
+    currentOrder.steps.some((step) => (
+      step.key !== currentStep.key &&
+      step.status === "active" &&
+      !canProductionStepsRunTogether(currentStep.key, step.key)
+    ))
   ) {
     return { status: "error", message: "Ya existe otra etapa activa en esta orden." };
   }
@@ -227,7 +234,7 @@ export async function updateProductionStep(
     const allowed = isOperatorTransitionAllowed(currentStep.status, parsed.data.status, permissions);
     if (!allowed) return { status: "error", message: "Esta acción está deshabilitada para operarios." };
     if (!canWorkerUseStep(user, currentStep)) return { status: "error", message: "No puedes operar esta etapa." };
-    if (isReversal && laterSteps.some(hasRecordedWork)) {
+    if (isReversal && laterStepsToReset.some(hasRecordedWork)) {
       return {
         status: "error",
         message: "Una etapa posterior ya tiene actividad. Pide a un administrador que haga la corrección.",
@@ -259,24 +266,18 @@ export async function updateProductionStep(
 
   const supabase = await createClient();
   const now = new Date().toISOString();
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("user_id", auth.user?.id ?? "")
-    .maybeSingle();
-  if (!profile) return { status: "error", message: "No se pudo identificar tu perfil." };
   if (user.role === "operator" && !hasSupabaseAdminConfig()) {
     return { status: "error", message: "Falta configurar el servicio seguro para actualizar el estado de la orden." };
   }
   const mutationClient = user.role === "operator" ? getSupabaseAdmin() : supabase;
+  const profileId = user.id;
 
   const patch = stepPatch({
     currentStep,
     nextStatus: parsed.data.status,
     reason: parsed.data.reason,
     now,
-    profileId: profile.id,
+    profileId,
   });
 
   const updateQuery = mutationClient
@@ -287,14 +288,14 @@ export async function updateProductionStep(
 
   const { data: updated, error } = await updateQuery.select("id");
 
-  if (error || !updated?.length) {
+  if (error || updated?.length !== 1) {
     return {
       status: "error",
-      message: error?.message ?? "La etapa no pudo actualizarse con los permisos actuales.",
+      message: error?.message ?? "La actualización no afectó exactamente al proceso seleccionado.",
     };
   }
 
-  if (isReversal && laterSteps.some(hasRecordedWork)) {
+  if (isReversal && laterStepsToReset.some(hasRecordedWork)) {
     const { error: downstreamError } = await mutationClient
       .from("production_steps")
       .update({
@@ -302,10 +303,10 @@ export async function updateProductionStep(
         started_at: null,
         completed_at: null,
         blocked_reason: null,
-        updated_by: profile.id,
+        updated_by: profileId,
       })
       .eq("order_id", parsed.data.orderId)
-      .in("step", laterSteps.map((step) => step.key));
+      .in("step", laterStepsToReset.map((step) => step.key));
     if (downstreamError) {
       return {
         status: "error",
@@ -314,9 +315,9 @@ export async function updateProductionStep(
     }
   }
 
-  const effectiveSteps = currentOrder.steps.map((step, index) => {
+  const effectiveSteps = currentOrder.steps.map((step) => {
     if (step.key === parsed.data.stepKey) return { ...step, status: parsed.data.status };
-    if (isReversal && index > currentStepIndex) {
+    if (isReversal && laterStepsToReset.some((laterStep) => laterStep.key === step.key)) {
       return { ...step, status: "pending" as const, startedAt: undefined, completedAt: undefined };
     }
     return step;
@@ -325,16 +326,30 @@ export async function updateProductionStep(
     currentOrder.priority,
     effectiveSteps,
   );
-  const { error: orderStatusError } = await mutationClient
-    .from("orders")
-    .update({
-      status: nextOrderStatus,
-      condition: nextOrderStatus === "quality_control"
-          ? "quality_control"
-          : "none",
-      completed_at: null,
-    })
-    .eq("id", parsed.data.orderId);
+  const [orderStatusResult, auditResult] = await Promise.all([
+    mutationClient
+      .from("orders")
+      .update({
+        status: nextOrderStatus,
+        condition: nextOrderStatus === "quality_control"
+            ? "quality_control"
+            : "none",
+        completed_at: null,
+      })
+      .eq("id", parsed.data.orderId),
+    mutationClient.from("audit_logs").insert({
+      order_id: parsed.data.orderId,
+      action: isReversal ? "revert_step" : "update_step",
+      entity: "production_steps",
+      profile_id: profileId,
+      field_name: "status",
+      old_value: currentStep.status,
+      new_value: parsed.data.reason
+        ? `${parsed.data.status}: ${parsed.data.reason}`
+        : parsed.data.status,
+    }),
+  ]);
+  const { error: orderStatusError } = orderStatusResult;
   if (orderStatusError) {
     return {
       status: "error",
@@ -342,17 +357,7 @@ export async function updateProductionStep(
     };
   }
 
-  const { error: auditError } = await mutationClient.from("audit_logs").insert({
-    order_id: parsed.data.orderId,
-    action: isReversal ? "revert_step" : "update_step",
-    entity: "production_steps",
-    profile_id: profile.id,
-    field_name: "status",
-    old_value: currentStep.status,
-    new_value: parsed.data.reason
-      ? `${parsed.data.status}: ${parsed.data.reason}`
-      : parsed.data.status,
-  });
+  const { error: auditError } = auditResult;
   if (auditError) return { status: "error", message: `La etapa cambió, pero no se pudo registrar la auditoría: ${auditError.message}` };
 
   revalidatePath("/admin");
@@ -397,12 +402,12 @@ function isOperatorTransitionAllowed(
   return false;
 }
 
-function hasRecordedWork(step: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"][number]) {
+function hasRecordedWork(step: NonNullable<Awaited<ReturnType<typeof getOrderProductionState>>>["steps"][number]) {
   return step.status !== "pending" || Boolean(step.startedAt || step.completedAt);
 }
 
 function isFinalDeliveryStep(
-  steps: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"],
+  steps: NonNullable<Awaited<ReturnType<typeof getOrderProductionState>>>["steps"],
   stepIndex: number,
 ) {
   const step = steps[stepIndex];
@@ -416,7 +421,7 @@ function stepPatch({
   now,
   profileId,
 }: {
-  currentStep: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"][number];
+  currentStep: NonNullable<Awaited<ReturnType<typeof getOrderProductionState>>>["steps"][number];
   nextStatus: UpdateStepInput["status"];
   reason?: string;
   now: string;
@@ -438,10 +443,11 @@ function stepPatch({
 }
 
 function orderStatusAfterStepChange(
-  priority: NonNullable<Awaited<ReturnType<typeof getOrder>>>["priority"],
-  steps: NonNullable<Awaited<ReturnType<typeof getOrder>>>["steps"],
+  priority: NonNullable<Awaited<ReturnType<typeof getOrderProductionState>>>["priority"],
+  steps: NonNullable<Awaited<ReturnType<typeof getOrderProductionState>>>["steps"],
 ) {
   if (steps.some((step) => step.status === "blocked")) return "blocked" as const;
+  if (steps.every((step) => step.status === "pending")) return "scheduled" as const;
   if (steps.every((step) => step.status === "done")) {
     return "quality_control" as const;
   }

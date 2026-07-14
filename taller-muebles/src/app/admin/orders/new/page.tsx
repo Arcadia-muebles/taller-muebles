@@ -19,11 +19,9 @@ export default async function NewOrderPage() {
   return (
     <AppShell active="admin" user={user}>
       <header className="border-b border-stone-200 pb-5">
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-950">
-          Crear documento La Reina
-        </h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-950">Agregar producto</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-          Documento comercial que alimenta producción. Leather House queda como ingreso simple de fabricación.
+          En Leather House se registra sólo la información necesaria para producción. En La Reina se crea el documento comercial.
         </p>
       </header>
 

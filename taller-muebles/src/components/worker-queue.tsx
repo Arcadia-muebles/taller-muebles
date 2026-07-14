@@ -53,9 +53,10 @@ type WorkerQueueProps = {
 };
 
 type WorkFilter = "all" | "pending" | "active" | "done" | "blocked";
+type OptimisticStepStatus = { status: StepStatus; previousStatus: StepStatus };
 
 export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: WorkerQueueProps) {
-  const [overrides, setOverrides] = useState<Record<string, StepStatus>>({});
+  const [overrides, setOverrides] = useState<Record<string, OptimisticStepStatus>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [pendingTarget, setPendingTarget] = useState<{ orderId: string; status: StepStatus } | null>(null);
@@ -71,7 +72,8 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
       orders.map((order) => ({
         ...order,
         steps: order.steps.map((step) => {
-          const status = overrides[`${order.id}:${step.key}`] ?? step.status;
+          const override = overrides[`${order.id}:${step.key}`];
+          const status = override && step.status === override.previousStatus ? override.status : step.status;
           return {
             ...step,
             status,
@@ -104,28 +106,40 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
       setFeedback({ tone: "error", text: `${order.code}: escribe un motivo de bloqueo de al menos 5 caracteres.` });
       return;
     }
+    const statusKey = `${order.id}:${step.key}`;
+    const previousOverride = overrides[statusKey];
+    const persistedStatus = orders
+      .find((sourceOrder) => sourceOrder.id === order.id)
+      ?.steps.find((sourceStep) => sourceStep.key === step.key)
+      ?.status ?? step.status;
+    setOverrides((current) => ({
+      ...current,
+      [statusKey]: { status, previousStatus: persistedStatus },
+    }));
     setPendingTarget({ orderId: order.id, status });
     startTransition(async () => {
-      const result = await updateProductionStep({
-        orderId: order.id,
-        stepKey: step.key,
-        status,
-        reason: comment || undefined,
-      });
+      try {
+        const result = await updateProductionStep({
+          orderId: order.id,
+          stepKey: step.key,
+          status,
+          reason: comment || undefined,
+        });
 
-      if (result.status === "success") {
-        setOverrides((current) => ({
-          ...current,
-          [`${order.id}:${step.key}`]: status,
-        }));
-        setComments((current) => ({ ...current, [order.id]: "" }));
-        setFeedback({ tone: "success", text: `${order.code}: ${step.label} actualizado.` });
+        if (result.status === "success") {
+          setComments((current) => ({ ...current, [order.id]: "" }));
+          setFeedback({ tone: "success", text: `${order.code}: ${step.label} actualizado.` });
+          return;
+        }
+
+        setOverrides((current) => restoreStepOverride(current, statusKey, previousOverride));
+        setFeedback({ tone: "error", text: `${order.code}: ${result.message}` });
+      } catch {
+        setOverrides((current) => restoreStepOverride(current, statusKey, previousOverride));
+        setFeedback({ tone: "error", text: `${order.code}: no fue posible guardar el proceso.` });
+      } finally {
         setPendingTarget(null);
-        return;
       }
-
-      setFeedback({ tone: "error", text: `${order.code}: ${result.message}` });
-      setPendingTarget(null);
     });
   }
 
@@ -275,6 +289,17 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
       </div>
     </section>
   );
+}
+
+function restoreStepOverride(
+  current: Record<string, OptimisticStepStatus>,
+  statusKey: string,
+  previousOverride?: OptimisticStepStatus,
+) {
+  const next = { ...current };
+  if (previousOverride) next[statusKey] = previousOverride;
+  else delete next[statusKey];
+  return next;
 }
 
 function WorkCard({

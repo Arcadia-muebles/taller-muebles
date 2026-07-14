@@ -38,9 +38,7 @@ export default async function DocumentsPage() {
         <div>
           <p className="page-kicker">Comercial</p>
           <h1 className="page-title">Documentos comerciales</h1>
-          <p className="page-description">
-            Notas de venta, cotizaciones, órdenes de compra y garantías vinculadas a producción.
-          </p>
+          <p className="page-description">Notas de venta, cotizaciones, órdenes de compra y garantías del área comercial.</p>
         </div>
         {canEditOrders ? (
           <Link href="/admin/orders/new" className="btn btn-primary">
@@ -53,8 +51,9 @@ export default async function DocumentsPage() {
       <section className="mt-5 grid gap-4">
         {documentOrder.map((type) => {
           const rows = documents.filter((document) => document.type === type);
+          const isQuote = type === "quote";
           return (
-            <details key={type} className="panel group/document overflow-hidden">
+            <details key={type} open={isQuote} className="panel group/document overflow-hidden">
               <summary className="panel-header flex cursor-pointer list-none items-center justify-between gap-3 transition hover:bg-stone-50 [&::-webkit-details-marker]:hidden">
                 <div className="flex items-center gap-3">
                   <FileText className="size-5 text-stone-500" />
@@ -106,7 +105,7 @@ export default async function DocumentsPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Total</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Abono</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Saldo</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producción</th>
+                      {!isQuote ? <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producción</th> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -129,13 +128,13 @@ export default async function DocumentsPage() {
                         <ClickableCell href={documentHref} className="text-sm font-semibold text-stone-900">{formatCurrency(document.total)}</ClickableCell>
                         <ClickableCell href={documentHref} className="text-sm text-stone-600">{formatCurrency(document.paidAmount)}</ClickableCell>
                         <ClickableCell href={documentHref} className="text-sm font-semibold text-stone-900">{formatCurrency(document.balance)}</ClickableCell>
-                        <ClickableCell href={documentHref} className="text-sm text-stone-600">{document.orders[0].status}</ClickableCell>
+                        {!isQuote ? <ClickableCell href={documentHref} className="text-sm text-stone-600">{document.orders[0].status}</ClickableCell> : null}
                       </tr>
                       );
                     })}
                     {!rows.length ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center text-sm text-stone-500">
+                        <td colSpan={isQuote ? 7 : 8} className="px-4 py-8 text-center text-sm text-stone-500">
                           No hay documentos de esta categoria.
                         </td>
                       </tr>

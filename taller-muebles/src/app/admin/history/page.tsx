@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { OrderTable } from "@/components/order-table";
 import { requireSession } from "@/lib/auth";
 import { listOrders } from "@/lib/repositories/production";
+import { isProductionOrder } from "@/lib/orders";
 
 type HistoryPageProps = {
   searchParams: Promise<{
@@ -15,7 +16,7 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const filters = await searchParams;
   const orders = await listOrders();
-  const allHistorical = orders.filter((order) => ["completed", "cancelled"].includes(order.status));
+  const allHistorical = orders.filter((order) => isProductionOrder(order) && ["completed", "cancelled"].includes(order.status));
   const historical = filterHistoricalOrders(allHistorical, filters);
   const completed = historical.filter((order) => order.status === "completed").length;
   const cancelled = historical.filter((order) => order.status === "cancelled").length;

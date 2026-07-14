@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { isReadyForDelivery } from "@/lib/metrics";
+import { isProductionOrder, productionOrderGroup } from "@/lib/orders";
 import { cancelLocalAgendaItem, completeLocalAgendaItem, createLocalAgendaTask, listLocalAgendaItems, scheduleLocalExternalOrderDelivery, scheduleLocalOrderDelivery, updateLocalAgendaItem } from "@/lib/local-store";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -53,8 +54,12 @@ export async function scheduleOrderDelivery(formData: FormData) {
 
   const scheduledDate = parsed.data.scheduledDate ?? todayLocalDate();
   const timeSlot = parsed.data.timeSlot ?? currentTimeSlot();
-  const order = (await listOrders()).find((item) => item.id === parsed.data.orderId);
-  if (!order || !isReadyForDelivery(order)) return;
+  const orders = await listOrders();
+  const order = orders.find((item) => item.id === parsed.data.orderId);
+  if (!order || !isProductionOrder(order)) return;
+  const groupOrders = productionOrderGroup(orders, order);
+  if (!groupOrders.length || !groupOrders.every(isReadyForDelivery)) return;
+  const groupOrderIds = groupOrders.map((item) => item.id);
 
   if (!hasSupabaseConfig()) {
     await scheduleLocalOrderDelivery({
@@ -67,8 +72,8 @@ export async function scheduleOrderDelivery(formData: FormData) {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
     if (!profileId) {
-      await scheduleWithLocalFallback(order, scheduledDate, timeSlot, parsed.data.notes);
-      revalidateAgendaPaths(order.id);
+      await scheduleWithLocalFallback(order, groupOrders, scheduledDate, timeSlot, parsed.data.notes);
+      revalidateAgendaPaths(groupOrderIds);
       redirect(`/admin/agenda?date=${scheduledDate}&scheduled=local`);
     }
     const times = timeSlotTimes(timeSlot);
@@ -76,14 +81,15 @@ export async function scheduleOrderDelivery(formData: FormData) {
       .from("agenda_items")
       .select("id")
       .eq("kind", "delivery")
-      .eq("order_id", order.id)
+      .in("order_id", groupOrderIds)
       .eq("status", "pending")
+      .limit(1)
       .maybeSingle();
 
     if (lookupError) {
       console.error("Agenda lookup failed, using local fallback:", lookupError.message);
-      await scheduleWithLocalFallback(order, scheduledDate, timeSlot, parsed.data.notes);
-      revalidateAgendaPaths(order.id);
+      await scheduleWithLocalFallback(order, groupOrders, scheduledDate, timeSlot, parsed.data.notes);
+      revalidateAgendaPaths(groupOrderIds);
       redirect(`/admin/agenda?date=${scheduledDate}&scheduled=local`);
     }
 
@@ -91,6 +97,7 @@ export async function scheduleOrderDelivery(formData: FormData) {
       const { error } = await supabase
         .from("agenda_items")
         .update({
+          title: `Entrega ${order.groupCode || order.code}${groupOrders.length > 1 ? ` · ${groupOrders.length} productos` : ""}`,
           scheduled_date: scheduledDate,
           time_slot: timeSlot,
           start_time: times.startTime,
@@ -100,15 +107,15 @@ export async function scheduleOrderDelivery(formData: FormData) {
         .eq("id", existing.id);
       if (error) {
         console.error("Agenda update failed, using local fallback:", error.message);
-        await scheduleWithLocalFallback(order, scheduledDate, timeSlot, parsed.data.notes);
-        revalidateAgendaPaths(order.id);
+        await scheduleWithLocalFallback(order, groupOrders, scheduledDate, timeSlot, parsed.data.notes);
+        revalidateAgendaPaths(groupOrderIds);
         redirect(`/admin/agenda?date=${scheduledDate}&scheduled=local`);
       }
     } else {
       const { error } = await supabase.from("agenda_items").insert({
         kind: "delivery",
         order_id: order.id,
-        title: `Entrega ${order.code}`,
+        title: `Entrega ${order.groupCode || order.code}${groupOrders.length > 1 ? ` · ${groupOrders.length} productos` : ""}`,
         notes: parsed.data.notes || null,
         scheduled_date: scheduledDate,
         time_slot: timeSlot,
@@ -118,38 +125,40 @@ export async function scheduleOrderDelivery(formData: FormData) {
       });
       if (error) {
         console.error("Agenda insert failed, using local fallback:", error.message);
-        await scheduleWithLocalFallback(order, scheduledDate, timeSlot, parsed.data.notes);
-        revalidateAgendaPaths(order.id);
+        await scheduleWithLocalFallback(order, groupOrders, scheduledDate, timeSlot, parsed.data.notes);
+        revalidateAgendaPaths(groupOrderIds);
         redirect(`/admin/agenda?date=${scheduledDate}&scheduled=local`);
       }
     }
-    const { error: auditError } = await supabase.from("audit_logs").insert({
-      order_id: order.id,
+    const { error: auditError } = await supabase.from("audit_logs").insert(groupOrders.map((groupOrder) => ({
+      order_id: groupOrder.id,
       action: "schedule_delivery",
       entity: "agenda_items",
       entity_id: existing?.id ?? order.id,
       profile_id: profileId,
       field_name: "scheduled_date",
       new_value: `${scheduledDate} ${timeSlot}`,
-    });
+    })));
     if (auditError) console.error("Agenda audit insert failed:", auditError.message);
   }
 
-  revalidateAgendaPaths(order.id);
+  revalidateAgendaPaths(groupOrderIds);
   redirect(`/admin/agenda?date=${scheduledDate}`);
 }
 
 async function scheduleWithLocalFallback(
   order: Awaited<ReturnType<typeof listOrders>>[number],
+  groupOrders: Awaited<ReturnType<typeof listOrders>>,
   scheduledDate: string,
   timeSlot: AgendaTimeSlot,
   notes?: string,
 ) {
   await scheduleLocalExternalOrderDelivery({
     orderId: order.id,
-    orderCode: order.code,
+    orderIds: groupOrders.map((item) => item.id),
+    orderCode: order.groupCode || order.code,
     client: order.client,
-    product: order.product,
+    product: groupOrders.length > 1 ? `${groupOrders.length} productos` : order.product,
     scheduledDate,
     timeSlot,
     notes,
@@ -335,23 +344,28 @@ async function closeSupabaseOrderFromAgenda({
   profileId: string;
   completedAt: string;
 }) {
+  const orders = await listOrders();
+  const seed = orders.find((order) => order.id === orderId);
+  const groupOrders = seed ? productionOrderGroup(orders, seed) : [];
+  const groupOrderIds = groupOrders.length ? groupOrders.map((order) => order.id) : [orderId];
+
   await supabase
     .from("orders")
     .update({ status: "completed", condition: "delivered", completed_at: completedAt })
-    .eq("id", orderId);
+    .in("id", groupOrderIds);
   await supabase
     .from("production_steps")
     .update({ status: "done", completed_at: completedAt, updated_by: profileId })
-    .eq("order_id", orderId);
-  await supabase.from("audit_logs").insert({
-    order_id: orderId,
+    .in("order_id", groupOrderIds);
+  await supabase.from("audit_logs").insert(groupOrderIds.map((groupOrderId) => ({
+    order_id: groupOrderId,
     action: "close_order",
     entity: "agenda_items",
     entity_id: agendaItemId,
     profile_id: profileId,
     field_name: "status",
     new_value: "completed",
-  });
+  })));
 }
 
 export async function cancelAgendaItem(formData: FormData) {
@@ -393,13 +407,15 @@ async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createCli
   return profile?.id ?? null;
 }
 
-function revalidateAgendaPaths(orderId?: string) {
+function revalidateAgendaPaths(orderIds?: string | string[]) {
   revalidatePath("/admin");
   revalidatePath("/admin/agenda");
   revalidatePath("/admin/ready");
   revalidatePath("/admin/history");
   revalidatePath("/taller");
-  if (orderId) revalidatePath(`/admin/orders/${orderId}`);
+  for (const orderId of typeof orderIds === "string" ? [orderIds] : orderIds ?? []) {
+    revalidatePath(`/admin/orders/${orderId}`);
+  }
 }
 
 function todayLocalDate() {

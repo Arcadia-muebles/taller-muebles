@@ -529,7 +529,8 @@ function statusPresentation(order: Order): { label: string; tone: ProductionTone
   if (order.status === "cancelled") return { label: "Cancelada", tone: "stone", icon: Circle };
   if (order.status === "blocked" || order.steps.some((step) => step.status === "blocked")) return { label: "Bloqueada", tone: "rose", icon: CircleDashed };
   if (order.status === "quality_control") return { label: "Listo para entrega", tone: "green", icon: CheckCircle2 };
-  if (order.status === "draft" || order.status === "scheduled") return { label: "Sin iniciar", tone: "stone", icon: Clock3 };
+  if (order.status === "scheduled" || (order.steps.length > 0 && order.steps.every((step) => step.status === "pending"))) return { label: "Sin empezar", tone: "stone", icon: Clock3 };
+  if (order.status === "draft") return { label: "Sin iniciar", tone: "stone", icon: Clock3 };
 
   const step = currentProductionStep(order);
   if (!step) return { label: statusLabel(order.status), tone: order.status === "urgent" ? "amber" : "stone", icon: Clock3 };
@@ -589,7 +590,7 @@ function shortStepLabel(label: string) {
 function statusLabel(status: OrderStatus) {
   const labels: Record<OrderStatus, string> = {
     draft: "Borrador",
-    scheduled: "Programada",
+    scheduled: "Sin empezar",
     in_production: "En producción",
     blocked: "Bloqueada",
     urgent: "Urgente",

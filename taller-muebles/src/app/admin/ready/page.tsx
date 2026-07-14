@@ -5,6 +5,7 @@ import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { ScheduleDeliveryButton } from "@/components/schedule-delivery-button";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
+import { productionOrderGroup } from "@/lib/orders";
 import { listAgendaItems, listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { deliveryLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
@@ -57,7 +58,9 @@ export default async function ReadyForDeliveryPage() {
             <tbody>
               {ready.map((order) => {
                 const progress = 100;
-                const groupOrders = orders.filter((item) => item.status !== "cancelled" && item.groupCode === order.groupCode);
+                const groupOrders = productionOrderGroup(orders, order);
+                const productSummary = groupOrders.map((item) => item.product).join(" · ");
+                const colors = [...new Set(groupOrders.map((item) => item.color).filter(Boolean))];
                 return (
                   <tr key={order.id} className="group">
                     <BodyCell className="rounded-l-lg border-l">
@@ -73,11 +76,14 @@ export default async function ReadyForDeliveryPage() {
                       </Link>
                     </BodyCell>
                     <BodyCell>
-                      <p className="whitespace-normal break-words text-xs font-semibold uppercase leading-5 text-stone-950">{order.product}</p>
+                      <p className="whitespace-normal break-words text-xs font-semibold uppercase leading-5 text-stone-950">
+                        {groupOrders.length > 1 ? `${groupOrders.length} productos` : order.product}
+                      </p>
+                      {groupOrders.length > 1 ? <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-stone-600">{productSummary}</p> : null}
                       <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-[0.04em] text-stone-500">Pedido {order.groupCode}</p>
                     </BodyCell>
                     <BodyCell>
-                      <p className="truncate text-xs font-semibold text-stone-900">{order.color || "Sin color"}</p>
+                      <p className="truncate text-xs font-semibold text-stone-900">{colors.length > 1 ? "Varios" : colors[0] || "Sin color"}</p>
                     </BodyCell>
                     <BodyCell>
                       <p className="inline-flex items-center gap-1 text-xs font-semibold text-stone-900">
@@ -96,7 +102,7 @@ export default async function ReadyForDeliveryPage() {
                       <div className="flex flex-col gap-2">
                         <OrderLabelPrintButton order={order} groupOrders={groupOrders} className="h-9 w-full justify-center px-2 text-xs" />
                         {canSchedule ? (
-                          <ScheduleDeliveryButton orderId={order.id} defaultDate={order.deliveryDate} />
+                          <ScheduleDeliveryButton orderId={order.id} defaultDate={order.deliveryDate} itemCount={groupOrders.length} />
                         ) : (
                           <span className="text-xs font-medium text-stone-500">Solo lectura</span>
                         )}

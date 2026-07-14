@@ -5,6 +5,7 @@ import path from "node:path";
 import type { AgendaItem, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
 import { defaultSystemSettings } from "@/lib/system-settings";
 import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
+import { productionOrderGroup, productionStepsResetByReversal } from "@/lib/orders";
 
 type LocalData = {
   orders: Order[];
@@ -222,21 +223,22 @@ export async function createLocalOrder(input: {
 }) {
   const data = await readData();
   const id = crypto.randomUUID();
-  const enabledSteps = (input.steps?.length ? input.steps : stepDefinitions.map((step) => ({
+  const enabledSteps = input.documentType === "quote" ? [] : (input.steps?.length ? input.steps : stepDefinitions.map((step) => ({
     key: step.key,
     label: step.label,
     targetDays: 0,
     enabled: true,
     required: true,
   }))).filter((step) => step.enabled);
-  const steps: ProductionStep[] = enabledSteps.map((step, index) => ({
+  const steps: ProductionStep[] = enabledSteps.map((step) => ({
     key: step.key,
     label: step.label,
-    owner: input.assignedTo?.trim() || pickLocalStepOwner(data, step.key, "Sin responsable asignado"),
-    status: index === 0 ? "active" : "pending",
-    startedAt: index === 0 ? nowIso() : undefined,
+    owner: pickLocalStepOwner(data, step.key, input.assignedTo?.trim() || "Sin responsable asignado"),
+    status: "pending",
   }));
-  const assignedTo = input.assignedTo?.trim() || steps[0]?.owner || "Equipo Taller";
+  const assignedTo = input.documentType === "quote"
+    ? "Sin responsable asignado"
+    : input.assignedTo?.trim() || steps[0]?.owner || "Equipo Taller";
 
   const order: Order = {
     id,
@@ -272,7 +274,7 @@ export async function createLocalOrder(input: {
       note: payment.note?.trim() || undefined,
     })),
     deliveryTerms: input.deliveryTerms?.trim() || undefined,
-    status: "in_production",
+    status: input.documentType === "quote" ? "draft" : "scheduled",
     condition: "Sin condicion",
     priority: input.priority,
     isWarranty: input.isWarranty,
@@ -284,7 +286,12 @@ export async function createLocalOrder(input: {
   };
 
   data.orders.unshift(order);
-  addAudit(data, order.id, "create_order", `Orden ${order.code} creada`);
+  addAudit(
+    data,
+    order.id,
+    input.documentType === "quote" ? "create_quote" : "create_order",
+    input.documentType === "quote" ? `Cotización ${order.code} creada` : `Orden ${order.code} creada`,
+  );
   await writeData(data);
   return order;
 }
@@ -320,11 +327,14 @@ export async function updateLocalOrder(id: string, input: {
   assignedTo?: string;
   observations?: string;
   isWarranty: boolean;
+  steps?: SystemSettings["production"]["steps"];
 }) {
   const data = await readData();
   const order = data.orders.find((item) => item.id === id);
   if (!order) return false;
 
+  const wasQuote = order.documentType === "quote";
+  const isQuote = input.documentType === "quote";
   order.store = input.store;
   order.documentType = input.documentType ?? order.documentType ?? (input.store === "LH" ? "production_intake" : "sales_note");
   order.documentStatus = input.documentStatus ?? order.documentStatus ?? "issued";
@@ -353,9 +363,24 @@ export async function updateLocalOrder(id: string, input: {
   order.entryDate = input.entryDate;
   order.deliveryDate = input.deliveryDate;
   order.priority = input.priority;
-  order.assignedTo = input.assignedTo?.trim() || order.assignedTo;
+  order.assignedTo = isQuote ? "Sin responsable asignado" : input.assignedTo?.trim() || order.assignedTo;
   order.observations = input.observations?.trim() || "Sin observaciones.";
   order.isWarranty = input.isWarranty;
+  if (isQuote) {
+    order.status = "draft";
+  } else if (wasQuote) {
+    order.status = "scheduled";
+    if (!order.steps.length) {
+      const enabledSteps = (input.steps ?? []).filter((step) => step.enabled);
+      order.steps = enabledSteps.map((step) => ({
+        key: step.key,
+        label: step.label,
+        owner: pickLocalStepOwner(data, step.key, input.assignedTo?.trim() || "Sin responsable asignado"),
+        status: "pending",
+      }));
+      order.assignedTo = input.assignedTo?.trim() || order.steps[0]?.owner || "Equipo Taller";
+    }
+  }
   addAudit(data, order.id, "update_order", "Datos comerciales y planificación actualizados");
   await writeData(data);
   return true;
@@ -464,16 +489,20 @@ export async function scheduleLocalOrderDelivery(input: {
   const data = await readData();
   const order = data.orders.find((item) => item.id === input.orderId);
   if (!order) return false;
+  const groupOrders = productionOrderGroup(data.orders, order);
   scheduleDeliveryAgendaItem(data, {
     orderId: order.id,
+    orderIds: groupOrders.map((item) => item.id),
     orderCode: order.code,
     client: order.client,
-    product: order.product,
+    product: groupOrders.length > 1 ? `${groupOrders.length} productos` : order.product,
     scheduledDate: input.scheduledDate,
     timeSlot: input.timeSlot,
     notes: input.notes,
   });
-  addAudit(data, order.id, "schedule_delivery", `Entrega agendada para ${input.scheduledDate} ${input.timeSlot}`);
+  for (const groupOrder of groupOrders) {
+    addAudit(data, groupOrder.id, "schedule_delivery", `Entrega conjunta agendada para ${input.scheduledDate} ${input.timeSlot}`);
+  }
   await writeData(data);
   return true;
 }
@@ -493,13 +522,16 @@ export async function scheduleLocalExternalOrderDelivery(input: {
   orderCode: string;
   client: string;
   product: string;
+  orderIds?: string[];
   scheduledDate: string;
   timeSlot: AgendaTimeSlot;
   notes?: string;
 }) {
   const data = await readData();
   scheduleDeliveryAgendaItem(data, input);
-  addAudit(data, input.orderId, "schedule_delivery", `Entrega agendada para ${input.scheduledDate} ${input.timeSlot}`);
+  for (const orderId of input.orderIds?.length ? input.orderIds : [input.orderId]) {
+    addAudit(data, orderId, "schedule_delivery", `Entrega conjunta agendada para ${input.scheduledDate} ${input.timeSlot}`);
+  }
   await writeData(data);
   return true;
 }
@@ -508,6 +540,7 @@ function scheduleDeliveryAgendaItem(
   data: LocalData,
   input: {
     orderId: string;
+    orderIds?: string[];
     orderCode: string;
     client: string;
     product: string;
@@ -517,11 +550,13 @@ function scheduleDeliveryAgendaItem(
   },
 ) {
   const times = timeSlotTimes(input.timeSlot);
+  const groupedOrderIds = new Set(input.orderIds?.length ? input.orderIds : [input.orderId]);
   const existing = data.agendaItems.find(
-    (item) => item.kind === "delivery" && item.orderId === input.orderId && item.status === "pending",
+    (item) => item.kind === "delivery" && item.orderId && groupedOrderIds.has(item.orderId) && item.status === "pending",
   );
 
   if (existing) {
+    existing.title = `Entrega ${input.orderCode}${/^\d+ productos$/.test(input.product) ? ` · ${input.product}` : ""}`;
     existing.scheduledDate = input.scheduledDate;
     existing.timeSlot = input.timeSlot;
     existing.startTime = times.startTime;
@@ -533,7 +568,7 @@ function scheduleDeliveryAgendaItem(
       id: crypto.randomUUID(),
       kind: "delivery",
       orderId: input.orderId,
-      title: `Entrega ${input.orderCode}`,
+      title: `Entrega ${input.orderCode}${/^\d+ productos$/.test(input.product) ? ` · ${input.product}` : ""}`,
       notes: input.notes?.trim() || undefined,
       scheduledDate: input.scheduledDate,
       timeSlot: input.timeSlot,
@@ -601,17 +636,18 @@ export async function completeLocalAgendaItem(id: string) {
   item.status = "done";
   item.updatedAt = nowIso();
   if (item.kind === "delivery" && item.orderId) {
-    const order = data.orders.find((orderItem) => orderItem.id === item.orderId);
-    if (order) {
+    const seed = data.orders.find((orderItem) => orderItem.id === item.orderId);
+    const completedAt = nowIso();
+    for (const order of seed ? productionOrderGroup(data.orders, seed) : []) {
       order.status = "completed";
       order.condition = "Entregado";
-      order.completedAt = nowIso();
+      order.completedAt = completedAt;
       order.steps = order.steps.map((step) => ({
         ...step,
         status: "done",
-        completedAt: step.completedAt ?? nowIso(),
+        completedAt: step.completedAt ?? completedAt,
       }));
-      addAudit(data, order.id, "close_order", "Entrega cerrada desde agenda");
+      addAudit(data, order.id, "close_order", "Entrega conjunta cerrada desde agenda");
     }
   }
   await writeData(data);
@@ -669,7 +705,7 @@ export async function updateLocalProductionStep(input: {
 
   if (isReversal) {
     const currentIndex = order.steps.findIndex((item) => item.key === step.key);
-    for (const laterStep of order.steps.slice(currentIndex + 1)) {
+    for (const laterStep of productionStepsResetByReversal(order.steps, currentIndex)) {
       laterStep.status = "pending";
       laterStep.startedAt = undefined;
       laterStep.completedAt = undefined;
@@ -678,6 +714,9 @@ export async function updateLocalProductionStep(input: {
 
   if (order.steps.some((item) => item.status === "blocked")) {
     order.status = "blocked";
+  } else if (order.steps.every((item) => item.status === "pending")) {
+    order.status = "scheduled";
+    order.condition = "Sin condicion";
   } else if (order.steps.every((item) => item.status === "done")) {
     order.status = "quality_control";
     order.condition = "Control de calidad";

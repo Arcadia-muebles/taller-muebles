@@ -20,18 +20,32 @@ export function ProductionStepControls({
 }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const [statusOverride, setStatusOverride] = useState<{ status: StepStatus; previousStatus: StepStatus } | null>(null);
+  const displayedStatus = statusOverride && status === statusOverride.previousStatus
+    ? statusOverride.status
+    : status;
 
   function move(nextStatus: StepStatus) {
+    const previousOverride = statusOverride;
     setMessage(null);
+    setStatusOverride({ status: nextStatus, previousStatus: status });
     startTransition(async () => {
-      const result = await updateProductionStep({ orderId, stepKey, status: nextStatus });
-      setMessage(result.status === "error" ? result.message : null);
+      try {
+        const result = await updateProductionStep({ orderId, stepKey, status: nextStatus });
+        if (result.status === "error") {
+          setStatusOverride(previousOverride);
+          setMessage(result.message);
+        }
+      } catch {
+        setStatusOverride(previousOverride);
+        setMessage("No fue posible guardar el proceso. Intenta nuevamente.");
+      }
     });
   }
 
   return (
     <div className="flex max-w-md flex-wrap justify-end gap-2">
-      {(status === "pending" || status === "blocked") ? (
+      {(displayedStatus === "pending" || displayedStatus === "blocked") ? (
         <button
           type="button"
           disabled={pending || !canActivate}
@@ -43,7 +57,7 @@ export function ProductionStepControls({
           Empezar
         </button>
       ) : null}
-      {status === "active" ? (
+      {displayedStatus === "active" ? (
         <>
           <button type="button" disabled={pending} onClick={() => move("pending")} className="btn btn-secondary h-8 text-xs">
             <Undo2 className="size-3.5" />
@@ -55,13 +69,13 @@ export function ProductionStepControls({
           </button>
         </>
       ) : null}
-      {status === "done" && canReopen ? (
+      {displayedStatus === "done" && canReopen ? (
         <button type="button" disabled={pending} onClick={() => move("pending")} className="btn h-8 border border-amber-200 bg-amber-50 text-xs text-amber-800 hover:bg-amber-100">
           <RotateCcw className="size-3.5" />
           Reabrir etapa
         </button>
       ) : null}
-      {status === "blocked" ? (
+      {displayedStatus === "blocked" ? (
         <button type="button" disabled={pending} onClick={() => move("pending")} className="btn btn-secondary h-8 text-xs">
           <Undo2 className="size-3.5" />
           Quitar bloqueo

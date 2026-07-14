@@ -79,6 +79,12 @@ type OrderRecord = OrderRow & {
 type OrderPaymentRecord = { id: string; order_id: string; paid_at: string; amount: number | string; method: string; note: string | null };
 type PaymentQuery = { select: (columns: string) => { in: (column: string, values: string[]) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: OrderPaymentRecord[] | null; error: { message: string } | null }> } } };
 
+export type ProductionOrderState = Pick<Order, "id" | "documentType" | "priority" | "steps">;
+
+type ProductionStateRecord = Pick<OrderRow, "id" | "document_type" | "priority"> & {
+  production_steps: Array<Pick<StepRow, "step" | "step_label" | "status" | "notes" | "started_at" | "completed_at" | "sort_order">> | null;
+};
+
 const conditionLabels: Record<string, Order["condition"]> = {
   none: "Sin condicion",
   warehouse: "En bodega",
@@ -104,7 +110,10 @@ export async function listOrders(): Promise<Order[]> {
       production_steps (*, assigned_profile:profiles!production_steps_assigned_to_fkey (full_name))
     `,
     )
-    .order("delivery_date", { ascending: true });
+    .order("delivery_date", { ascending: true })
+    .order("internal_code", { ascending: true })
+    .order("product_name", { ascending: true })
+    .order("id", { ascending: true });
 
   if (error || !data) {
     console.error("Supabase orders query failed:", error?.message);
@@ -141,6 +150,54 @@ export async function getOrder(id: string): Promise<Order | undefined> {
 
   const order = mapOrderRecord(data as OrderRecord);
   return (await attachOrderPayments(supabase, [order]))[0];
+}
+
+export async function getOrderProductionState(id: string): Promise<ProductionOrderState | undefined> {
+  if (!hasSupabaseConfig()) {
+    const order = await getLocalOrder(id);
+    if (!order) return undefined;
+    return {
+      id: order.id,
+      documentType: order.documentType,
+      priority: order.priority,
+      steps: order.steps,
+    };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(`
+      id,
+      document_type,
+      priority,
+      production_steps (step, step_label, status, notes, started_at, completed_at, sort_order)
+    `)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) {
+    console.error("Supabase production state query failed:", error?.message);
+    return undefined;
+  }
+
+  const record = data as unknown as ProductionStateRecord;
+  return {
+    id: record.id,
+    documentType: record.document_type as CommercialDocumentType,
+    priority: record.priority as Order["priority"],
+    steps: (record.production_steps ?? [])
+      .sort((first, second) => first.sort_order - second.sort_order)
+      .map((step) => ({
+        key: step.step,
+        label: step.step_label,
+        owner: "",
+        status: step.status as StepStatus,
+        notes: step.notes ?? undefined,
+        startedAt: step.started_at ?? undefined,
+        completedAt: step.completed_at ?? undefined,
+      })),
+  };
 }
 
 async function attachOrderPayments(supabase: Awaited<ReturnType<typeof createClient>>, orders: Order[]) {

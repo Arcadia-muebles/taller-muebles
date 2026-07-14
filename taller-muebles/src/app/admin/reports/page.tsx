@@ -3,13 +3,15 @@ import { AppShell } from "@/components/app-shell";
 import { StatCard } from "@/components/stat-card";
 import { requireSession } from "@/lib/auth";
 import { productivityByArea } from "@/lib/metrics";
+import { isProductionOrder } from "@/lib/orders";
 import { listOrders, listUsers } from "@/lib/repositories/production";
 import { workshopHoursBetween } from "@/lib/utils";
 
 export default async function ReportsPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const [orders, users] = await Promise.all([listOrders(), listUsers()]);
-  const areas = productivityByArea(orders, users);
+  const productionOrders = orders.filter(isProductionOrder);
+  const areas = productivityByArea(productionOrders, users);
   const totals = areas.reduce(
     (summary, area) => ({
       assigned: summary.assigned + area.assigned,
@@ -20,7 +22,7 @@ export default async function ReportsPage() {
     }),
     { assigned: 0, completed: 0, active: 0, pending: 0, blocked: 0 },
   );
-  const cycleHours = orders.flatMap((order) => order.steps.flatMap((step) => {
+  const cycleHours = productionOrders.flatMap((order) => order.steps.flatMap((step) => {
     if (!step.startedAt || !step.completedAt) return [];
     const hours = workshopHoursBetween(step.startedAt, step.completedAt);
     return Number.isFinite(hours) ? [hours] : [];

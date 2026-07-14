@@ -25,6 +25,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
   if (!documentOrders.length) notFound();
 
   const document = documentOrders[0];
+  const isQuote = document.documentType === "quote";
   const financials = documentFinancials(document, documentOrders);
   const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
 
@@ -46,14 +47,16 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
             </span>
           </div>
           <p className="page-description">
-            Vista completa del registro comercial y de los productos que alimentan producción.
+            {isQuote ? "Vista completa de la cotización comercial." : "Vista completa del registro comercial y de los productos que alimentan producción."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/admin/orders/${document.id}`} className="btn btn-secondary">
-            <Wrench className="size-4" />
-            Ver producción
-          </Link>
+          {!isQuote ? (
+            <Link href={`/admin/orders/${document.id}`} className="btn btn-secondary">
+              <Wrench className="size-4" />
+              Ver producción
+            </Link>
+          ) : null}
           {canEditOrders ? (
             <Link href={`/admin/orders/${document.id}/edit`} className="btn btn-primary">
               <Pencil className="size-4" />
@@ -91,7 +94,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
               <Wrench className="size-5 text-stone-500" />
               <div>
                 <h2 className="panel-title">Productos</h2>
-                <p className="panel-description">Cada fila mantiene su propia orden productiva.</p>
+                <p className="panel-description">{isQuote ? "Productos incluidos en la cotización." : "Cada fila mantiene su propia orden productiva."}</p>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -104,25 +107,31 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Cant.</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Precio</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Subtotal</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producción</th>
+                    {!isQuote ? <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producción</th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {documentOrders.map((order) => (
                     <tr key={order.id} className="border-b border-stone-100 last:border-0 hover:bg-stone-50">
                       <td className="px-4 py-3 align-middle">
-                        <Link href={`/admin/orders/${order.id}`} className="text-sm font-semibold text-stone-950 underline-offset-4 hover:underline">
-                          {order.product}
-                        </Link>
+                        {isQuote ? (
+                          <span className="text-sm font-semibold text-stone-950">{order.product}</span>
+                        ) : (
+                          <Link href={`/admin/orders/${order.id}`} className="text-sm font-semibold text-stone-950 underline-offset-4 hover:underline">
+                            {order.product}
+                          </Link>
+                        )}
                       </td>
                       <td className="px-4 py-3 align-middle text-sm text-stone-600">{order.material}</td>
                       <td className="px-4 py-3 align-middle text-sm text-stone-600">{order.color}</td>
                       <td className="px-4 py-3 align-middle text-sm text-stone-600">{formatQuantity(order.quantity)}</td>
                       <td className="px-4 py-3 align-middle text-sm text-stone-600">{formatCurrency(order.unitPrice)}</td>
                       <td className="px-4 py-3 align-middle text-sm font-semibold text-stone-900">{formatCurrency(lineTotal(order))}</td>
-                      <td className="px-4 py-3 align-middle">
-                        <StatusBadge type="order" value={order.status} />
-                      </td>
+                      {!isQuote ? (
+                        <td className="px-4 py-3 align-middle">
+                          <StatusBadge type="order" value={order.status} />
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>

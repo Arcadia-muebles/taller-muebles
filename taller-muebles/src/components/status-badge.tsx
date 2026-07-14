@@ -12,7 +12,7 @@ const orderConfig: Record<
     icon: Circle,
   },
   scheduled: {
-    label: "Programada",
+    label: "Sin empezar",
     className: "border-stone-200 bg-white text-stone-600",
     icon: Clock,
   },

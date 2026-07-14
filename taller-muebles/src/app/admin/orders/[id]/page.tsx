@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
@@ -18,6 +18,7 @@ import { StepCommentButton } from "@/components/step-comment-button";
 import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
+import { productionStepPrerequisitesMet } from "@/lib/orders";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getOrder, listOrderAttachments, listOrderAudit, listOrders } from "@/lib/repositories/production";
 import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel } from "@/lib/utils";
@@ -39,6 +40,9 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 
   if (!order) {
     notFound();
+  }
+  if (order.documentType === "quote") {
+    redirect(`/admin/documents/${encodeURIComponent(order.groupCode || order.code)}`);
   }
 
   const progress = completionPercent(order);
@@ -172,7 +176,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                           status={step.status}
                           canActivate={
                             settings.production.allowParallelSteps ||
-                            order.steps.slice(0, index).every((previousStep) => previousStep.status === "done")
+                            productionStepPrerequisitesMet(order.steps, index)
                           }
                           canReopen={!isFinalDeliveryStep(order.steps, index)}
                         />

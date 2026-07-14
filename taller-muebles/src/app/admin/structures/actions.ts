@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { createLocalStructureRequest, updateLocalProductionStep, updateLocalStructureRequestStatus } from "@/lib/local-store";
+import { isProductionOrder } from "@/lib/orders";
 import { getOrder } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { createClient } from "@/lib/supabase/server";
@@ -58,6 +59,8 @@ export async function createStructureRequest(formData: FormData) {
     assignedTo: formData.get("assignedTo")?.toString() || undefined,
   });
   if (!parsed.success) return;
+  const order = await getOrder(parsed.data.orderId);
+  if (!order || !isProductionOrder(order)) return;
 
   const file = formData.get("file");
   const attachment = file instanceof File && file.size > 0 ? file : undefined;
@@ -134,6 +137,8 @@ export async function setStructureOrderStatus(formData: FormData) {
     status: formData.get("status"),
   });
   if (!parsed.success) return;
+  const order = await getOrder(parsed.data.orderId);
+  if (!order || !isProductionOrder(order)) return;
 
   if (!hasSupabaseConfig()) {
     await createLocalStructureRequest({
@@ -250,26 +255,6 @@ async function updateStructureStep({
         ? { status: "active", started_at: now, completed_at: null, blocked_reason: null, notes, updated_by: profileId }
         : { status: "pending", started_at: null, completed_at: null, blocked_reason: null, notes, updated_by: profileId };
   await (supabase as unknown as LooseDb<ProductionStepRow>).from("production_steps").update(patch).eq("order_id", orderId).eq("step", "structure");
-
-  if (status !== "done") {
-    const order = await getOrder(orderId);
-    const structureIndex = order?.steps.findIndex((step) => step.key === "structure") ?? -1;
-    if (order && structureIndex >= 0) {
-      for (const step of order.steps.slice(structureIndex + 1)) {
-        await (supabase as unknown as LooseDb<ProductionStepRow>)
-          .from("production_steps")
-          .update({
-            status: "pending",
-            started_at: null,
-            completed_at: null,
-            blocked_reason: null,
-            updated_by: profileId,
-          })
-          .eq("order_id", orderId)
-          .eq("step", step.key);
-      }
-    }
-  }
 }
 
 async function saveStructureAttachment({

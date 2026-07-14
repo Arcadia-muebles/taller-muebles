@@ -175,8 +175,8 @@ select {
   }
 
   @page sales-note {
-    size: 216mm 330mm;
-    margin: 10mm;
+    size: A4 portrait;
+    margin: 6mm;
   }
 
   body.printing-sales-note * {
@@ -192,12 +192,38 @@ select {
     page: sales-note;
     position: absolute;
     inset: 0 auto auto 0;
-    width: 196mm;
-    min-height: 310mm;
+    width: 198mm;
+    min-height: 0;
     overflow: visible !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    transform-origin: top left;
+    zoom: var(--sales-note-print-scale, 1);
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.printing-sales-note .sales-note-print-area .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  body.printing-sales-note .sales-note-products-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  body.printing-sales-note .sales-note-products-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.printing-sales-note .sales-note-products-table th:last-child,
+  body.printing-sales-note .sales-note-products-table td:last-child {
+    display: none !important;
   }
 
   body.printing-sales-note .sales-note-print-hidden,
@@ -512,6 +538,12 @@ select {
   body:not(.printing-label):not(.printing-sales-note) select,
   body:not(.printing-label):not(.printing-sales-note) textarea {
     display: none !important;
+  }
+
+  body:not(.printing-label):not(.printing-sales-note) button.production-process-indicator {
+    display: grid !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   body,
