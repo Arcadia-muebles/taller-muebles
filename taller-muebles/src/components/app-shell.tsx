@@ -26,12 +26,17 @@ export function AppShell({ active, user, children }: AppShellProps) {
     <DesktopShell
       sidebar={(
         <>
-        <div className="flex items-center gap-3 border-b border-stone-200 pb-5">
-          <Image src={brand.icon} alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg" priority unoptimized />
-          <div>
-            <p className="text-sm font-semibold">{brand.name}</p>
-            <p className="text-xs text-stone-500">{brand.subtitle}</p>
-          </div>
+        <div className="border-b border-stone-200 pb-5">
+          <Image
+            src={brand.logo}
+            alt="La Reina · Muebles en cuero"
+            width={1600}
+            height={874}
+            className="h-auto w-40"
+            priority
+            unoptimized
+          />
+          <p className="mt-2 text-xs font-medium text-stone-500">{brand.appName}</p>
         </div>
         {localMode ? (
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">

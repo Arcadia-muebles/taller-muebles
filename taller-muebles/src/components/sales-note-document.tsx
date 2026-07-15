@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Check, Pencil, Wrench, X } from "lucide-react";
 import { useActionState, useState } from "react";
 import { updateOrder } from "@/app/admin/orders/actions";
@@ -41,8 +42,8 @@ export function SalesNoteDocument({ code, orders, canEdit }: Props) {
     </form>
     {state.status === "error" ? <p className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs font-medium text-rose-700 md:px-7">{state.message}</p> : null}
 
-    <div className="grid gap-6 px-4 py-6 md:grid-cols-[150px_1fr_170px] md:px-7">
-      <div className="flex h-24 w-28 items-center justify-center rounded-md border border-stone-200 text-center"><div><p className="text-xs font-bold tracking-[0.18em]">LA REINA</p><p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Muebles en cuero</p></div></div>
+    <div className="grid gap-6 px-4 py-6 md:grid-cols-[180px_1fr_170px] md:px-7">
+      <div className="flex min-h-24 items-center justify-center"><Image src="/la-reina-logo.jpeg" alt="La Reina · Muebles en cuero" width={1600} height={874} className="h-auto w-full max-w-44" priority unoptimized /></div>
       <div className="text-center"><h3 className="text-base font-bold uppercase">Fabricación y venta de muebles</h3><div className="mt-2 space-y-1 text-xs leading-5 text-stone-600"><p>Carmen #2001 - Santiago Centro</p><p>Fono: 22 555 3795 - 22 556 5988</p><p>www.muebleslareina.cl</p><p>lareina@mueblesencuero.cl</p></div></div>
       <div className="md:text-right"><div className="inline-flex rounded-md border border-stone-200 px-3 py-2 text-sm font-bold uppercase">Nota de venta</div><p className="mt-3 text-2xl font-bold">{code}</p><div className="mt-2 text-sm font-medium text-stone-700">Fecha: <Editable editing={editing} form={formId} name="entryDate" value={document.entryDate} type="date" className="w-36 text-right">{formatDate(document.entryDate)}</Editable></div></div>
     </div>

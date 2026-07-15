@@ -25,8 +25,8 @@ export function MobileNavigation({
     <div className="sticky top-0 z-40 -mx-4 mb-4 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
       <div className="flex items-center justify-between">
         <Link href={active === "admin" ? "/admin" : "/taller"} className="flex items-center gap-2">
-          <Image src={brand.icon} alt="" width={32} height={32} className="size-8 shrink-0 rounded-md" priority unoptimized />
-          <span className="text-sm font-semibold">{brand.appName}</span>
+          <Image src={brand.logo} alt="La Reina · Muebles en cuero" width={1600} height={874} className="h-auto w-24 shrink-0" priority unoptimized />
+          <span className="hidden text-sm font-semibold min-[390px]:inline">{brand.appName}</span>
         </Link>
         <button
           type="button"

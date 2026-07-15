@@ -7,6 +7,8 @@ import { orderStatusLabel } from "@/lib/orders";
 import type { Order } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+const LA_REINA_LOGO_PATH = "/la-reina-logo.jpeg";
+
 export function OrderLabelPrintButton({
   order,
   groupOrders = [order],
@@ -22,12 +24,11 @@ export function OrderLabelPrintButton({
   const productIndex = Math.max(orderedGroup.findIndex((item) => item.id === order.id), 0) + 1;
   const productTotal = orderedGroup.length || 1;
   const status = productionLabel(order);
-  const brand = storeBrand(order.store);
   const qrValue = `pedido:${order.id}|codigo:${order.code}|tienda:${order.store}`;
   const observations = order.observations?.trim();
   const labelRef = useRef<HTMLDivElement>(null);
 
-  function printLabel() {
+  async function printLabel() {
     const label = labelRef.current;
     if (!label) return;
 
@@ -50,6 +51,16 @@ export function OrderLabelPrintButton({
     printDocument.open();
     printDocument.write(labelPrintDocument(label.outerHTML));
     printDocument.close();
+
+    await Promise.all(
+      Array.from(printDocument.images).map((image) => {
+        if (image.complete) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          image.addEventListener("load", () => resolve(), { once: true });
+          image.addEventListener("error", () => resolve(), { once: true });
+        });
+      }),
+    );
 
     frame.contentWindow?.focus();
     frame.contentWindow?.print();
@@ -78,13 +89,9 @@ export function OrderLabelPrintButton({
         <div ref={labelRef} className="label-card">
           <aside className="label-brand-panel">
             <div className="label-brand">
-              <div className="label-brand-mark" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </div>
-              <p className="label-brand-name">{brand.name}</p>
-              <p className="label-brand-subtitle">{brand.subtitle}</p>
+              {/* Native img keeps the printable markup portable inside the isolated print frame. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="label-brand-logo" src={LA_REINA_LOGO_PATH} alt="La Reina · Muebles en cuero" />
             </div>
             <div className="label-divider" />
             <p className="label-code">{order.code}</p>
@@ -177,11 +184,6 @@ function productionLabel(order: Order) {
   return labels[current.key] ?? (current.status === "done" ? "TERMINADO" : "PENDIENTE");
 }
 
-function storeBrand(store: Order["store"]) {
-  if (store === "LR") return { name: "La Reina", subtitle: "Muebles en cuero" };
-  return { name: "Leather House", subtitle: "Muebles en cuero" };
-}
-
 function twoDigit(value: number) {
   return value.toString().padStart(2, "0");
 }
@@ -252,45 +254,12 @@ body {
   width: 100%;
 }
 
-.label-brand-mark {
-  display: grid;
-  grid-template-columns: repeat(3, 7mm);
-  justify-content: center;
-  align-items: end;
-  gap: 0.7mm;
-  height: 9mm;
-  margin-bottom: 2mm;
-}
-
-.label-brand-mark span {
+.label-brand-logo {
   display: block;
-  width: 0;
-  height: 0;
-  border-right: 3.5mm solid transparent;
-  border-left: 3.5mm solid transparent;
-  border-bottom: 7mm solid #000000;
-}
-
-.label-brand-mark span:nth-child(2) {
-  transform: translateY(-2mm);
-}
-
-.label-brand-name {
-  margin: 0;
-  overflow: hidden;
-  font-size: 8mm;
-  font-weight: 700;
-  line-height: 0.95;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.label-brand-subtitle {
-  margin: 1.5mm 0 0;
-  font-size: 2.4mm;
-  font-weight: 800;
-  letter-spacing: 0.9mm;
-  text-transform: uppercase;
+  width: 100%;
+  height: auto;
+  max-height: 23mm;
+  object-fit: contain;
 }
 
 .label-divider {

@@ -41,10 +41,16 @@ export default async function DocumentsPage() {
           <p className="page-description">Notas de venta, cotizaciones, órdenes de compra y garantías del área comercial.</p>
         </div>
         {canEditOrders ? (
-          <Link href="/admin/orders/new" className="btn btn-primary">
-            <Plus className="size-4" />
-            Nuevo registro
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/orders/new?type=sales_note" className="btn btn-secondary">
+              <Plus className="size-4" />
+              Nueva nota de venta
+            </Link>
+            <Link href="/admin/orders/new?type=quote" className="btn btn-primary">
+              <Plus className="size-4" />
+              Nueva cotización
+            </Link>
+          </div>
         ) : null}
       </header>
 
@@ -103,8 +109,8 @@ export default async function DocumentsPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Productos</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Entrega</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Total</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Abono</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Saldo</th>
+                      {!isQuote ? <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Abono</th> : null}
+                      {!isQuote ? <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Saldo</th> : null}
                       {!isQuote ? <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producción</th> : null}
                     </tr>
                   </thead>
@@ -126,15 +132,15 @@ export default async function DocumentsPage() {
                         <ClickableCell href={documentHref} className="text-sm text-stone-600">{document.orders.length}</ClickableCell>
                         <ClickableCell href={documentHref} className="text-sm text-stone-600">{formatDate(document.deliveryDate)}</ClickableCell>
                         <ClickableCell href={documentHref} className="text-sm font-semibold text-stone-900">{formatCurrency(document.total)}</ClickableCell>
-                        <ClickableCell href={documentHref} className="text-sm text-stone-600">{formatCurrency(document.paidAmount)}</ClickableCell>
-                        <ClickableCell href={documentHref} className="text-sm font-semibold text-stone-900">{formatCurrency(document.balance)}</ClickableCell>
+                        {!isQuote ? <ClickableCell href={documentHref} className="text-sm text-stone-600">{formatCurrency(document.paidAmount)}</ClickableCell> : null}
+                        {!isQuote ? <ClickableCell href={documentHref} className="text-sm font-semibold text-stone-900">{formatCurrency(document.balance)}</ClickableCell> : null}
                         {!isQuote ? <ClickableCell href={documentHref} className="text-sm text-stone-600">{document.orders[0].status}</ClickableCell> : null}
                       </tr>
                       );
                     })}
                     {!rows.length ? (
                       <tr>
-                        <td colSpan={isQuote ? 7 : 8} className="px-4 py-8 text-center text-sm text-stone-500">
+                        <td colSpan={isQuote ? 5 : 8} className="px-4 py-8 text-center text-sm text-stone-500">
                           No hay documentos de esta categoria.
                         </td>
                       </tr>

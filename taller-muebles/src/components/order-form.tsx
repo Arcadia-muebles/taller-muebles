@@ -17,10 +17,11 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { forwardRef, useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch, type Resolver, type UseFormRegister } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
-import type { StoreCode } from "@/lib/types";
+import type { CommercialDocumentType, StoreCode } from "@/lib/types";
 import { newOrderSchema, orderSchema, type NewOrderFormValues, type OrderFormValues } from "@/lib/validation/order";
 
 const inputClass = "control-lg bg-white";
@@ -38,10 +39,12 @@ type FieldErrors = Partial<Record<keyof OrderFormValues, { message?: string }>>;
 export function OrderForm({
   orderId,
   initialValues,
+  initialDocumentType = "sales_note",
   nextCodes = { LH: "LH-001", LR: "LR-001" },
 }: {
   orderId?: string;
   initialValues?: OrderFormValues;
+  initialDocumentType?: CommercialDocumentType;
   assignees?: string[];
   nextCodes?: Record<StoreCode, string>;
 }) {
@@ -62,7 +65,7 @@ export function OrderForm({
     resolver: zodResolver(orderId ? orderSchema : newOrderSchema) as Resolver<FormValues>,
     defaultValues: initialValues ?? {
       store: "LR",
-      documentType: "sales_note",
+      documentType: initialDocumentType,
       documentStatus: "issued",
       salesNoteNumber: nextCodes.LR,
       isWarranty: false,
@@ -75,14 +78,14 @@ export function OrderForm({
       paymentMethod: "Transferencia",
       deliveryTerms: "El despacho dentro de Santiago no tiene costo. En caso de subir o bajar por escalas el costo será de $7.000.- por piso.",
       products: [{ productName: "", material: "", color: "", quantity: 1 }],
-      payments: [{ paidAt: defaultEntryDate, amount: 0, method: "Transferencia", note: "" }],
+      payments: initialDocumentType === "quote" ? [] : [{ paidAt: defaultEntryDate, amount: 0, method: "Transferencia", note: "" }],
     },
   });
   const { fields: productFields, append: appendProduct, remove: removeProduct, replace: replaceProducts } = useFieldArray({
     control,
     name: "products",
   });
-  const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({
+  const { fields: paymentFields, append: appendPayment, remove: removePayment, replace: replacePayments } = useFieldArray({
     control,
     name: "payments",
   });
@@ -99,6 +102,8 @@ export function OrderForm({
   const deliveryDateValue = useWatch({ control, name: "deliveryDate" });
   const isLeatherHouse = store === "LH";
   const isCommercialDocument = store === "LR";
+  const isQuote = documentType === "quote";
+  const documentLabel = commercialDocumentLabel(documentType);
   const pending = actionPending || formPending;
   const showValidationSummary = submitCount > 0 && Object.keys(errors).length > 0;
   const typedErrors = errors as FieldErrors & {
@@ -173,6 +178,13 @@ export function OrderForm({
     setValue("paidAmount", computedPaymentsPaid, { shouldDirty: true, shouldValidate: true });
     setValue("paymentMethod", paymentSummary(payments), { shouldDirty: true, shouldValidate: false });
   }, [computedPaymentsPaid, isCommercialDocument, orderId, payments, setValue]);
+
+  useEffect(() => {
+    if (orderId || !isQuote) return;
+    if (payments.length) replacePayments([]);
+    setValue("paidAmount", 0, { shouldDirty: true, shouldValidate: true });
+    setValue("paymentMethod", "", { shouldDirty: true, shouldValidate: false });
+  }, [isQuote, orderId, payments.length, replacePayments, setValue]);
 
   const submit = handleSubmit((_values, event) => {
     if (!(event?.target instanceof HTMLFormElement)) return;
@@ -322,7 +334,7 @@ export function OrderForm({
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
                 <FileText className="size-4" />
-                Vista previa editable - nota de venta
+                Vista previa editable - {documentLabel.toLocaleLowerCase("es-CL")}
               </div>
               <div className="grid gap-2 sm:grid-cols-[auto_180px_180px_180px]">
                 <button type="button" onClick={printSalesNotePdf} className="btn btn-secondary h-10 whitespace-nowrap">
@@ -348,14 +360,17 @@ export function OrderForm({
             </div>
           </div>
 
-          <div className="grid gap-6 px-4 py-6 md:grid-cols-[150px_1fr_170px] md:px-7">
-            <div className="flex h-24 w-28 items-center justify-center rounded-md border border-stone-200 text-center">
-              <div>
-                <p className="text-xs font-bold tracking-[0.18em] text-stone-950">{isLeatherHouse ? "LEATHER HOUSE" : "LA REINA"}</p>
-                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
-                  {isLeatherHouse ? "Producción" : "Muebles en cuero"}
-                </p>
-              </div>
+          <div className="grid gap-6 px-4 py-6 md:grid-cols-[180px_1fr_170px] md:px-7">
+            <div className="flex min-h-24 items-center justify-center">
+              <Image
+                src="/la-reina-logo.jpeg"
+                alt="La Reina · Muebles en cuero"
+                width={1600}
+                height={874}
+                className="h-auto w-full max-w-44"
+                priority
+                unoptimized
+              />
             </div>
             <div className="text-center">
               <h2 className="text-base font-bold uppercase tracking-[0.02em] text-stone-950">Fabricación y venta de muebles</h2>
@@ -368,7 +383,7 @@ export function OrderForm({
             </div>
             <div className="md:text-right">
               <div className="inline-flex rounded-md border border-stone-200 px-3 py-2 text-sm font-bold uppercase text-stone-950">
-                {isLeatherHouse ? "Ingreso taller" : "Nota de venta"}
+                {isLeatherHouse ? "Ingreso taller" : documentLabel}
               </div>
               <input
                 {...register("salesNoteNumber")}
@@ -545,28 +560,32 @@ export function OrderForm({
             ) : null}
           </div>
 
-          <div className="grid gap-4 border-b border-stone-200 px-4 py-4 md:grid-cols-2 md:px-7">
-            <PaymentDocumentBox title="Abono" amount={formatCurrency(computedPaid)}>
-              <PaymentRows
-                register={register}
-                fields={paymentFields}
-                errors={typedErrors.payments}
-                onAdd={() => appendPayment({ paidAt: new Date().toISOString().slice(0, 10), amount: 0, method: "Transferencia", note: "" })}
-                onRemove={removePayment}
-                compact
-              />
-              {typedErrors.paidAmount?.message ? <p className="mt-2 text-xs font-medium text-rose-600">{typedErrors.paidAmount.message}</p> : null}
-            </PaymentDocumentBox>
-            <PaymentDocumentBox title="Saldo" amount={formatCurrency(computedBalance)}>
-              <p className="text-xs text-stone-500">Saldo pendiente calculado desde el total y el abono registrado.</p>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-100">
-                <div className="h-full rounded-full bg-stone-950" style={{ width: `${paymentProgress(computedPaid, computedTotal)}%` }} />
-              </div>
-            </PaymentDocumentBox>
-          </div>
+          {!isQuote ? (
+            <div className="grid gap-4 border-b border-stone-200 px-4 py-4 md:grid-cols-2 md:px-7">
+              <PaymentDocumentBox title="Abono" amount={formatCurrency(computedPaid)}>
+                <PaymentRows
+                  register={register}
+                  fields={paymentFields}
+                  errors={typedErrors.payments}
+                  onAdd={() => appendPayment({ paidAt: new Date().toISOString().slice(0, 10), amount: 0, method: "Transferencia", note: "" })}
+                  onRemove={removePayment}
+                  compact
+                />
+                {typedErrors.paidAmount?.message ? <p className="mt-2 text-xs font-medium text-rose-600">{typedErrors.paidAmount.message}</p> : null}
+              </PaymentDocumentBox>
+              <PaymentDocumentBox title="Saldo" amount={formatCurrency(computedBalance)}>
+                <p className="text-xs text-stone-500">Saldo pendiente calculado desde el total y el abono registrado.</p>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-100">
+                  <div className="h-full rounded-full bg-stone-950" style={{ width: `${paymentProgress(computedPaid, computedTotal)}%` }} />
+                </div>
+              </PaymentDocumentBox>
+            </div>
+          ) : null}
 
           <div className="border-b border-stone-200 px-4 py-4 text-center md:px-7">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Condiciones de entrega</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">
+              {isQuote ? "Condiciones de la cotización" : "Condiciones de entrega"}
+            </p>
             <textarea {...register("deliveryTerms")} className="mt-2 min-h-16 w-full resize-none border-0 bg-transparent text-center text-sm leading-6 text-stone-700 outline-none focus:bg-stone-50" />
           </div>
 
@@ -575,15 +594,19 @@ export function OrderForm({
               <DocumentField label="Vendedor" error={typedErrors.sellerName?.message}>
                 <DocumentInput {...register("sellerName")} placeholder="Vendedor" strong />
               </DocumentField>
-              <label className="mt-4 flex w-fit items-center gap-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-medium">
-                <input {...register("isWarranty")} type="checkbox" className="size-4 accent-stone-950" />
-                Es garantía
-              </label>
+              {!isQuote ? (
+                <label className="mt-4 flex w-fit items-center gap-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-medium">
+                  <input {...register("isWarranty")} type="checkbox" className="size-4 accent-stone-950" />
+                  Es garantía
+                </label>
+              ) : <input type="hidden" {...register("isWarranty")} />}
             </div>
-            <div className="self-end text-center">
-              <div className="border-b border-stone-950 pt-10" />
-              <p className="mt-2 text-xs text-stone-500">Firma</p>
-            </div>
+            {!isQuote ? (
+              <div className="self-end text-center">
+                <div className="border-b border-stone-950 pt-10" />
+                <p className="mt-2 text-xs text-stone-500">Firma</p>
+              </div>
+            ) : null}
           </div>
 
           <div className="border-t border-stone-200 bg-stone-50 px-4 py-4 md:px-7">
@@ -615,7 +638,7 @@ export function OrderForm({
           </Link>
           <button type="submit" disabled={pending} className="btn-lg btn-primary">
             <Save className="size-4" />
-            {pending ? "Guardando..." : isLeatherHouse ? "Guardar ingreso" : "Guardar documento"}
+            {pending ? "Guardando..." : isLeatherHouse ? "Guardar ingreso" : isQuote ? "Guardar cotización" : "Guardar documento"}
           </button>
         </div>
         {showValidationSummary ? (
@@ -1274,6 +1297,16 @@ function formatCurrency(value: number) {
     currency: "CLP",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function commercialDocumentLabel(type?: CommercialDocumentType) {
+  const labels: Partial<Record<CommercialDocumentType, string>> = {
+    sales_note: "Nota de venta",
+    quote: "Cotización",
+    purchase_order: "Orden de compra",
+    warranty: "Garantía",
+  };
+  return type ? labels[type] ?? "Documento comercial" : "Documento comercial";
 }
 
 function clampPercent(value: number | string) {

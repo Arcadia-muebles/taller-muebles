@@ -4,4 +4,5 @@ export const brand = {
   appName: "Control Producción",
   icon: "/arcadia-icon.svg",
   iconPng: "/arcadia-icon.png",
+  logo: "/la-reina-logo.jpeg",
 };
