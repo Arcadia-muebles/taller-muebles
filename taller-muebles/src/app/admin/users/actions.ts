@@ -10,7 +10,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 const userSchema = z.object({
   email: z.string().email(),
   name: z.string().trim().min(2),
-  role: z.enum(["admin", "manager", "operator", "viewer"]),
+  role: z.enum(["admin", "manager", "operator"]),
   areas: z.array(z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/)).optional(),
   password: z.string().min(8).optional(),
 });
@@ -105,7 +105,7 @@ export async function removeUser(formData: FormData) {
 const updateUserSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(2),
-  role: z.enum(["admin", "manager", "operator", "viewer"]),
+  role: z.enum(["admin", "manager", "operator"]),
   areas: z.array(z.string().trim().min(2).max(40).regex(/^[a-z0-9_]+$/)).optional(),
 });
 

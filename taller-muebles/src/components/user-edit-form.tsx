@@ -36,7 +36,6 @@ export function UserEditForm({
           <option value="admin">Administrador</option>
           <option value="manager">Supervisor</option>
           <option value="operator">Trabajador</option>
-          <option value="viewer">Lectura</option>
         </select>
       </Field>
       <div className="flex flex-col gap-2">

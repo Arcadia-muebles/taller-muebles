@@ -34,7 +34,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (profileError || !profile?.active) {
+    if (profileError || !profile?.active || profile.role === "viewer") {
       if (profileError) console.error("Supabase profile lookup failed:", profileError.message);
       return null;
     }
@@ -55,7 +55,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const decoded = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<SessionUser>;
     if (!decoded.email) return null;
     const localUser = await getLocalUserByEmail(decoded.email);
-    if (!localUser?.active) return null;
+    if (!localUser?.active || localUser.role === "viewer") return null;
     return {
       id: localUser.id,
       email: localUser.email,

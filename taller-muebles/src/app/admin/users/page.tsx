@@ -17,7 +17,7 @@ export default async function UsersPage() {
         <p className="page-kicker">Usuarios</p>
         <h1 className="page-title">Roles y responsables</h1>
         <p className="page-description max-w-2xl">
-          Abre cada rol para agregar correos y asignar personas. Los trabajadores se asignan a una etapa del proceso productivo.
+          Administra las cuentas internas. Los clientes reciben un enlace de Portal Cliente desde el detalle de su pedido y no necesitan una cuenta.
         </p>
       </header>
 

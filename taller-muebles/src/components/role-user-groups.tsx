@@ -9,7 +9,7 @@ import { DeactivateUserButton } from "./deactivate-user-button";
 import { SubmitButton } from "./submit-button";
 import { UserEditForm } from "./user-edit-form";
 
-const roleOrder: Role[] = ["admin", "manager", "operator", "viewer"];
+const roleOrder: Array<Exclude<Role, "viewer">> = ["admin", "manager", "operator"];
 const initialState: UserActionResult = { ok: false, message: "" };
 const inputClass = "control disabled:cursor-not-allowed disabled:opacity-50";
 

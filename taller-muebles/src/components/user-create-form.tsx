@@ -53,7 +53,6 @@ export function UserCreateForm({
             <option value="admin">Administrador</option>
             <option value="manager">Supervisor</option>
             <option value="operator">Trabajador</option>
-            <option value="viewer">Lectura</option>
           </select>
         </Field>
         {role === "operator" ? (
