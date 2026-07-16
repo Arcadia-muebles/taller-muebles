@@ -78,6 +78,35 @@ export type AppUser = {
   active: boolean;
 };
 
+export type ClientPortalLink = {
+  id: string;
+  orderId: string;
+  tokenHash: string;
+  createdAt: string;
+  expiresAt: string;
+  createdBy?: string;
+  revokedAt?: string;
+};
+
+export type ClientPortalOrder = {
+  code: string;
+  client: string;
+  entryDate: string;
+  deliveryDate: string;
+  status: OrderStatus;
+  progress: number;
+  items: Array<{
+    id: string;
+    code: string;
+    product: string;
+    color: string;
+    quantity: number;
+    status: OrderStatus;
+    progress: number;
+    steps: Array<Pick<ProductionStep, "key" | "label" | "status">>;
+  }>;
+};
+
 export type Order = {
   id: string;
   code: string;

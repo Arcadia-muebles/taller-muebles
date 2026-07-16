@@ -2,7 +2,7 @@ import "server-only";
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AgendaItem, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
+import type { AgendaItem, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, ClientPortalLink, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
 import { defaultSystemSettings } from "@/lib/system-settings";
 import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
 import { productionOrderGroup, productionStepsResetByReversal } from "@/lib/orders";
@@ -18,6 +18,7 @@ type LocalData = {
   structureRequests: Array<Omit<StructureRequest, "attachments"> & { attachmentIds: string[] }>;
   suppliers: Supplier[];
   users: AppUser[];
+  clientPortalLinks?: ClientPortalLink[];
   deletedUserIds?: string[];
   settings?: SystemSettings;
 };
@@ -36,6 +37,7 @@ const emptyData: LocalData = {
   structureRequests: [],
   suppliers: [],
   users: [],
+  clientPortalLinks: [],
   deletedUserIds: [],
 };
 
@@ -161,6 +163,7 @@ async function readData(): Promise<LocalData> {
     structureRequests: parsed.structureRequests ?? [],
     suppliers: parsed.suppliers ?? [],
     users: parsed.users ?? [],
+    clientPortalLinks: parsed.clientPortalLinks ?? [],
     deletedUserIds: parsed.deletedUserIds ?? [],
     settings: parsed.settings,
   };
@@ -185,6 +188,56 @@ export async function listLocalAgendaItems(date?: string) {
 
 export async function getLocalOrder(id: string) {
   return (await readData()).orders.find((order) => order.id === id);
+}
+
+export async function getLocalClientPortalLink(orderId: string) {
+  return (await readData()).clientPortalLinks?.find(
+    (link) => link.orderId === orderId && !link.revokedAt && link.expiresAt > new Date().toISOString(),
+  );
+}
+
+export async function findLocalClientPortalLinkByTokenHash(tokenHash: string) {
+  return (await readData()).clientPortalLinks?.find(
+    (link) => link.tokenHash === tokenHash && !link.revokedAt && link.expiresAt > new Date().toISOString(),
+  );
+}
+
+export async function createLocalClientPortalLink(link: ClientPortalLink, actorName: string) {
+  const data = await readData();
+  const revokedAt = new Date().toISOString();
+  data.clientPortalLinks = (data.clientPortalLinks ?? []).map((current) =>
+    current.orderId === link.orderId && !current.revokedAt ? { ...current, revokedAt } : current,
+  );
+  data.clientPortalLinks.push(link);
+  data.auditLogs.push({
+    id: crypto.randomUUID(),
+    orderId: link.orderId,
+    action: "Acceso de Portal Cliente creado",
+    summary: `Enlace creado por ${actorName}; vence el ${link.expiresAt.slice(0, 10)}.`,
+    createdAt: link.createdAt,
+  });
+  await writeData(data);
+}
+
+export async function revokeLocalClientPortalLink(orderId: string, actorName: string) {
+  const data = await readData();
+  const revokedAt = new Date().toISOString();
+  let changed = false;
+  data.clientPortalLinks = (data.clientPortalLinks ?? []).map((link) => {
+    if (link.orderId !== orderId || link.revokedAt) return link;
+    changed = true;
+    return { ...link, revokedAt };
+  });
+  if (changed) {
+    data.auditLogs.push({
+      id: crypto.randomUUID(),
+      orderId,
+      action: "Acceso de Portal Cliente revocado",
+      summary: `Enlace revocado por ${actorName}.`,
+      createdAt: revokedAt,
+    });
+    await writeData(data);
+  }
 }
 
 export async function createLocalOrder(input: {

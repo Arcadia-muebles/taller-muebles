@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { ClientPortalAccess } from "@/components/client-portal-access";
 import { OrderActions } from "@/components/order-actions";
 import { OrderCollaboration } from "@/components/order-collaboration";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
@@ -20,6 +21,7 @@ import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
 import { productionStepPrerequisitesMet } from "@/lib/orders";
 import { getSystemSettings } from "@/lib/repositories/settings";
+import { getClientPortalLinkSummary } from "@/lib/client-portal";
 import { getOrder, listOrderAttachments, listOrderAudit, listOrders } from "@/lib/repositories/production";
 import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel } from "@/lib/utils";
 
@@ -50,6 +52,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
   const canCommentOnSteps = user.role === "admin" || user.role === "manager";
   const canClose = order.steps.every((step) => step.status === "done");
   const groupOrders = orders.filter((item) => item.groupCode === order.groupCode);
+  const portalLink = user.role === "admin" ? await getClientPortalLinkSummary(order.id) : undefined;
 
   return (
     <AppShell active="admin" user={user}>
@@ -85,6 +88,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
           {canEditOrder ? <OrderActions orderId={order.id} canClose={canClose} /> : null}
         </div>
       </header>
+
+      {user.role === "admin" ? <ClientPortalAccess orderId={order.id} activeLink={portalLink} /> : null}
 
       <section className="mt-5 grid gap-5 xl:grid-cols-[1fr_380px]">
         <div className="space-y-5">
