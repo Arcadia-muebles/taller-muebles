@@ -15,6 +15,7 @@ import { OrderActions } from "@/components/order-actions";
 import { OrderCollaboration } from "@/components/order-collaboration";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { ProductionStepControls } from "@/components/production-step-controls";
+import { SalesNoteDocument } from "@/components/sales-note-document";
 import { StepCommentButton } from "@/components/step-comment-button";
 import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
@@ -27,11 +28,12 @@ import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel
 
 type OrderDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string | string[] }>;
 };
 
-export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
+export default async function OrderDetailPage({ params, searchParams }: OrderDetailPageProps) {
   const user = await requireSession(["admin", "manager", "viewer"]);
-  const { id } = await params;
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   const [order, audit, attachments, settings, orders] = await Promise.all([
     getOrder(id),
     listOrderAudit(id),
@@ -51,7 +53,34 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
   const canEditOrder = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
   const canCommentOnSteps = user.role === "admin" || user.role === "manager";
   const canClose = order.steps.every((step) => step.status === "done");
-  const groupOrders = orders.filter((item) => item.groupCode === order.groupCode);
+  const documentCode = order.groupCode || order.code;
+  const groupOrders = orders
+    .filter((item) => item.store === order.store)
+    .filter((item) => (item.groupCode || item.code) === documentCode)
+    .sort((a, b) => a.product.localeCompare(b.product));
+  const showProductionView = query.view === "production";
+
+  if (order.documentType === "sales_note" && !showProductionView) {
+    return (
+      <AppShell active="admin" user={user}>
+        <div className="mb-4">
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-950"
+          >
+            <ArrowLeft className="size-4" />
+            Volver al panel
+          </Link>
+        </div>
+        <SalesNoteDocument
+          code={documentCode}
+          orders={groupOrders}
+          canEdit={canEditOrder}
+        />
+      </AppShell>
+    );
+  }
+
   const portalLink = user.role === "admin" ? await getClientPortalLinkSummary(order.id) : undefined;
 
   return (

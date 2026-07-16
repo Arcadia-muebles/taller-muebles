@@ -31,7 +31,7 @@ export function SalesNoteDocument({ code, orders, canEdit }: Props) {
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 bg-stone-50 px-4 py-3 md:px-7">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">{editing ? "Editando nota de venta" : "Nota de venta emitida"}</p>
       <div className="flex flex-wrap gap-2">
-        {!editing ? <><Link href={`/admin/documents/${encodeURIComponent(code)}`} className="btn btn-secondary h-9 text-xs">Ver detalle</Link><Link href={`/admin/orders/${document.id}`} className="btn btn-secondary h-9 text-xs"><Wrench className="size-3.5" />Producción</Link></> : null}
+        {!editing ? <><Link href={`/admin/documents/${encodeURIComponent(code)}`} className="btn btn-secondary h-9 text-xs">Ver detalle</Link><Link href={`/admin/orders/${document.id}?view=production`} className="btn btn-secondary h-9 text-xs"><Wrench className="size-3.5" />Producción</Link></> : null}
         {canEdit && !editing ? <button type="button" onClick={() => setEditing(true)} className="btn h-9 text-xs"><Pencil className="size-3.5" />Editar</button> : null}
         {editing ? <><button type="button" onClick={() => setEditing(false)} className="btn btn-secondary h-9 text-xs"><X className="size-3.5" />Cancelar</button><button type="submit" form={formId} disabled={pending} className="btn h-9 text-xs"><Check className="size-3.5" />{pending ? "Guardando" : "Guardar"}</button></> : null}
       </div>

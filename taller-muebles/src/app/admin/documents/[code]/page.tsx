@@ -52,7 +52,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
         </div>
         <div className="flex flex-wrap gap-2">
           {!isQuote ? (
-            <Link href={`/admin/orders/${document.id}`} className="btn btn-secondary">
+            <Link href={`/admin/orders/${document.id}?view=production`} className="btn btn-secondary">
               <Wrench className="size-4" />
               Ver producción
             </Link>
@@ -117,7 +117,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
                         {isQuote ? (
                           <span className="text-sm font-semibold text-stone-950">{order.product}</span>
                         ) : (
-                          <Link href={`/admin/orders/${order.id}`} className="text-sm font-semibold text-stone-950 underline-offset-4 hover:underline">
+                          <Link href={`/admin/orders/${order.id}?view=production`} className="text-sm font-semibold text-stone-950 underline-offset-4 hover:underline">
                             {order.product}
                           </Link>
                         )}
