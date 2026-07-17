@@ -360,7 +360,7 @@ export function OrderForm({
             </div>
           </div>
 
-          <div className="grid gap-6 px-4 py-6 md:grid-cols-[180px_1fr_170px] md:px-7">
+          <div className="grid gap-5 border-b border-stone-300 px-4 py-5 md:grid-cols-[190px_1fr_170px] md:px-6">
             <div className="flex min-h-24 items-center justify-center">
               <Image
                 src="/la-reina-logo.jpeg"
@@ -372,9 +372,9 @@ export function OrderForm({
                 unoptimized
               />
             </div>
-            <div className="text-center">
+            <div className="text-center md:text-left">
               <h2 className="text-base font-bold uppercase tracking-[0.02em] text-stone-950">Fabricación y venta de muebles</h2>
-              <div className="mt-2 space-y-1 text-xs leading-5 text-stone-600">
+              <div className="mt-2 grid gap-x-6 gap-y-1 text-xs leading-5 text-stone-600 lg:grid-cols-2">
                 <p>Carmen #2001 - Santiago Centro</p>
                 <p>Fono: 22 555 3795 - 22 556 5988</p>
                 <p>www.muebleslareina.cl</p>
@@ -399,33 +399,41 @@ export function OrderForm({
             </div>
           </div>
 
-          <div className="grid gap-x-8 gap-y-3 border-y border-stone-200 bg-stone-50/70 px-4 py-4 md:grid-cols-2 md:px-7">
-            <DocumentField label="Nombre" error={typedErrors.clientName?.message}>
-              <DocumentInput {...register("clientName")} placeholder="Nombre del cliente" strong />
-            </DocumentField>
-            <DocumentField label="Comuna" error={typedErrors.customerCommune?.message}>
-              <DocumentInput {...register("customerCommune")} placeholder="Comuna" />
-            </DocumentField>
-            {isCommercialDocument ? (
-              <>
+          <div className="border-b border-stone-300 bg-stone-50/70 px-4 py-4 md:px-6">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-stone-700">Datos del cliente</p>
+            <div className="grid gap-x-10 gap-y-3 md:grid-cols-[1.15fr_0.8fr_0.8fr]">
+              <div className="grid content-start gap-3">
+                <DocumentField label="Nombre" error={typedErrors.clientName?.message}>
+                  <DocumentInput {...register("clientName")} placeholder="Nombre del cliente" strong />
+                </DocumentField>
                 <DocumentField label="Dirección" error={typedErrors.customerAddress?.message}>
                   <DocumentInput {...register("customerAddress")} placeholder="Dirección de despacho o cliente" />
-                </DocumentField>
-                <DocumentField label="RUT" error={typedErrors.customerRut?.message}>
-                  <DocumentInput {...customerRutField} placeholder="12.345.678-9" />
                 </DocumentField>
                 <DocumentField label="Correo" error={typedErrors.customerEmail?.message}>
                   <DocumentInput {...register("customerEmail")} type="email" placeholder="correo@cliente.cl" />
                 </DocumentField>
+              </div>
+              <div className="grid content-start gap-3">
+                <DocumentField label="Comuna" error={typedErrors.customerCommune?.message}>
+                  <DocumentInput {...register("customerCommune")} placeholder="Comuna" />
+                </DocumentField>
+                {isCommercialDocument ? (
+                  <DocumentField label="RUT" error={typedErrors.customerRut?.message}>
+                    <DocumentInput {...customerRutField} placeholder="12.345.678-9" />
+                  </DocumentField>
+                ) : null}
+              </div>
+              {isCommercialDocument ? (
                 <DocumentField label="Teléfono" error={typedErrors.customerPhone?.message}>
                   <DocumentInput {...customerPhoneField} placeholder="+56 ..." />
                 </DocumentField>
-              </>
-            ) : null}
+              ) : null}
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="sales-note-products-table w-full min-w-[860px] border-collapse">
+          <div className="sales-note-products-section flex min-h-[400px] flex-col border-b border-stone-300">
+            <div className="overflow-x-auto">
+              <table className="sales-note-products-table w-full min-w-[860px] border-collapse">
               <thead>
                 <tr className="border-b border-stone-200 bg-stone-50">
                   <th className="w-14 px-4 py-2 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Cant.</th>
@@ -509,11 +517,11 @@ export function OrderForm({
                   );
                 })}
               </tbody>
-            </table>
-          </div>
-
-          <div className="grid gap-5 border-b border-stone-200 px-4 py-4 lg:grid-cols-[1fr_260px] md:px-7">
-            <div>
+              </table>
+            </div>
+            <div className="sales-note-product-lines min-h-24 flex-1" aria-hidden="true" />
+            <div className="grid items-end gap-5 px-4 pb-4 md:grid-cols-[1fr_260px] md:px-6">
+              <div>
               <button
                 type="button"
                 onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
@@ -523,14 +531,6 @@ export function OrderForm({
                 Agregar producto
               </button>
               <input type="hidden" {...register("groupCode")} />
-              <div className="mt-4 grid max-w-xl gap-4 sm:grid-cols-2">
-                <DocumentField label="Plazo de entrega">
-                  <DeliveryDaysControl days={deliveryDays} onSelect={setDeliveryDays} compact />
-                </DocumentField>
-                <DocumentField label="Fecha estimada de entrega" error={typedErrors.deliveryDate?.message}>
-                  <input {...register("deliveryDate")} type="date" className="w-full border-0 border-b border-stone-200 bg-transparent pb-1 text-sm font-semibold text-stone-950 outline-none focus:border-stone-500" />
-                </DocumentField>
-              </div>
             </div>
             {isCommercialDocument ? (
               <div className="overflow-hidden rounded-lg border border-stone-950">
@@ -558,10 +558,30 @@ export function OrderForm({
                 </div>
               </div>
             ) : null}
+            </div>
+          </div>
+
+          <div className="grid border-b border-stone-300 bg-stone-50/70 px-4 py-3 md:grid-cols-2 md:divide-x md:divide-stone-300 md:px-6">
+            <div className="flex items-center gap-3 pb-3 md:pb-0 md:pr-6">
+              <CalendarDays className="size-4 shrink-0 text-stone-500" />
+              <div className="min-w-0 flex-1">
+                <DocumentField label="Plazo de entrega">
+                  <DeliveryDaysControl days={deliveryDays} onSelect={setDeliveryDays} compact />
+                </DocumentField>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 border-t border-stone-200 pt-3 md:border-t-0 md:pl-6 md:pt-0">
+              <CalendarDays className="size-4 shrink-0 text-stone-500" />
+              <div className="min-w-0 flex-1">
+                <DocumentField label="Fecha estimada de entrega" error={typedErrors.deliveryDate?.message}>
+                  <input {...register("deliveryDate")} type="date" className="w-full border-0 border-b border-stone-200 bg-transparent pb-1 text-sm font-semibold text-stone-950 outline-none focus:border-stone-500" />
+                </DocumentField>
+              </div>
+            </div>
           </div>
 
           {!isQuote ? (
-            <div className="grid gap-4 border-b border-stone-200 px-4 py-4 md:grid-cols-2 md:px-7">
+            <div className="grid gap-4 border-b border-stone-300 px-4 py-4 md:grid-cols-2 md:px-6">
               <PaymentDocumentBox title="Abono" amount={formatCurrency(computedPaid)}>
                 <PaymentRows
                   register={register}
@@ -582,7 +602,20 @@ export function OrderForm({
             </div>
           ) : null}
 
-          <div className="border-b border-stone-200 px-4 py-4 text-center md:px-7">
+          {!isQuote ? (
+            <div className="sales-note-print-signature px-4 py-3 text-center md:px-6">
+              <div className="mx-auto w-64 border-b border-stone-700 pt-4" />
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Nombre / firma / fecha</p>
+            </div>
+          ) : null}
+
+          <div className={isQuote ? "" : "sales-note-print-hidden"}>
+          {!isQuote ? (
+            <div className="border-y border-stone-200 bg-stone-100 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500 md:px-7">
+              Información interna · No se incluye en el PDF
+            </div>
+          ) : null}
+          <div className="border-y border-stone-200 px-4 py-4 text-center md:px-7">
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">
               {isQuote ? "Condiciones de la cotización" : "Condiciones de entrega"}
             </p>
@@ -601,12 +634,6 @@ export function OrderForm({
                 </label>
               ) : <input type="hidden" {...register("isWarranty")} />}
             </div>
-            {!isQuote ? (
-              <div className="self-end text-center">
-                <div className="border-b border-stone-950 pt-10" />
-                <p className="mt-2 text-xs text-stone-500">Firma</p>
-              </div>
-            ) : null}
           </div>
 
           <div className="border-t border-stone-200 bg-stone-50 px-4 py-4 md:px-7">
@@ -628,6 +655,7 @@ export function OrderForm({
               </Field>
             <p className="mt-2 text-xs text-stone-500">Máximo 10 MB. Se puede dejar vacío y adjuntar después desde el detalle de la orden.</p>
             </div>
+          </div>
           </div>
         </section>
 
@@ -1126,10 +1154,10 @@ function DeliveryDaysControl({ days, onSelect, compact }: { days: number | undef
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label="Cambiar plazo de entrega"
-        className={`flex w-full items-center justify-between gap-3 border-b border-stone-200 pb-1 text-left text-sm font-semibold text-stone-950 transition hover:border-stone-500 ${compact ? "" : "rounded-md border border-stone-200 px-3 py-2"}`}
+        className={`flex w-full items-center justify-between gap-3 border-b border-stone-200 pb-1 text-left text-sm font-semibold text-stone-950 transition hover:border-stone-500 ${compact ? "sales-note-print-value" : "rounded-md border border-stone-200 px-3 py-2"}`}
       >
         <span>{label}</span>
-        <span className="text-xs font-medium text-stone-500">{open ? "Cerrar" : "Cambiar"}</span>
+        <span className="sales-note-print-change text-xs font-medium text-stone-500">{open ? "Cerrar" : "Cambiar"}</span>
       </button>
       {open ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1180,7 +1208,7 @@ function PaymentRows({
     <div className={compact ? "space-y-3" : "mt-2 space-y-3"}>
       {fields.map((field, index) => (
         <div key={field.id} className="rounded-md border border-stone-200 bg-stone-50/70 p-3">
-          <div className={compact ? "grid gap-2" : "grid gap-2 md:grid-cols-[150px_150px_1fr_1fr_40px]"}>
+          <div className={compact ? "grid gap-2 sm:grid-cols-[105px_110px_1fr_1fr_36px]" : "grid gap-2 md:grid-cols-[150px_150px_1fr_1fr_40px]"}>
             <label>
               <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Fecha</span>
               <input {...register(`payments.${index}.paidAt` as const)} type="date" className={compact ? documentPaymentInputClass : inputClass} />
@@ -1205,7 +1233,7 @@ function PaymentRows({
               type="button"
               onClick={() => onRemove(index)}
               disabled={fields.length === 1}
-              className="mt-4 grid size-9 place-items-center rounded-md text-stone-400 transition hover:bg-white hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
+              className="grid size-9 place-items-center self-end rounded-md text-stone-400 transition hover:bg-white hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
               aria-label="Eliminar abono"
               title="Eliminar abono"
             >
@@ -1215,7 +1243,7 @@ function PaymentRows({
         </div>
       ))}
       {compact ? (
-        <button type="button" onClick={onAdd} className="btn btn-secondary h-9 w-full">
+        <button type="button" onClick={onAdd} className="btn btn-secondary h-9">
           <Plus className="size-4" />
           Agregar abono
         </button>

@@ -161,6 +161,15 @@ select {
   .meta-label {
     @apply text-xs font-medium uppercase tracking-[0.12em] text-stone-400;
   }
+
+  .sales-note-product-lines {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 35px,
+      rgb(231 229 228) 36px
+    );
+  }
 }
 
 @media print {
@@ -206,6 +215,21 @@ select {
     -webkit-print-color-adjust: exact;
   }
 
+  body.printing-sales-note .sales-note-products-section {
+    min-height: 98mm !important;
+  }
+
+  body.printing-sales-note .sales-note-product-lines {
+    min-height: 24mm !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.printing-sales-note .sales-note-print-signature {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   body.printing-sales-note .sales-note-print-area .overflow-x-auto {
     overflow: visible !important;
   }
@@ -243,6 +267,14 @@ select {
   body.printing-sales-note button,
   body.printing-sales-note select,
   body.printing-sales-note input[type="file"] {
+    display: none !important;
+  }
+
+  body.printing-sales-note button.sales-note-print-value {
+    display: flex !important;
+  }
+
+  body.printing-sales-note .sales-note-print-change {
     display: none !important;
   }
 

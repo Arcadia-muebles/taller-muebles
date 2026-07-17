@@ -76,18 +76,18 @@ export default async function DocumentsPage() {
                     const firstOrder = document.orders[0];
                     return (
                       <details key={document.key} className="group/note overflow-hidden rounded-lg border border-stone-200 bg-white">
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 transition hover:bg-stone-50 [&::-webkit-details-marker]:hidden">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <span className="font-mono text-sm font-bold text-stone-950">{document.code}</span>
-                              <span className="text-sm font-medium text-stone-900">{document.client}</span>
-                            </div>
-                            <p className="mt-1 text-xs text-stone-500">
-                              {document.orders.length} {document.orders.length === 1 ? "producto" : "productos"} · Emitida {formatDate(document.entryDate)} · {formatCurrency(document.total)}
-                            </p>
+                        <summary className="flex cursor-pointer list-none items-center gap-4 px-4 py-3 transition hover:bg-stone-50 [&::-webkit-details-marker]:hidden">
+                          <div className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-[minmax(220px,1.4fr)_110px_repeat(3,minmax(120px,0.7fr))]">
+                            <SummaryField label="Nombre del cliente" value={document.client} className="col-span-2 lg:col-span-1" />
+                            <SummaryField label="Código" value={document.code} mono />
+                            <SummaryField label="Total de la compra" value={formatCurrency(document.total)} />
+                            <SummaryField label="Abonó" value={formatCurrency(document.paidAmount)} />
+                            <SummaryField label="Debe" value={formatCurrency(document.balance)} strong />
                           </div>
                           <div className="flex shrink-0 items-center gap-3 text-xs font-medium text-stone-500">
-                            <span className="hidden sm:inline">{firstOrder?.documentStatus === "issued" ? "Emitida" : documentStatusLabel(document.status)}</span>
+                            <span className="hidden xl:inline">
+                              {firstOrder?.documentStatus === "issued" ? "Emitida" : documentStatusLabel(document.status)} · {formatDate(document.entryDate)}
+                            </span>
                             <ChevronDown className="size-4 transition group-open/note:rotate-180" />
                           </div>
                         </summary>
@@ -175,6 +175,29 @@ function ClickableCell({
   );
 }
 
+function SummaryField({
+  label,
+  value,
+  className = "",
+  mono = false,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  className?: string;
+  mono?: boolean;
+  strong?: boolean;
+}) {
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <span className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-400">{label}</span>
+      <span className={`mt-0.5 block truncate text-sm text-stone-900 ${mono ? "font-mono font-bold" : strong ? "font-bold" : "font-medium"}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function groupDocuments(orders: Order[]): DocumentSummary[] {
   const map = new Map<string, Order[]>();
   for (const order of orders) {
@@ -185,6 +208,10 @@ function groupDocuments(orders: Order[]): DocumentSummary[] {
 
   return Array.from(map.entries()).map(([key, group]) => {
     const first = group[0];
+    const total = first.total ?? 0;
+    const paidAmount = first.payments?.length
+      ? first.payments.reduce((sum, payment) => sum + payment.amount, 0)
+      : (first.paidAmount ?? 0);
     return {
       key,
       type: first.documentType,
@@ -194,9 +221,9 @@ function groupDocuments(orders: Order[]): DocumentSummary[] {
       store: first.store,
       entryDate: first.entryDate,
       deliveryDate: first.deliveryDate,
-      total: first.total,
-      paidAmount: first.paidAmount,
-      balance: first.balance,
+      total,
+      paidAmount,
+      balance: Math.max(total - paidAmount, 0),
       orders: group.sort((a, b) => a.product.localeCompare(b.product)),
     };
   }).sort((a, b) => {
