@@ -2,7 +2,6 @@ import { ChevronDown, FileText, Plus } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
-import { SalesNoteDocument } from "@/components/sales-note-document";
 import { requireSession } from "@/lib/auth";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -92,7 +91,11 @@ export default async function DocumentsPage() {
                           </div>
                         </summary>
                         <div className="border-t border-stone-200 p-4">
-                          <SalesNoteDocument code={document.code} orders={document.orders} canEdit={canEditOrders} />
+                          {firstOrder ? (
+                            <Link href={`/admin/orders/${firstOrder.id}`} className="btn btn-primary">
+                              Abrir nota de venta
+                            </Link>
+                          ) : null}
                         </div>
                       </details>
                     );

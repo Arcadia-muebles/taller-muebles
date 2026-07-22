@@ -43,18 +43,21 @@ export function OrderForm({
   initialValues,
   initialDocumentType = "sales_note",
   nextCodes = { LH: "LH-001", LR: "LR-001" },
+  readOnly = false,
 }: {
   orderId?: string;
-  initialValues?: OrderFormValues;
+  initialValues?: FormValues;
   initialDocumentType?: CommercialDocumentType;
   assignees?: string[];
   nextCodes?: Record<StoreCode, string>;
+  readOnly?: boolean;
 }) {
   const action = orderId ? updateOrder.bind(null, orderId) : createOrder;
   const [state, formAction, actionPending] = useActionState(action, initialState);
   const [formPending, startTransition] = useTransition();
   const [discountPercent, setDiscountPercent] = useState(0);
   const [pdfSaving, setPdfSaving] = useState(false);
+  const [printPreparing, setPrintPreparing] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfSuccess, setPdfSuccess] = useState<string | null>(null);
   const lastAutoCode = useRef<string | null>(initialValues?.salesNoteNumber ?? nextCodes.LR);
@@ -147,9 +150,9 @@ export function OrderForm({
   }, [documentType, setValue, store]);
 
   const computedSubtotal = isCommercialDocument
-    ? orderId
-      ? lineTotal(quantity, unitPrice)
-      : products.reduce((sum, product) => sum + lineTotal(product.quantity, product.unitPrice), 0)
+    ? products.length
+      ? products.reduce((sum, product) => sum + lineTotal(product.quantity, product.unitPrice), 0)
+      : lineTotal(quantity, unitPrice)
     : 0;
   const computedDiscountPercent = clampPercent(discountPercent);
   const computedDiscount = !orderId && isCommercialDocument
@@ -190,9 +193,17 @@ export function OrderForm({
   }, [isQuote, orderId, payments.length, replacePayments, setValue]);
 
   const submit = handleSubmit((_values, event) => {
+    if (readOnly) return;
     if (!(event?.target instanceof HTMLFormElement)) return;
     const formData = new FormData(event.target);
     if (!orderId) formData.set("productItems", JSON.stringify(products));
+    if (orderId && products[0]) {
+      formData.set("productName", products[0].productName ?? "");
+      formData.set("material", products[0].material ?? "");
+      formData.set("color", products[0].color ?? "");
+      formData.set("quantity", String(products[0].quantity ?? 1));
+      formData.set("unitPrice", String(products[0].unitPrice ?? 0));
+    }
     if (!orderId) {
       formData.set("paidAmount", String(computedPaid));
       formData.set("paymentMethod", paymentSummary(payments));
@@ -213,34 +224,8 @@ export function OrderForm({
     setPdfSaving(true);
     setPdfError(null);
     setPdfSuccess(null);
-    const exportArea = printArea.cloneNode(true) as HTMLElement;
-    exportArea.classList.add("sales-note-pdf-export");
-    exportArea.setAttribute("aria-hidden", "true");
-    Object.assign(exportArea.style, {
-      position: "fixed",
-      left: "-10000px",
-      top: "0",
-      width: "748px",
-      maxWidth: "none",
-      pointerEvents: "none",
-      zIndex: "-1",
-    });
-    copyFormValues(printArea, exportArea);
-    document.body.appendChild(exportArea);
-
     try {
-      await document.fonts.ready;
-      await waitForImages(exportArea);
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import("html2canvas-pro"),
-        import("jspdf"),
-      ]);
-      const canvas = await html2canvas(exportArea, {
-        backgroundColor: "#ffffff",
-        logging: false,
-        scale: 2,
-        useCORS: true,
-      });
+      const [canvas, { jsPDF }] = await Promise.all([renderSalesNoteCanvas(printArea), import("jspdf")]);
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
       const margin = 6;
       const availableWidth = 210 - margin * 2;
@@ -255,50 +240,52 @@ export function OrderForm({
       console.error("No se pudo generar el PDF", error);
       setPdfError("No se pudo generar el PDF. Intenta nuevamente.");
     } finally {
-      exportArea.remove();
       setPdfSaving(false);
     }
   }
 
-  function printSalesNote() {
-    const root = document.documentElement;
-    const body = document.body;
+  async function printSalesNote() {
     const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
-    if (!printArea) return;
+    if (!printArea || printPreparing) return;
 
-    const preparePrintScale = () => {
-      root.style.setProperty("--sales-note-print-scale", "1");
-      void printArea.offsetHeight;
-
-      const pixelsPerMillimeter = 96 / 25.4;
-      const printableWidth = 198 * pixelsPerMillimeter;
-      const printableHeight = 285 * pixelsPerMillimeter;
-      const contentWidth = Math.max(printArea.scrollWidth, printArea.offsetWidth);
-      const contentHeight = Math.max(printArea.scrollHeight, printArea.offsetHeight);
-      const scale = Math.min(1, printableWidth / contentWidth, printableHeight / contentHeight);
-
-      root.style.setProperty("--sales-note-print-scale", String(scale));
-    };
-
-    body.classList.add("printing-sales-note");
-    preparePrintScale();
-    const cleanup = () => {
-      body.classList.remove("printing-sales-note");
-      root.style.removeProperty("--sales-note-print-scale");
-      window.removeEventListener("beforeprint", preparePrintScale);
-      window.removeEventListener("afterprint", cleanup);
-    };
-    window.addEventListener("beforeprint", preparePrintScale);
-    window.addEventListener("afterprint", cleanup);
-    window.print();
-    window.setTimeout(cleanup, 60_000);
+    setPrintPreparing(true);
+    setPdfError(null);
+    try {
+      const canvas = await renderSalesNoteCanvas(printArea);
+      const frame = document.createElement("iframe");
+      frame.title = "Impresión de nota de venta";
+      Object.assign(frame.style, { position: "fixed", width: "1px", height: "1px", right: "0", bottom: "0", border: "0", opacity: "0" });
+      document.body.appendChild(frame);
+      const frameDocument = frame.contentDocument;
+      if (!frameDocument) throw new Error("No se pudo preparar la hoja de impresión.");
+      frameDocument.open();
+      frameDocument.write('<!doctype html><html><head><title>Nota de venta</title><style>@page{size:A4 portrait;margin:6mm}html,body{width:198mm;height:285mm;margin:0;overflow:hidden;background:#fff}img{display:block;width:100%;height:100%;object-fit:contain;object-position:top left}</style></head><body><img alt="Nota de venta"></body></html>');
+      frameDocument.close();
+      const image = frameDocument.querySelector("img");
+      if (!image) throw new Error("No se pudo preparar la nota para impresión.");
+      await new Promise<void>((resolve, reject) => {
+        image.addEventListener("load", () => resolve(), { once: true });
+        image.addEventListener("error", () => reject(new Error("No se pudo renderizar la nota.")), { once: true });
+        image.src = canvas.toDataURL("image/jpeg", 0.96);
+      });
+      const cleanup = () => frame.remove();
+      frame.contentWindow?.addEventListener("afterprint", cleanup, { once: true });
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      window.setTimeout(cleanup, 60_000);
+    } catch (error) {
+      console.error("No se pudo imprimir la nota", error);
+      setPdfError("No se pudo preparar la impresión. Intenta nuevamente.");
+    } finally {
+      setPrintPreparing(false);
+    }
   }
 
   if (!orderId && state.status === "success") {
     return <OrderSuccessScreen message={state.message} orderId={state.orderId} isQuote={state.documentType === "quote"} />;
   }
 
-  if (!orderId && isLeatherHouse) {
+  if (isLeatherHouse) {
     return (
       <form key="leather-house-intake" action={formAction} onSubmit={submit} className="space-y-4">
         <input type="hidden" name="productItems" value={JSON.stringify(products)} readOnly />
@@ -307,7 +294,7 @@ export function OrderForm({
         <input type="hidden" {...register("salesNoteNumber")} />
         <input type="hidden" {...register("groupCode")} />
 
-        <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+        <section inert={readOnly ? true : undefined} className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-stone-200 bg-stone-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="grid size-10 place-items-center rounded-md border border-stone-200 bg-white">
@@ -392,10 +379,10 @@ export function OrderForm({
             <ArrowLeft className="size-4" />
             Volver
           </Link>
-          <button type="submit" disabled={pending} className="btn-lg btn-primary">
+          {!readOnly ? <button type="submit" disabled={pending} className="btn-lg btn-primary">
             <Save className="size-4" />
-            {pending ? "Guardando..." : "Ingresar a producción"}
-          </button>
+            {pending ? "Guardando..." : orderId ? "Guardar cambios" : "Ingresar a producción"}
+          </button> : null}
         </div>
         {showValidationSummary ? (
           <div aria-live="polite" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950">
@@ -416,7 +403,7 @@ export function OrderForm({
     );
   }
 
-  if (!orderId) {
+  if (isCommercialDocument) {
     return (
       <form key="la-reina-document" action={formAction} onSubmit={submit} className="space-y-4">
         <input type="hidden" name="productItems" value={JSON.stringify(products)} readOnly />
@@ -437,9 +424,9 @@ export function OrderForm({
                   <Download className="size-4" />
                   {pdfSaving ? "Guardando..." : "Guardar PDF"}
                 </button>
-                <button type="button" onClick={printSalesNote} className="btn btn-secondary h-10 whitespace-nowrap">
+                <button type="button" onClick={printSalesNote} disabled={printPreparing} className="btn btn-secondary h-10 whitespace-nowrap">
                   <Printer className="size-4" />
-                  Imprimir
+                  {printPreparing ? "Preparando..." : "Imprimir"}
                 </button>
                 <select {...register("store")} className="control bg-white">
                   <option value="LH">LH - producción</option>
@@ -755,10 +742,10 @@ export function OrderForm({
             <ArrowLeft className="size-4" />
             Volver
           </Link>
-          <button type="submit" disabled={pending} className="btn-lg btn-primary">
+          {!readOnly ? <button type="submit" disabled={pending} className="btn-lg btn-primary">
             <Save className="size-4" />
-            {pending ? "Guardando..." : isLeatherHouse ? "Guardar ingreso" : isQuote ? "Guardar cotización" : "Guardar documento"}
-          </button>
+            {pending ? "Guardando..." : orderId ? "Guardar cambios" : isQuote ? "Guardar cotización" : "Guardar documento"}
+          </button> : null}
         </div>
         {showValidationSummary ? (
           <div aria-live="polite" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950">
@@ -1444,6 +1431,37 @@ function copyFormValues(source: HTMLElement, target: HTMLElement) {
       targetField.textContent = sourceField.value;
     }
   });
+}
+
+async function renderSalesNoteCanvas(printArea: HTMLElement) {
+  const exportArea = printArea.cloneNode(true) as HTMLElement;
+  exportArea.classList.add("sales-note-pdf-export");
+  exportArea.setAttribute("aria-hidden", "true");
+  Object.assign(exportArea.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    width: "748px",
+    maxWidth: "none",
+    pointerEvents: "none",
+    zIndex: "-1",
+  });
+  copyFormValues(printArea, exportArea);
+  document.body.appendChild(exportArea);
+
+  try {
+    await document.fonts.ready;
+    await waitForImages(exportArea);
+    const { default: html2canvas } = await import("html2canvas-pro");
+    return await html2canvas(exportArea, {
+      backgroundColor: "#ffffff",
+      logging: false,
+      scale: 2,
+      useCORS: true,
+    });
+  } finally {
+    exportArea.remove();
+  }
 }
 
 async function waitForImages(root: HTMLElement) {

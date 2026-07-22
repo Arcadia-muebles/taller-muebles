@@ -14,8 +14,8 @@ import { ClientPortalAccess } from "@/components/client-portal-access";
 import { OrderActions } from "@/components/order-actions";
 import { OrderCollaboration } from "@/components/order-collaboration";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
+import { OrderForm } from "@/components/order-form";
 import { ProductionStepControls } from "@/components/production-step-controls";
-import { SalesNoteDocument } from "@/components/sales-note-document";
 import { StepCommentButton } from "@/components/step-comment-button";
 import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
@@ -60,10 +60,10 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
     .sort((a, b) => a.product.localeCompare(b.product));
   const showProductionView = query.view === "production";
 
-  if (order.documentType === "sales_note" && !showProductionView) {
+  if (!showProductionView) {
     return (
       <AppShell active="admin" user={user}>
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/admin"
             className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-950"
@@ -71,11 +71,60 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             <ArrowLeft className="size-4" />
             Volver al panel
           </Link>
+          {canEditOrder ? (
+            <Link href={`/admin/orders/${order.id}/edit`} className="btn btn-primary">
+              Editar orden
+            </Link>
+          ) : null}
         </div>
-        <SalesNoteDocument
-          code={documentCode}
-          orders={groupOrders}
-          canEdit={canEditOrder}
+        <OrderForm
+          orderId={order.id}
+          readOnly
+          initialDocumentType={order.documentType}
+          initialValues={{
+            store: order.store,
+            documentType: order.documentType,
+            documentStatus: order.documentStatus,
+            salesNoteNumber: documentCode,
+            groupCode: order.groupCode,
+            clientName: order.client,
+            customerContact: order.customerContact,
+            customerAddress: order.customerAddress,
+            customerCommune: order.customerCommune,
+            customerRut: order.customerRut,
+            customerEmail: order.customerEmail,
+            customerPhone: order.customerPhone,
+            productName: order.product,
+            material: order.material,
+            color: order.color,
+            quantity: order.quantity,
+            unitPrice: order.unitPrice,
+            subtotal: order.subtotal,
+            discount: order.discount,
+            total: order.total,
+            paidAmount: order.paidAmount,
+            sellerName: order.sellerName,
+            paymentMethod: order.paymentMethod,
+            deliveryTerms: order.deliveryTerms,
+            entryDate: order.entryDate,
+            deliveryDate: order.deliveryDate,
+            assignedTo: order.assignedTo,
+            observations: order.observations,
+            isWarranty: order.isWarranty,
+            products: groupOrders.map((item) => ({
+              productName: item.product,
+              material: item.material,
+              color: item.color,
+              quantity: item.quantity ?? 1,
+              unitPrice: item.unitPrice ?? 0,
+            })),
+            payments: (order.payments ?? []).map((payment) => ({
+              paidAt: payment.paidAt,
+              amount: payment.amount,
+              method: payment.method,
+              note: payment.note ?? "",
+            })),
+          }}
         />
       </AppShell>
     );

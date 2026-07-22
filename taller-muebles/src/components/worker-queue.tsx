@@ -69,19 +69,32 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
 
   const workingOrders = useMemo(
     () =>
-      orders.map((order) => ({
-        ...order,
-        steps: order.steps.map((step) => {
+      orders.map((order) => {
+        const now = new Date().toISOString();
+        const steps = order.steps.map((step) => {
           const override = overrides[`${order.id}:${step.key}`];
           const status = override && step.status === override.previousStatus ? override.status : step.status;
           return {
             ...step,
             status,
             startedAt: status === "pending" ? undefined : step.startedAt,
-            completedAt: status === "done" ? step.completedAt ?? new Date().toISOString() : undefined,
+            completedAt: status === "done" ? step.completedAt ?? now : undefined,
           };
-        }),
-      })),
+        });
+        const finalStep = steps.at(-1);
+        const autoCompleteFinalStep =
+          finalStep?.status === "pending" &&
+          /dispatch|despacho|entrega|terminado/i.test(`${finalStep.key} ${finalStep.label}`) &&
+          steps.slice(0, -1).every((step) => step.status === "done");
+        return {
+          ...order,
+          steps: autoCompleteFinalStep
+            ? steps.map((step, index) => index === steps.length - 1
+              ? { ...step, status: "done" as const, startedAt: step.startedAt ?? now, completedAt: now }
+              : step)
+            : steps,
+        };
+      }),
     [orders, overrides],
   );
 

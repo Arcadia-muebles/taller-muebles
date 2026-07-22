@@ -62,6 +62,8 @@ export function OrderLabelPrintButton({
       }),
     );
 
+    fitLabelText(printDocument);
+
     frame.contentWindow?.focus();
     frame.contentWindow?.print();
     window.setTimeout(() => frame.remove(), 1000);
@@ -196,6 +198,27 @@ function formatShortDate(value?: string | null) {
   return `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear().toString().slice(-2)}`;
 }
 
+function fitLabelText(document: Document) {
+  const selectors = [
+    ".label-code",
+    ".label-client",
+    ".label-product",
+    ".label-color",
+    ".label-status",
+    ".label-footer-meta span",
+  ];
+
+  document.querySelectorAll<HTMLElement>(selectors.join(",")).forEach((element) => {
+    const availableWidth = element.clientWidth;
+    if (!availableWidth || element.scrollWidth <= availableWidth) return;
+
+    const currentSize = Number.parseFloat(document.defaultView?.getComputedStyle(element).fontSize ?? "0");
+    if (!currentSize) return;
+
+    element.style.fontSize = `${currentSize * (availableWidth / element.scrollWidth) * 0.97}px`;
+  });
+}
+
 function labelPrintDocument(labelMarkup: string) {
   return `<!doctype html>
 <html>
@@ -246,7 +269,7 @@ body {
   align-items: center;
   min-width: 0;
   border-right: 0.35mm solid #000000;
-  padding: 4mm 3mm;
+  padding: 2.5mm 3mm;
   text-align: center;
 }
 
@@ -258,14 +281,14 @@ body {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 23mm;
+  max-height: 20mm;
   object-fit: contain;
 }
 
 .label-divider {
   width: 100%;
   height: 0.35mm;
-  margin: 4mm 0;
+  margin: 2.5mm 0;
   background: #000000;
 }
 
@@ -274,7 +297,7 @@ body {
   margin: 0;
   overflow: hidden;
   font-family: "Arial Narrow", Arial, sans-serif;
-  font-size: 19mm;
+  font-size: 16mm;
   font-weight: 900;
   line-height: 0.9;
   text-align: center;
@@ -283,8 +306,8 @@ body {
 }
 
 .label-qr {
-  width: 29mm !important;
-  height: 29mm !important;
+  width: 26mm !important;
+  height: 26mm !important;
   margin-top: auto;
 }
 
@@ -292,22 +315,23 @@ body {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  padding: 4mm 5mm 3mm 5mm;
+  overflow: hidden;
+  padding: 2.5mm 5mm;
 }
 
 .label-section {
   min-width: 0;
   border-bottom: 0.3mm solid #000000;
-  padding-bottom: 3mm;
+  padding-bottom: 1.5mm;
 }
 
 .label-section + .label-section {
-  padding-top: 3mm;
+  padding-top: 1.5mm;
 }
 
 .label-kicker {
-  margin: 0 0 1.2mm;
-  font-size: 3.3mm;
+  margin: 0 0 0.7mm;
+  font-size: 3mm;
   font-weight: 800;
   letter-spacing: 0.7mm;
   line-height: 1;
@@ -318,7 +342,7 @@ body {
   margin: 0;
   overflow: hidden;
   font-family: "Arial Narrow", Arial, sans-serif;
-  font-size: 8.5mm;
+  font-size: 7mm;
   font-weight: 900;
   line-height: 1;
   text-transform: uppercase;
@@ -336,7 +360,7 @@ body {
   margin: 0;
   overflow: hidden;
   font-family: "Arial Narrow", Arial, sans-serif;
-  font-size: 5.6mm;
+  font-size: 5mm;
   font-weight: 900;
   line-height: 1.05;
   text-transform: uppercase;
@@ -344,7 +368,7 @@ body {
 }
 
 .label-count {
-  margin: 5.2mm 0 0;
+  margin: 3.8mm 0 0;
   font-size: 4mm;
   font-weight: 900;
   line-height: 1;
@@ -356,7 +380,7 @@ body {
 .label-color {
   margin: 0;
   overflow: hidden;
-  font-size: 6mm;
+  font-size: 5.5mm;
   font-weight: 900;
   line-height: 1;
   text-transform: uppercase;
@@ -371,7 +395,7 @@ body {
 
 .label-date-grid > div {
   min-width: 0;
-  padding: 3mm 0;
+  padding: 2mm 0;
 }
 
 .label-date-grid > div + div {
@@ -381,7 +405,7 @@ body {
 
 .label-date {
   margin: 0;
-  font-size: 5mm;
+  font-size: 4.5mm;
   font-weight: 900;
   line-height: 1;
 }
@@ -392,7 +416,7 @@ body {
   align-items: end;
   gap: 3mm;
   border-bottom: 0.3mm solid #000000;
-  padding: 2.5mm 0 2mm;
+  padding: 1.5mm 0;
   text-transform: uppercase;
 }
 
@@ -404,7 +428,7 @@ body {
 }
 
 .label-observations p {
-  min-height: 4mm;
+  min-height: 3.5mm;
   margin: 0;
   overflow: hidden;
   border-bottom: 0.25mm solid #000000;
@@ -419,13 +443,13 @@ body {
   grid-template-columns: 12mm minmax(0, 1fr);
   align-items: center;
   gap: 3mm;
-  padding-top: 2.8mm;
+  padding-top: 2mm;
 }
 
 .label-status-icon {
   display: grid;
-  width: 11.5mm;
-  height: 11.5mm;
+  width: 10.5mm;
+  height: 10.5mm;
   place-items: center;
   border-radius: 999px;
   background: #000000;
@@ -442,7 +466,7 @@ body {
   overflow: hidden;
   border-bottom: 0.6mm solid #000000;
   font-family: "Arial Narrow", Arial, sans-serif;
-  font-size: 8mm;
+  font-size: 7mm;
   font-weight: 900;
   line-height: 1;
   text-transform: uppercase;
@@ -455,12 +479,18 @@ body {
   gap: 4mm;
   margin-top: auto;
   overflow: hidden;
-  font-size: 2.4mm;
+  font-size: 2.2mm;
   font-weight: 800;
   letter-spacing: 0.3mm;
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.label-footer-meta span {
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
 }
 `;
 }

@@ -137,6 +137,10 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
     }
 
     if (current?.key === stepKey) {
+      if (current.status === "active") {
+        updateStepStatus(order.id, stepKey, current.status, "done");
+        return;
+      }
       if (current.status !== "pending" || !isWaitingForStep(order, current)) return;
       updateStepStatus(order.id, stepKey, current.status, "active");
       return;
@@ -568,13 +572,13 @@ function StepDot({
   const disabled = pending || !canMove || order.status === "completed" || order.status === "cancelled";
   const waiting = isWaitingForStep(order, step);
   const requestedAndPending = requested && step.status === "pending";
-  const independentAction = isIndependentStartStep(step.key)
-    ? step.status === "active"
+  const directAction = step.status === "active"
       ? `Marcar ${step.label} como listo`
-      : step.status === "done"
-        ? `Reabrir ${step.label}`
-        : `Iniciar ${step.label}`
-    : undefined;
+      : isIndependentStartStep(step.key)
+        ? step.status === "done"
+          ? `Reabrir ${step.label}`
+          : `Iniciar ${step.label}`
+        : undefined;
   const Icon = step.status === "done" ? Check : step.status === "active" ? Circle : step.status === "blocked" ? X : Circle;
   return (
     <button
@@ -584,8 +588,8 @@ function StepDot({
       data-step-status={step.status}
       disabled={disabled}
       onClick={onMove}
-      title={independentAction ?? (requestedAndPending ? `${step.label}: solicitada, pendiente` : waiting ? `${step.label}: disponible para iniciar` : disabled ? step.label : `Mover a ${step.label}`)}
-      aria-label={independentAction ? `${independentAction} para ${order.code}` : requestedAndPending ? `${step.label}: solicitada, pendiente` : disabled ? `${step.label}: ${step.status}` : `Mover ${order.code} a ${step.label}`}
+      title={directAction ?? (requestedAndPending ? `${step.label}: solicitada, pendiente` : waiting ? `${step.label}: disponible para iniciar` : disabled ? step.label : `Mover a ${step.label}`)}
+      aria-label={directAction ? `${directAction} para ${order.code}` : requestedAndPending ? `${step.label}: solicitada, pendiente` : disabled ? `${step.label}: ${step.status}` : `Mover ${order.code} a ${step.label}`}
       className={cn(
         "production-process-indicator mx-auto grid size-6 place-items-center rounded-md border transition",
         requestedAndPending ? "border-amber-300 bg-amber-50 text-amber-700" : stepDotClass(step.status, stepTone(step)),
@@ -938,17 +942,27 @@ function isFinishedStep(step: Pick<ProductionStep, "key" | "label">) {
 
 function orderWithStepStatuses(order: Order, statuses: Record<string, OptimisticStepStatus>): Order {
   const now = new Date().toISOString();
+  const steps = order.steps.map((step) => {
+    const optimisticStatus = statuses[optimisticStepStatusKey(order.id, step.key)];
+    if (!optimisticStatus || step.status !== optimisticStatus.previousStatus) return step;
+    const { status } = optimisticStatus;
+    if (status === "pending") return { ...step, status, startedAt: undefined, completedAt: undefined };
+    if (status === "active") return { ...step, status, startedAt: step.startedAt ?? now, completedAt: undefined };
+    if (status === "done") return { ...step, status, startedAt: step.startedAt ?? now, completedAt: now };
+    return { ...step, status };
+  });
+  const finalStep = steps.at(-1);
+  const autoCompleteFinalStep =
+    finalStep?.status === "pending" &&
+    isFinishedStep(finalStep) &&
+    steps.slice(0, -1).every((step) => step.status === "done");
   return {
     ...order,
-    steps: order.steps.map((step) => {
-      const optimisticStatus = statuses[optimisticStepStatusKey(order.id, step.key)];
-      if (!optimisticStatus || step.status !== optimisticStatus.previousStatus) return step;
-      const { status } = optimisticStatus;
-      if (status === "pending") return { ...step, status, startedAt: undefined, completedAt: undefined };
-      if (status === "active") return { ...step, status, startedAt: step.startedAt ?? now, completedAt: undefined };
-      if (status === "done") return { ...step, status, startedAt: step.startedAt ?? now, completedAt: now };
-      return { ...step, status };
-    }),
+    steps: autoCompleteFinalStep
+      ? steps.map((step, index) => index === steps.length - 1
+        ? { ...step, status: "done" as const, startedAt: step.startedAt ?? now, completedAt: now }
+        : step)
+      : steps,
   };
 }
 

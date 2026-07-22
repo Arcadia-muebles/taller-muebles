@@ -144,8 +144,8 @@ export async function getOrder(id: string): Promise<Order | undefined> {
     .maybeSingle();
 
   if (error || !data) {
-    console.error("Supabase order query failed:", error?.message);
-    return undefined;
+    if (error) console.error("Supabase order query failed:", error.message);
+    return (await listOrders()).find((order) => order.id === id);
   }
 
   const order = mapOrderRecord(data as OrderRecord);

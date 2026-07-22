@@ -194,6 +194,13 @@ export async function updateProductionStep(
   const currentStepIndex = currentOrder.steps.findIndex((step) => step.key === parsed.data.stepKey);
   const laterStepsToReset = productionStepsResetByReversal(currentOrder.steps, currentStepIndex);
   const isReversal = isReverseTransition(currentStep.status, parsed.data.status);
+  const finalStepToAutoComplete =
+    parsed.data.status === "done" &&
+    currentStepIndex === currentOrder.steps.length - 2 &&
+    isFinalDeliveryStep(currentOrder.steps, currentStepIndex + 1) &&
+    currentOrder.steps.slice(0, currentStepIndex).every((step) => step.status === "done")
+      ? currentOrder.steps[currentStepIndex + 1]
+      : undefined;
 
   if (currentStep.status === "done" && parsed.data.status === "pending" && isFinalDeliveryStep(currentOrder.steps, currentStepIndex)) {
     return { status: "error", message: "La entrega final no se puede reabrir como una etapa de producción." };
@@ -295,6 +302,26 @@ export async function updateProductionStep(
     };
   }
 
+  if (finalStepToAutoComplete) {
+    const { error: finalStepError } = await mutationClient
+      .from("production_steps")
+      .update({
+        status: "done",
+        started_at: finalStepToAutoComplete.startedAt ?? now,
+        completed_at: now,
+        blocked_reason: null,
+        updated_by: profileId,
+      })
+      .eq("order_id", parsed.data.orderId)
+      .eq("step", finalStepToAutoComplete.key);
+    if (finalStepError) {
+      return {
+        status: "error",
+        message: `La etapa se completó, pero no se pudo marcar la orden como terminada: ${finalStepError.message}`,
+      };
+    }
+  }
+
   if (isReversal && laterStepsToReset.some(hasRecordedWork)) {
     const { error: downstreamError } = await mutationClient
       .from("production_steps")
@@ -317,6 +344,9 @@ export async function updateProductionStep(
 
   const effectiveSteps = currentOrder.steps.map((step) => {
     if (step.key === parsed.data.stepKey) return { ...step, status: parsed.data.status };
+    if (finalStepToAutoComplete && step.key === finalStepToAutoComplete.key) {
+      return { ...step, status: "done" as const, startedAt: step.startedAt ?? now, completedAt: now };
+    }
     if (isReversal && laterStepsToReset.some((laterStep) => laterStep.key === step.key)) {
       return { ...step, status: "pending" as const, startedAt: undefined, completedAt: undefined };
     }

@@ -1,27 +1,73 @@
 "use client";
 
 import { CalendarDays, Truck } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { scheduleOrderDelivery } from "@/app/admin/agenda/actions";
 
 export function ScheduleDeliveryButton({ orderId, defaultDate, itemCount = 1 }: { orderId: string; defaultDate: string; itemCount?: number }) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [position, setPosition] = useState({ top: 12, left: 12 });
+  const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLFormElement>(null);
 
-  function toggleOpen() {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (rect) {
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    function updatePosition() {
+      const button = buttonRef.current?.getBoundingClientRect();
+      const panel = panelRef.current?.getBoundingClientRect();
+      if (!button || !panel) return;
+
+      const gap = 8;
+      const viewportPadding = 12;
+      const fitsBelow = button.bottom + gap + panel.height <= window.innerHeight - viewportPadding;
+      const preferredTop = fitsBelow ? button.bottom + gap : button.top - panel.height - gap;
+      const preferredLeft = button.left - panel.width - gap;
+
       setPosition({
-        top: Math.max(16, rect.top + rect.height / 2 - 112),
-        left: Math.max(16, rect.left - 328),
+        top: Math.min(Math.max(viewportPadding, preferredTop), window.innerHeight - panel.height - viewportPadding),
+        left: Math.min(Math.max(viewportPadding, preferredLeft), window.innerWidth - panel.width - viewportPadding),
       });
     }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function closeFromOutside(event: PointerEvent) {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) setOpen(false);
+    }
+
+    function closeFromKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeFromKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeFromKeyboard);
+    };
+  }, [open]);
+
+  function toggleOpen() {
     setOpen((value) => !value);
   }
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         ref={buttonRef}
         type="button"
@@ -35,9 +81,11 @@ export function ScheduleDeliveryButton({ orderId, defaultDate, itemCount = 1 }: 
 
       {open ? (
         <form
+          ref={panelRef}
           action={scheduleOrderDelivery}
+          onSubmit={() => setOpen(false)}
           style={{ top: position.top, left: position.left }}
-          className="fixed z-50 w-80 rounded-lg border border-emerald-200 bg-white p-3 shadow-xl shadow-stone-950/10"
+          className="fixed z-[100] max-h-[calc(100vh-1.5rem)] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-lg border border-emerald-200 bg-white p-3 shadow-xl shadow-stone-950/10"
         >
           <input type="hidden" name="orderId" value={orderId} />
           <div className="grid grid-cols-[1.2fr_0.8fr] gap-2">

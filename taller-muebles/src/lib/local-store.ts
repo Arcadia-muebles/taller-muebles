@@ -752,7 +752,16 @@ export async function updateLocalProductionStep(input: {
     step.completedAt = now;
     const nextStep = nextPendingStep(order, step.key);
     if (nextStep) {
-      nextStep.status = "pending";
+      const nextStepIndex = order.steps.findIndex((item) => item.key === nextStep.key);
+      const completesIntoFinished =
+        nextStepIndex === order.steps.length - 1 &&
+        isFinishedStep(nextStep) &&
+        order.steps.slice(0, nextStepIndex).every((item) => item.status === "done");
+      nextStep.status = completesIntoFinished ? "done" : "pending";
+      if (completesIntoFinished) {
+        nextStep.startedAt = nextStep.startedAt ?? now;
+        nextStep.completedAt = now;
+      }
     }
   }
 
