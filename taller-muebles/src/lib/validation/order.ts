@@ -65,16 +65,6 @@ const baseOrderSchema = z.object({
 });
 
 function refineOrder(value: z.infer<typeof baseOrderSchema>, context: z.RefinementCtx) {
-  if (value.store === "LH") {
-    if (!value.color?.trim()) {
-      context.addIssue({ code: "custom", path: ["color"], message: "Ingresa color." });
-    }
-    return;
-  }
-
-  if (!value.color?.trim()) {
-    context.addIssue({ code: "custom", path: ["color"], message: "Ingresa color." });
-  }
   if (
     value.documentType !== "quote" &&
     value.total !== undefined &&
@@ -92,7 +82,7 @@ export type OrderFormValues = z.infer<typeof orderSchema>;
 export const orderProductSchema = z.object({
   productName: requiredText("Ingresa producto o modelo.", 3),
   material: z.string().trim().optional(),
-  color: requiredText("Ingresa color.", 2),
+  color: z.string().trim().optional(),
   quantity: optionalQuantity,
   unitPrice: optionalMoney,
 });

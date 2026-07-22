@@ -260,8 +260,13 @@ export async function updateAgendaItem(formData: FormData) {
       entity: "agenda_items",
       entity_id: parsed.data.itemId,
       profile_id: profileId,
-      field_name: "notes",
-      new_value: parsed.data.notes || "",
+      field_name: "schedule",
+      new_value: JSON.stringify({
+        scheduledDate: parsed.data.scheduledDate,
+        timeSlot: parsed.data.timeSlot,
+        title: parsed.data.kind === "task" ? parsed.data.title : undefined,
+        notes: parsed.data.notes || "",
+      }),
     });
     if (auditError) console.error("Agenda item audit insert failed:", auditError.message);
   }
@@ -379,10 +384,22 @@ export async function cancelAgendaItem(formData: FormData) {
     await cancelLocalAgendaItem(parsed.data.itemId);
   } else {
     const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) return;
     const { error } = await supabase.from("agenda_items").update({ status: "cancelled" }).eq("id", parsed.data.itemId);
     if (error) {
       console.error("Agenda cancel failed, using local fallback:", error.message);
       await cancelLocalAgendaItem(parsed.data.itemId);
+    } else {
+      const { error: auditError } = await supabase.from("audit_logs").insert({
+        action: "cancel_agenda_item",
+        entity: "agenda_items",
+        entity_id: parsed.data.itemId,
+        profile_id: profileId,
+        field_name: "status",
+        new_value: "cancelled",
+      });
+      if (auditError) console.error("Agenda cancellation audit insert failed:", auditError.message);
     }
   }
 

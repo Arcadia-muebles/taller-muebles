@@ -1,8 +1,9 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Plus, Sun, Truck } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Plus, Sun, Trash2, Truck } from "lucide-react";
 import Link from "next/link";
 import type { ElementType, ReactNode } from "react";
 import { cancelAgendaItem, completeAgendaItem, createAgendaTask, scheduleOrderDelivery, updateAgendaItem } from "@/app/admin/agenda/actions";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { PrintPageButton } from "@/components/print-page-button";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
@@ -182,9 +183,11 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
             tone="orange"
             empty="No hay tareas pendientes."
           >
-            {pendingTasks.slice(0, 3).map((item) => (
-              <TaskSidebarItem key={item.id} item={item} />
-            ))}
+            <div className="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
+              {pendingTasks.map((item) => (
+                <TaskSidebarItem key={item.id} item={item} canEdit={canEdit} />
+              ))}
+            </div>
           </SidebarList>
         </aside>
       </div>
@@ -311,7 +314,14 @@ function AgendaCard({ item, order, canEdit }: { item: AgendaItem; order?: Order;
               </form>
               <form action={cancelAgendaItem}>
                 <input type="hidden" name="itemId" value={item.id} />
-                <button type="submit" className="w-full rounded px-3 py-2 text-left text-xs font-medium text-rose-700 hover:bg-rose-50">Cancelar</button>
+                <ConfirmSubmitButton
+                  title="Quitar de la agenda"
+                  description="La actividad se ocultará de la agenda, pero conservará su registro para trazabilidad."
+                  confirmLabel="Quitar actividad"
+                  pendingLabel="Quitando..."
+                  trigger="Quitar de la agenda"
+                  triggerClassName="w-full rounded px-3 py-2 text-left text-xs font-medium text-rose-700 hover:bg-rose-50"
+                />
               </form>
             </div>
           </details>
@@ -487,16 +497,70 @@ function ReadySidebarItem({
   );
 }
 
-function TaskSidebarItem({ item }: { item: AgendaItem }) {
+function TaskSidebarItem({ item, canEdit }: { item: AgendaItem; canEdit: boolean }) {
+  const overdue = item.scheduledDate < todayLocalDate();
   return (
-    <div className="rounded-md bg-orange-50 p-3">
+    <div className={cn("rounded-md border p-3", overdue ? "border-rose-200 bg-rose-50/70" : "border-orange-100 bg-orange-50")}>
       <div className="flex gap-2">
-        <ClipboardCheck className="mt-0.5 size-4 shrink-0 text-orange-600" />
-        <div className="min-w-0">
-          <p className="truncate text-xs font-semibold text-stone-950">{item.title}</p>
-          <p className="truncate text-xs text-stone-500">{item.notes || formatDate(item.scheduledDate)}</p>
+        <ClipboardCheck className={cn("mt-0.5 size-4 shrink-0", overdue ? "text-rose-600" : "text-orange-600")} />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold leading-4 text-stone-950">{item.title}</p>
+          {item.notes ? <p className="mt-1 line-clamp-2 text-xs leading-4 text-stone-500">{item.notes}</p> : null}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", overdue ? "bg-rose-100 text-rose-700" : "bg-white text-stone-600")}>
+              {overdue ? "Vencida" : "Programada"} · {formatDate(item.scheduledDate)}
+            </span>
+            <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-stone-600">{item.timeSlot}</span>
+          </div>
         </div>
       </div>
+      {canEdit ? (
+        <details className="mt-2">
+          <summary className={cn(
+            "grid h-8 w-full cursor-pointer list-none place-items-center rounded-md border bg-white px-2 text-xs font-semibold transition",
+            overdue ? "border-rose-200 text-rose-700 hover:bg-rose-50" : "border-orange-200 text-orange-700 hover:bg-orange-50",
+          )}>
+            {overdue ? "Reagendar o gestionar" : "Gestionar"}
+          </summary>
+          <div className="mt-2 rounded-md border border-stone-200 bg-white p-2.5 shadow-sm">
+            <form action={updateAgendaItem} className="space-y-2">
+              <input type="hidden" name="itemId" value={item.id} />
+              <input type="hidden" name="kind" value="task" />
+              <label className="block">
+                <span className="field-label">Tarea</span>
+                <input name="title" defaultValue={item.title} className="control mt-1" required minLength={3} maxLength={120} />
+              </label>
+              <AgendaFormFields selectedDate={item.scheduledDate} defaultSlot={item.timeSlot} compact />
+              <label className="block">
+                <span className="field-label">Detalle</span>
+                <textarea name="notes" defaultValue={item.notes} className="textarea-control mt-1 min-h-16" maxLength={500} placeholder="Cliente, proveedor o contexto" />
+              </label>
+              <button type="submit" className="h-8 w-full rounded-md bg-stone-950 px-2 text-xs font-semibold text-white hover:bg-stone-800">
+                {overdue ? "Reagendar tarea" : "Guardar cambios"}
+              </button>
+            </form>
+            <div className="mt-2 grid grid-cols-2 gap-2 border-t border-stone-100 pt-2">
+              <form action={completeAgendaItem}>
+                <input type="hidden" name="itemId" value={item.id} />
+                <button type="submit" className="h-8 w-full rounded-md border border-emerald-200 bg-emerald-50 px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+                  Marcar hecha
+                </button>
+              </form>
+              <form action={cancelAgendaItem}>
+                <input type="hidden" name="itemId" value={item.id} />
+                <ConfirmSubmitButton
+                  title="Eliminar tarea pendiente"
+                  description="La tarea saldrá de pendientes, pero su cancelación quedará registrada para trazabilidad."
+                  confirmLabel="Eliminar tarea"
+                  pendingLabel="Eliminando..."
+                  trigger={<span className="inline-flex items-center gap-1"><Trash2 className="size-3.5" />Eliminar</span>}
+                  triggerClassName="grid h-8 w-full place-items-center rounded-md border border-rose-200 bg-rose-50 px-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                />
+              </form>
+            </div>
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

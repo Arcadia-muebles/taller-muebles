@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  Download,
   DollarSign,
   Factory,
   FileText,
@@ -19,7 +20,7 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { forwardRef, useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useFieldArray, useForm, useWatch, type Resolver, type UseFormRegister } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch, type Control, type Resolver, type UseFormRegister } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
 import type { CommercialDocumentType, StoreCode } from "@/lib/types";
 import { newOrderSchema, orderSchema, type NewOrderFormValues, type OrderFormValues } from "@/lib/validation/order";
@@ -27,6 +28,7 @@ import { newOrderSchema, orderSchema, type NewOrderFormValues, type OrderFormVal
 const inputClass = "control-lg bg-white";
 const labelClass = "field-label";
 const deliveryDayOptions = [10, 20, 30, 40, 50];
+const paymentMethodOptions = ["Transferencia", "Efectivo", "Débito", "Crédito", "Webpay", "Cheque", "Otro"];
 const initialState: CreateOrderState = {
   status: "idle",
   message: "",
@@ -52,6 +54,9 @@ export function OrderForm({
   const [state, formAction, actionPending] = useActionState(action, initialState);
   const [formPending, startTransition] = useTransition();
   const [discountPercent, setDiscountPercent] = useState(0);
+  const [pdfSaving, setPdfSaving] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfSuccess, setPdfSuccess] = useState<string | null>(null);
   const lastAutoCode = useRef<string | null>(initialValues?.salesNoteNumber ?? nextCodes.LR);
   const defaultEntryDate = new Date().toISOString().slice(0, 10);
   const {
@@ -81,7 +86,7 @@ export function OrderForm({
       payments: initialDocumentType === "quote" ? [] : [{ paidAt: defaultEntryDate, amount: 0, method: "Transferencia", note: "" }],
     },
   });
-  const { fields: productFields, append: appendProduct, remove: removeProduct, replace: replaceProducts } = useFieldArray({
+  const { fields: productFields, append: appendProduct, remove: removeProduct } = useFieldArray({
     control,
     name: "products",
   });
@@ -136,12 +141,10 @@ export function OrderForm({
   useEffect(() => {
     if (store === "LH") {
       setValue("documentType", "production_intake", { shouldDirty: false, shouldValidate: true });
-      const firstProduct = getValues("products")?.[0] ?? { productName: "", material: "", color: "", quantity: 1 };
-      if ((getValues("products")?.length ?? 0) > 1) replaceProducts([firstProduct]);
     } else if (documentType === "production_intake") {
       setValue("documentType", "sales_note", { shouldDirty: false, shouldValidate: true });
     }
-  }, [documentType, getValues, replaceProducts, setValue, store]);
+  }, [documentType, setValue, store]);
 
   const computedSubtotal = isCommercialDocument
     ? orderId
@@ -203,7 +206,61 @@ export function OrderForm({
     setValue("deliveryDate", addDays(baseDate, days), { shouldDirty: true, shouldValidate: true });
   }
 
-  function printSalesNotePdf() {
+  async function saveSalesNotePdf() {
+    const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
+    if (!printArea || pdfSaving) return;
+
+    setPdfSaving(true);
+    setPdfError(null);
+    setPdfSuccess(null);
+    const exportArea = printArea.cloneNode(true) as HTMLElement;
+    exportArea.classList.add("sales-note-pdf-export");
+    exportArea.setAttribute("aria-hidden", "true");
+    Object.assign(exportArea.style, {
+      position: "fixed",
+      left: "-10000px",
+      top: "0",
+      width: "748px",
+      maxWidth: "none",
+      pointerEvents: "none",
+      zIndex: "-1",
+    });
+    copyFormValues(printArea, exportArea);
+    document.body.appendChild(exportArea);
+
+    try {
+      await document.fonts.ready;
+      await waitForImages(exportArea);
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas-pro"),
+        import("jspdf"),
+      ]);
+      const canvas = await html2canvas(exportArea, {
+        backgroundColor: "#ffffff",
+        logging: false,
+        scale: 2,
+        useCORS: true,
+      });
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
+      const margin = 6;
+      const availableWidth = 210 - margin * 2;
+      const availableHeight = 297 - margin * 2;
+      const scale = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
+      const width = canvas.width * scale;
+      const height = canvas.height * scale;
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.96), "JPEG", margin, margin, width, height, undefined, "FAST");
+      pdf.save(pdfFileName(documentLabel, getValues("salesNoteNumber")));
+      setPdfSuccess("PDF generado y descargado.");
+    } catch (error) {
+      console.error("No se pudo generar el PDF", error);
+      setPdfError("No se pudo generar el PDF. Intenta nuevamente.");
+    } finally {
+      exportArea.remove();
+      setPdfSaving(false);
+    }
+  }
+
+  function printSalesNote() {
     const root = document.documentElement;
     const body = document.body;
     const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
@@ -244,13 +301,11 @@ export function OrderForm({
   if (!orderId && isLeatherHouse) {
     return (
       <form key="leather-house-intake" action={formAction} onSubmit={submit} className="space-y-4">
-        <input type="hidden" name="productItems" value={JSON.stringify(products.slice(0, 1))} readOnly />
+        <input type="hidden" name="productItems" value={JSON.stringify(products)} readOnly />
         <input type="hidden" {...register("documentType")} value="production_intake" />
         <input type="hidden" {...register("documentStatus")} value="issued" />
         <input type="hidden" {...register("salesNoteNumber")} />
         <input type="hidden" {...register("groupCode")} />
-        <input type="hidden" {...register("products.0.material")} value="Por definir" />
-        <input type="hidden" {...register("products.0.quantity")} value={1} />
 
         <section className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-stone-200 bg-stone-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -259,8 +314,8 @@ export function OrderForm({
                 <Factory className="size-5 text-stone-600" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-stone-950">Ingreso de producto Leather House</h2>
-                <p className="mt-0.5 text-sm text-stone-500">Ingreso directo a producción; no genera una nota de venta.</p>
+                <h2 className="text-base font-semibold text-stone-950">Ingreso de productos Leather House</h2>
+                <p className="mt-0.5 text-sm text-stone-500">Todos los productos comparten cliente, fechas y código de orden.</p>
               </div>
             </div>
             <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
@@ -276,18 +331,59 @@ export function OrderForm({
             <Field label="Nombre cliente" error={typedErrors.clientName?.message} full>
               <input {...register("clientName")} className={inputClass} placeholder="Nombre del cliente" autoFocus />
             </Field>
-            <Field label="Producto" error={typedErrors.products?.[0]?.productName?.message}>
-              <input {...register("products.0.productName")} className={inputClass} placeholder="Producto o modelo" />
-            </Field>
-            <Field label="Color" error={typedErrors.products?.[0]?.color?.message}>
-              <input {...register("products.0.color")} className={inputClass} placeholder="Color" />
-            </Field>
             <Field label="Fecha de ingreso" error={typedErrors.entryDate?.message}>
               <input {...register("entryDate")} type="date" className={inputClass} />
             </Field>
             <Field label="Fecha de entrega" error={typedErrors.deliveryDate?.message}>
               <input {...register("deliveryDate")} type="date" className={inputClass} />
             </Field>
+          </div>
+
+          <div className="border-t border-stone-200 bg-stone-50/60 p-5">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-stone-950">Productos de la orden</h3>
+                <p className="mt-1 text-xs text-stone-500">Cada producto tendrá su propio avance en producción.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
+                className="btn btn-secondary w-fit"
+              >
+                <Plus className="size-4" />
+                Agregar producto
+              </button>
+            </div>
+
+            <div className="grid gap-3">
+              {productFields.map((field, index) => (
+                <div key={field.id} className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_auto] sm:items-start">
+                  <span className="grid size-9 place-items-center rounded-md bg-stone-100 font-mono text-sm font-semibold text-stone-600">
+                    {index + 1}
+                  </span>
+                  <Field label="Producto" error={typedErrors.products?.[index]?.productName?.message}>
+                    <input {...register(`products.${index}.productName`)} className={inputClass} placeholder="Producto o modelo" />
+                  </Field>
+                  <Field label="Color (opcional)" error={typedErrors.products?.[index]?.color?.message}>
+                    <input {...register(`products.${index}.color`)} className={inputClass} placeholder="Color" />
+                  </Field>
+                  <div className="sm:pt-6">
+                    <button
+                      type="button"
+                      onClick={() => removeProduct(index)}
+                      disabled={productFields.length === 1}
+                      className="grid size-11 place-items-center rounded-md border border-stone-200 text-stone-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label={`Eliminar producto ${index + 1}`}
+                      title="Eliminar producto"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                  <input type="hidden" {...register(`products.${index}.material`)} value="Por definir" />
+                  <input type="hidden" {...register(`products.${index}.quantity`)} value={1} />
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -304,7 +400,7 @@ export function OrderForm({
         {showValidationSummary ? (
           <div aria-live="polite" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950">
             <p className="text-sm font-semibold">Faltan datos obligatorios</p>
-            <p className="mt-1 text-sm">Completa los cinco campos para ingresar el producto.</p>
+            <p className="mt-1 text-sm">Completa el cliente, las fechas y el nombre de cada producto.</p>
           </div>
         ) : null}
         {state.message ? (
@@ -336,10 +432,14 @@ export function OrderForm({
                 <FileText className="size-4" />
                 Vista previa editable - {documentLabel.toLocaleLowerCase("es-CL")}
               </div>
-              <div className="grid gap-2 sm:grid-cols-[auto_180px_180px_180px]">
-                <button type="button" onClick={printSalesNotePdf} className="btn btn-secondary h-10 whitespace-nowrap">
+              <div className="grid gap-2 sm:grid-cols-[auto_auto_180px_180px]">
+                <button type="button" onClick={saveSalesNotePdf} disabled={pdfSaving} className="btn btn-secondary h-10 whitespace-nowrap">
+                  <Download className="size-4" />
+                  {pdfSaving ? "Guardando..." : "Guardar PDF"}
+                </button>
+                <button type="button" onClick={printSalesNote} className="btn btn-secondary h-10 whitespace-nowrap">
                   <Printer className="size-4" />
-                  Guardar PDF
+                  Imprimir
                 </button>
                 <select {...register("store")} className="control bg-white">
                   <option value="LH">LH - producción</option>
@@ -438,8 +538,9 @@ export function OrderForm({
                 <tr className="border-b border-stone-200 bg-stone-50">
                   <th className="w-14 px-4 py-2 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Cant.</th>
                   <th className="px-4 py-2 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Descripción del producto</th>
-                  <th className="w-36 px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Valor unitario</th>
-                  <th className="w-36 px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Subtotal</th>
+                  <th className="w-32 px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Valor neto</th>
+                  <th className="w-32 px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Valor bruto</th>
+                  <th className="w-32 px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400">Valor total</th>
                   <th className="w-11 px-2 py-2"></th>
                 </tr>
               </thead>
@@ -481,6 +582,9 @@ export function OrderForm({
                           <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.color?.message}</p>
                         ) : null}
                       </td>
+                      <td className="px-4 py-4 text-right align-top text-sm font-semibold text-stone-700">
+                        {isCommercialDocument ? formatCurrency(unitNetValue(product.unitPrice)) : "-"}
+                      </td>
                       <td className="px-4 py-4 align-top text-right">
                         {isCommercialDocument ? (
                           <input
@@ -490,6 +594,7 @@ export function OrderForm({
                             step="1"
                             className="h-9 w-28 rounded-md border border-transparent bg-transparent px-2 text-right text-sm text-stone-950 outline-none transition focus:border-stone-300 focus:bg-white"
                             placeholder="0"
+                            aria-label={`Valor bruto unitario producto ${index + 1}`}
                           />
                         ) : (
                           <span className="text-sm text-stone-400">-</span>
@@ -578,12 +683,18 @@ export function OrderForm({
                 </DocumentField>
               </div>
             </div>
+            {pdfError || pdfSuccess ? (
+              <p aria-live="polite" className={`mt-2 text-right text-xs font-medium ${pdfError ? "text-rose-700" : "text-emerald-700"}`}>
+                {pdfError ?? pdfSuccess}
+              </p>
+            ) : null}
           </div>
 
           {!isQuote ? (
             <div className="grid gap-4 border-b border-stone-300 px-4 py-4 md:grid-cols-2 md:px-6">
               <PaymentDocumentBox title="Abono" amount={formatCurrency(computedPaid)}>
                 <PaymentRows
+                  control={control}
                   register={register}
                   fields={paymentFields}
                   errors={typedErrors.payments}
@@ -636,26 +747,6 @@ export function OrderForm({
             </div>
           </div>
 
-          <div className="border-t border-stone-200 bg-stone-50 px-4 py-4 md:px-7">
-            <Field label="Observaciones" error={typedErrors.observations?.message} full>
-              <textarea
-                {...register("observations")}
-                className="textarea-control min-h-24 bg-white"
-                placeholder="Condiciones especiales, medidas, acuerdos, material pendiente..."
-              />
-            </Field>
-            <div className="sales-note-print-hidden mt-4">
-              <Field label="Adjunto inicial">
-                <input
-                  name="file"
-                  type="file"
-                  accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
-                  className="block w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-stone-800"
-                />
-              </Field>
-            <p className="mt-2 text-xs text-stone-500">Máximo 10 MB. Se puede dejar vacío y adjuntar después desde el detalle de la orden.</p>
-            </div>
-          </div>
           </div>
         </section>
 
@@ -801,7 +892,7 @@ export function OrderForm({
             <Field label="Material" error={typedErrors.material?.message}>
               <input {...register("material")} className={inputClass} placeholder={isLeatherHouse ? "Opcional" : "Cuero natural"} />
             </Field>
-            <Field label="Color" error={typedErrors.color?.message}>
+            <Field label="Color (opcional)" error={typedErrors.color?.message}>
               <input {...register("color")} className={inputClass} placeholder="Riga Whisky" />
             </Field>
             {isCommercialDocument ? (
@@ -846,7 +937,7 @@ export function OrderForm({
                 <tr className="border-b border-stone-200 bg-stone-50">
                   <th className="w-14 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">N</th>
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Producto</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Color</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Color (opcional)</th>
                   {isCommercialDocument ? (
                     <>
                       <th className="w-28 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-stone-500">Cant.</th>
@@ -955,6 +1046,7 @@ export function OrderForm({
                   </button>
                 </div>
                 <PaymentRows
+                  control={control}
                   register={register}
                   fields={paymentFields}
                   errors={typedErrors.payments}
@@ -1185,6 +1277,7 @@ function DeliveryDaysControl({ days, onSelect, compact }: { days: number | undef
 }
 
 function PaymentRows({
+  control,
   register,
   fields,
   errors,
@@ -1192,6 +1285,7 @@ function PaymentRows({
   onRemove,
   compact,
 }: {
+  control: Control<FormValues>;
   register: UseFormRegister<FormValues>;
   fields: Array<{ id: string }>;
   errors?: Array<{
@@ -1216,12 +1310,32 @@ function PaymentRows({
             </label>
             <label>
               <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Monto</span>
-              <input {...register(`payments.${index}.amount` as const)} type="number" min="0" step="1" className={compact ? documentPaymentInputClass : inputClass} placeholder="0" />
+              <Controller
+                control={control}
+                name={`payments.${index}.amount` as const}
+                render={({ field }) => (
+                  <input
+                    ref={field.ref}
+                    name={field.name}
+                    value={formatClpInput(field.value)}
+                    onBlur={field.onBlur}
+                    onChange={(event) => field.onChange(parseClpInput(event.target.value))}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    className={compact ? documentPaymentInputClass : inputClass}
+                    placeholder="0"
+                  />
+                )}
+              />
               {errors?.[index]?.amount?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.amount?.message}</p> : null}
             </label>
             <label>
               <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Medio</span>
-              <input {...register(`payments.${index}.method` as const)} className={compact ? documentPaymentInputClass : inputClass} placeholder="Transferencia" />
+              <select {...register(`payments.${index}.method` as const)} className={compact ? documentPaymentInputClass : inputClass}>
+                {paymentMethodOptions.map((method) => (
+                  <option key={method} value={method}>{method}</option>
+                ))}
+              </select>
               {errors?.[index]?.method?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.method?.message}</p> : null}
             </label>
             <label>
@@ -1315,8 +1429,44 @@ function PaymentDocumentBox({
   );
 }
 
+function copyFormValues(source: HTMLElement, target: HTMLElement) {
+  const sourceFields = source.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+  const targetFields = target.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+
+  sourceFields.forEach((sourceField, index) => {
+    const targetField = targetFields[index];
+    if (!targetField) return;
+    targetField.value = sourceField.value;
+    if (sourceField instanceof HTMLInputElement && targetField instanceof HTMLInputElement) {
+      targetField.checked = sourceField.checked;
+    }
+    if (sourceField instanceof HTMLTextAreaElement && targetField instanceof HTMLTextAreaElement) {
+      targetField.textContent = sourceField.value;
+    }
+  });
+}
+
+async function waitForImages(root: HTMLElement) {
+  await Promise.all(Array.from(root.querySelectorAll("img")).map((image) => image.decode().catch(() => undefined)));
+}
+
+function pdfFileName(documentLabel: string, documentCode?: string) {
+  const safeLabel = documentLabel
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  const safeCode = documentCode?.trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "sin-numero";
+  return `${safeLabel || "documento"}-${safeCode}.pdf`;
+}
+
 function lineTotal(quantity?: number, unitPrice?: number) {
   return (Number(quantity ?? 1) || 1) * (Number(unitPrice ?? 0) || 0);
+}
+
+function unitNetValue(unitPrice?: number) {
+  return Math.round((Number(unitPrice ?? 0) || 0) / 1.19);
 }
 
 function formatCurrency(value: number) {
@@ -1325,6 +1475,16 @@ function formatCurrency(value: number) {
     currency: "CLP",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function formatClpInput(value: unknown) {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat("es-CL", { maximumFractionDigits: 0 }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function parseClpInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits ? Number(digits) : 0;
 }
 
 function commercialDocumentLabel(type?: CommercialDocumentType) {

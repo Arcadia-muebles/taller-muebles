@@ -20,7 +20,7 @@ export default async function ClientTrackingPage({ params }: { params: Promise<{
 
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-6 text-stone-950 sm:px-6 sm:py-10">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto w-full min-w-0 max-w-5xl">
         <header className="flex flex-col gap-5 border-b border-stone-300 pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Image src={brand.logo} alt="La Reina · Muebles en cuero" width={1600} height={874} className="h-auto w-36" priority unoptimized />

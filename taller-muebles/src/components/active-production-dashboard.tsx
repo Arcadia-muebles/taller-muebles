@@ -77,7 +77,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
   );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DashboardFilter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("recent");
+  const [sortKey, setSortKey] = useState<SortKey>("delivery");
   const [page, setPage] = useState(1);
   const [optimisticStage, setOptimisticStage] = useState<Record<string, AreaKey>>({});
   const [optimisticStepStatuses, setOptimisticStepStatuses] = useState<Record<string, OptimisticStepStatus>>({});
@@ -433,9 +433,9 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                     </BodyCell>
                     <BodyCell>
                       <div className="flex min-w-0 items-center">
-                        <span className={cn("inline-flex max-w-full items-center gap-1.5 rounded-md border px-2.5 py-2 text-[11px] font-semibold uppercase leading-none", tonePill(presentation.tone))}>
-                          <StatusIcon className="size-4 shrink-0" />
-                          <span className="truncate">{presentation.label}</span>
+                        <span className={cn("inline-flex max-w-full items-start gap-1.5 rounded-md border px-2.5 py-2 text-[11px] font-semibold uppercase", tonePill(presentation.tone))}>
+                          <StatusIcon className="mt-0.5 size-4 shrink-0" />
+                          <span className="whitespace-normal break-words leading-4">{presentation.label}</span>
                         </span>
                       </div>
                     </BodyCell>
@@ -638,6 +638,9 @@ function BodyCell({ children, className }: { children: React.ReactNode; classNam
 
 function orderRowClass(order: Order) {
   if (order.status === "completed") {
+    return "[&_td]:border-emerald-300 [&_td]:bg-emerald-100/80 hover:[&_td]:bg-emerald-100";
+  }
+  if (isReadyForDelivery(order)) {
     return "[&_td]:border-emerald-100 [&_td]:bg-emerald-50/70 hover:[&_td]:bg-emerald-50";
   }
   return "";
@@ -843,7 +846,7 @@ function isDashboardActiveOrder(order: Order) {
 }
 
 function isDashboardVisibleOrder(order: Order) {
-  return isProductionOrder(order) && !["completed", "cancelled"].includes(order.status);
+  return isProductionOrder(order) && order.status !== "cancelled";
 }
 
 function matchesSearch(order: Order, search: string) {
@@ -896,7 +899,7 @@ function visiblePageNumbers(currentPage: number, totalPages: number) {
 }
 
 function statusPresentation(order: Order): { label: string; tone: Tone; icon: React.ElementType } {
-  if (order.status === "completed") return { label: "Entregada", tone: "green", icon: CheckCircle2 };
+  if (order.status === "completed") return { label: "Entregado", tone: "green", icon: Truck };
   if (order.status === "blocked" || order.steps.some((step) => step.status === "blocked")) return { label: "Bloqueada", tone: "rose", icon: CircleDashed };
   if (isReadyForDelivery(order)) return { label: "Terminado", tone: "green", icon: CheckCircle2 };
   if (order.steps.length && order.steps.every((step) => step.status === "pending")) return { label: "Sin empezar", tone: "stone", icon: Clock3 };

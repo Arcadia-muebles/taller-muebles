@@ -144,7 +144,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
   }
 
   return (
-    <section className="mx-auto max-w-6xl pb-20 lg:pb-0">
+    <section className="mx-auto w-full min-w-0 max-w-6xl pb-20 lg:pb-0">
       <header className="flex flex-col gap-4 border-b border-stone-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid size-14 shrink-0 place-items-center rounded-lg border border-stone-200 bg-white shadow-sm shadow-stone-950/5">
@@ -189,7 +189,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-3 xl:grid-cols-2">
+      <div className="mt-4 grid min-w-0 gap-3 xl:grid-cols-2">
         {filteredVisible.map((order) => {
           const step = workerActionStep(user, order);
           if (!step) return null;
@@ -217,8 +217,8 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
         ) : null}
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        <details className="rounded-lg border border-stone-200 bg-white">
+      <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-2">
+        <details className="min-w-0 rounded-lg border border-stone-200 bg-white">
           <summary className="cursor-pointer list-none p-4">
             <QueueListHeader title="Planificación" description="Pedidos que aún pasan por etapas antes de la tuya." count={`${filteredFuture.length} por venir`} />
           </summary>
@@ -252,7 +252,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
           </div>
         </details>
 
-        <details className="rounded-lg border border-stone-200 bg-white">
+        <details className="min-w-0 rounded-lg border border-stone-200 bg-white">
           <summary className="cursor-pointer list-none p-4">
             <QueueListHeader title="Historial" description="Trabajos terminados por tu etapa." count={`${filteredHistory.length} registros`} />
           </summary>

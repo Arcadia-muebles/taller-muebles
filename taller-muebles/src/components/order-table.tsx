@@ -259,7 +259,7 @@ export function OrderTable({
                   {row.getVisibleCells().map((cell, index) => {
                     const cellClass = cn(
                       "border-y border-stone-200 px-2 py-2.5 align-middle text-sm shadow-sm transition",
-                      done ? "border-emerald-100 bg-emerald-50/70 group-hover:bg-emerald-50" : "bg-white group-hover:bg-stone-50",
+                      done ? "border-emerald-300 bg-emerald-100/80 group-hover:bg-emerald-100" : "bg-white group-hover:bg-stone-50",
                       index === 0 && "rounded-l-lg border-l",
                       index === row.getVisibleCells().length - 1 && "rounded-r-lg border-r",
                       columnClass(cell.column.id),
@@ -462,7 +462,7 @@ function OrderCard({
   const canEdit = canEditOrders && !["completed", "cancelled"].includes(order.status);
 
   const card = (
-    <article className={cn("min-w-0 rounded-lg border p-3 shadow-sm", order.status === "completed" ? "border-emerald-100 bg-emerald-50/70" : "border-stone-200 bg-white", rowLinks && "group cursor-pointer hover:bg-stone-50")}>
+    <article className={cn("min-w-0 rounded-lg border p-3 shadow-sm", order.status === "completed" ? "border-emerald-300 bg-emerald-100/80" : "border-stone-200 bg-white", rowLinks && "group cursor-pointer hover:bg-stone-50")}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <CodeClientCell order={order} rowLinks={rowLinks} detailPathPrefix={detailPathPrefix} />
         <ProductionStatusPill order={order} compact />

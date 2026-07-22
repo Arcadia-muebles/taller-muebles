@@ -47,7 +47,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
 
   return (
     <AppShell active="taller" user={user}>
-      <div className="mx-auto max-w-5xl pb-20 lg:pb-0">
+      <div className="mx-auto w-full min-w-0 max-w-5xl pb-20 lg:pb-0">
       <header className="border-b border-stone-200 pb-4">
         <div className="flex items-center justify-between gap-3">
           <Link href="/taller" className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-950">
