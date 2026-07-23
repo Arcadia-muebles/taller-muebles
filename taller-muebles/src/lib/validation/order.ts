@@ -92,6 +92,10 @@ export const orderProductsSchema = z.array(orderProductSchema).min(1, "Agrega al
 export type OrderProductFormValues = z.infer<typeof orderProductSchema>;
 
 export const orderPaymentSchema = z.object({
+  id: z.preprocess(
+    (value) => value === "" || value === null ? undefined : value,
+    z.string().uuid().optional(),
+  ),
   paidAt: requiredText("Ingresa fecha de abono."),
   amount: optionalMoney,
   method: z.string().trim().max(80, "El medio de pago es demasiado largo.").optional(),

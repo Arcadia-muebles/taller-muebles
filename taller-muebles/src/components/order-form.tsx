@@ -96,6 +96,7 @@ export function OrderForm({
   const { fields: paymentFields, append: appendPayment, remove: removePayment, replace: replacePayments } = useFieldArray({
     control,
     name: "payments",
+    keyName: "fieldKey",
   });
   const store = useWatch({ control, name: "store" });
   const documentType = useWatch({ control, name: "documentType" });
@@ -160,7 +161,7 @@ export function OrderForm({
     : Number(discountValue ?? 0) || 0;
   const computedTotal = Math.max(computedSubtotal - computedDiscount, 0);
   const computedPaymentsPaid = payments.reduce((sum, payment) => sum + (Number(payment?.amount ?? 0) || 0), 0);
-  const computedPaid = isCommercialDocument && !orderId && payments.length ? computedPaymentsPaid : Number(paidAmountValue ?? 0) || 0;
+  const computedPaid = isCommercialDocument && payments.length ? computedPaymentsPaid : Number(paidAmountValue ?? 0) || 0;
   const computedBalance = Math.max(computedTotal - computedPaid, 0);
   const computedNet = Math.round(computedTotal / 1.19);
   const computedVat = Math.max(computedTotal - computedNet, 0);
@@ -180,10 +181,10 @@ export function OrderForm({
   }, [computedDiscount, computedSubtotal, computedTotal, isCommercialDocument, setValue]);
 
   useEffect(() => {
-    if (!isCommercialDocument || orderId) return;
+    if (!isCommercialDocument || !payments.length) return;
     setValue("paidAmount", computedPaymentsPaid, { shouldDirty: true, shouldValidate: true });
-    setValue("paymentMethod", paymentSummary(payments), { shouldDirty: true, shouldValidate: false });
-  }, [computedPaymentsPaid, isCommercialDocument, orderId, payments, setValue]);
+    setValue("paymentMethod", latestPaymentMethod(payments), { shouldDirty: true, shouldValidate: false });
+  }, [computedPaymentsPaid, isCommercialDocument, payments, setValue]);
 
   useEffect(() => {
     if (orderId || !isQuote) return;
@@ -204,10 +205,8 @@ export function OrderForm({
       formData.set("quantity", String(products[0].quantity ?? 1));
       formData.set("unitPrice", String(products[0].unitPrice ?? 0));
     }
-    if (!orderId) {
-      formData.set("paidAmount", String(computedPaid));
-      formData.set("paymentMethod", paymentSummary(payments));
-    }
+    formData.set("paidAmount", String(computedPaid));
+    formData.set("paymentMethod", payments.length ? latestPaymentMethod(payments) : String(getValues("paymentMethod") ?? ""));
     startTransition(() => formAction(formData));
   });
 
@@ -412,7 +411,7 @@ export function OrderForm({
         <input type="hidden" {...register("total")} value={computedTotal} readOnly />
         <input type="hidden" {...register("customerContact")} />
 
-        <section className="sales-note-print-area overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+        <section inert={readOnly ? true : undefined} className="sales-note-print-area overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
           <div className="sales-note-print-hidden border-b border-stone-200 bg-stone-50 px-4 py-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
@@ -689,6 +688,20 @@ export function OrderForm({
                   onRemove={removePayment}
                   compact
                 />
+                {orderId && !readOnly ? (
+                  <button type="submit" disabled={pending} className="sales-note-print-hidden btn btn-primary mt-3 h-9">
+                    <Save className="size-4" />
+                    {pending ? "Guardando..." : "Guardar abonos"}
+                  </button>
+                ) : null}
+                {orderId && state.message ? (
+                  <p
+                    aria-live="polite"
+                    className={`mt-2 text-xs font-medium ${state.status === "success" ? "text-emerald-700" : "text-rose-700"}`}
+                  >
+                    {state.message}
+                  </p>
+                ) : null}
                 {typedErrors.paidAmount?.message ? <p className="mt-2 text-xs font-medium text-rose-600">{typedErrors.paidAmount.message}</p> : null}
               </PaymentDocumentBox>
               <PaymentDocumentBox title="Saldo" amount={formatCurrency(computedBalance)}>
@@ -1274,7 +1287,7 @@ function PaymentRows({
 }: {
   control: Control<FormValues>;
   register: UseFormRegister<FormValues>;
-  fields: Array<{ id: string }>;
+  fields: Array<{ fieldKey: string }>;
   errors?: Array<{
     paidAt?: { message?: string };
     amount?: { message?: string };
@@ -1288,7 +1301,8 @@ function PaymentRows({
   return (
     <div className={compact ? "space-y-3" : "mt-2 space-y-3"}>
       {fields.map((field, index) => (
-        <div key={field.id} className="rounded-md border border-stone-200 bg-stone-50/70 p-3">
+        <div key={field.fieldKey} className="rounded-md border border-stone-200 bg-stone-50/70 p-3">
+          <input {...register(`payments.${index}.id` as const)} type="hidden" />
           <div className={compact ? "grid gap-2 sm:grid-cols-[105px_110px_1fr_1fr_36px]" : "grid gap-2 md:grid-cols-[150px_150px_1fr_1fr_40px]"}>
             <label>
               <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Fecha</span>
@@ -1561,18 +1575,9 @@ function formatChileanPhone(value: string) {
   return `+56 ${first}${second ? ` ${second}` : ""}${third ? ` ${third}` : ""}`;
 }
 
-function paymentSummary(payments: PaymentFormValue[] | undefined) {
+function latestPaymentMethod(payments: PaymentFormValue[] | undefined) {
   const validPayments = (payments ?? []).filter((payment) => Number(payment?.amount ?? 0) > 0);
-  if (!validPayments.length) return "";
-  return validPayments
-    .map((payment) => {
-      const amount = formatCurrency(Number(payment.amount ?? 0));
-      const method = payment.method?.trim() || "Sin medio";
-      const date = payment.paidAt || "Sin fecha";
-      const note = payment.note?.trim();
-      return `${date}: ${amount} (${method})${note ? ` - ${note}` : ""}`;
-    })
-    .join(" | ");
+  return validPayments.at(-1)?.method?.trim() || "";
 }
 
 function paymentProgress(paid: number, total: number) {

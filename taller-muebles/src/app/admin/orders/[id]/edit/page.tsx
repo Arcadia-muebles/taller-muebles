@@ -64,6 +64,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
               unitPrice: order.unitPrice ?? 0,
             }],
             payments: (order.payments ?? []).map((payment) => ({
+              id: payment.id,
               paidAt: payment.paidAt,
               amount: payment.amount,
               method: payment.method,

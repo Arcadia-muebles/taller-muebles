@@ -79,7 +79,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
         </div>
         <OrderForm
           orderId={order.id}
-          readOnly
+          readOnly={!canEditOrder}
           initialDocumentType={order.documentType}
           initialValues={{
             store: order.store,
@@ -119,6 +119,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
               unitPrice: item.unitPrice ?? 0,
             })),
             payments: (order.payments ?? []).map((payment) => ({
+              id: payment.id,
               paidAt: payment.paidAt,
               amount: payment.amount,
               method: payment.method,

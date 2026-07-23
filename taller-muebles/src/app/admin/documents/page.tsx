@@ -212,9 +212,10 @@ function groupDocuments(orders: Order[]): DocumentSummary[] {
   return Array.from(map.entries()).map(([key, group]) => {
     const first = group[0];
     const total = first.total ?? 0;
-    const paidAmount = first.payments?.length
-      ? first.payments.reduce((sum, payment) => sum + payment.amount, 0)
-      : (first.paidAmount ?? 0);
+    const historyPaidAmount = first.payments?.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
+    const paidAmount = historyPaidAmount > 0 && historyPaidAmount * 1000 === first.paidAmount
+      ? first.paidAmount
+      : first.payments?.length ? historyPaidAmount : (first.paidAmount ?? 0);
     return {
       key,
       type: first.documentType,

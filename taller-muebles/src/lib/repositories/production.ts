@@ -208,7 +208,20 @@ async function attachOrderPayments(supabase: Awaited<ReturnType<typeof createCli
   if (error || !data) return orders;
   const paymentsByOrder = new Map<string, OrderPaymentRecord[]>();
   for (const payment of data) paymentsByOrder.set(payment.order_id, [...(paymentsByOrder.get(payment.order_id) ?? []), payment]);
-  return orders.map((order) => ({ ...order, payments: (paymentsByOrder.get(order.id) ?? []).map((payment) => ({ id: payment.id, paidAt: payment.paid_at, amount: Number(payment.amount), method: payment.method, note: payment.note ?? undefined })) }));
+  return orders.map((order) => {
+    const payments = (paymentsByOrder.get(order.id) ?? []).map((payment) => ({
+      id: payment.id,
+      paidAt: payment.paid_at,
+      amount: Number(payment.amount),
+      method: payment.method,
+      note: payment.note ?? undefined,
+    }));
+    const historyTotal = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    const correctedPayments = historyTotal > 0 && historyTotal * 1000 === order.paidAmount
+      ? payments.map((payment) => ({ ...payment, amount: payment.amount * 1000 }))
+      : payments;
+    return { ...order, payments: correctedPayments };
+  });
 }
 
 export async function listAgendaItems(date?: string): Promise<AgendaItem[]> {

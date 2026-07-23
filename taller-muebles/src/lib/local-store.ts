@@ -373,6 +373,7 @@ export async function updateLocalOrder(id: string, input: {
   paidAmount?: number;
   sellerName?: string;
   paymentMethod?: string;
+  payments?: Array<{ id?: string; paidAt: string; amount?: number; method?: string; note?: string }>;
   deliveryTerms?: string;
   entryDate: string;
   deliveryDate: string;
@@ -412,6 +413,25 @@ export async function updateLocalOrder(id: string, input: {
   order.balance = input.total !== undefined ? Math.max(input.total - (input.paidAmount ?? 0), 0) : undefined;
   order.sellerName = input.sellerName?.trim() || undefined;
   order.paymentMethod = input.paymentMethod?.trim() || undefined;
+  if (input.payments?.length) {
+    const payments = input.payments
+      .filter((payment) => (payment.amount ?? 0) > 0)
+      .map((payment) => ({
+        id: payment.id ?? crypto.randomUUID(),
+        paidAt: payment.paidAt,
+        amount: payment.amount ?? 0,
+        method: payment.method?.trim() || "Sin especificar",
+        note: payment.note?.trim() || undefined,
+      }));
+    const paidAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    const balance = input.total !== undefined ? Math.max(input.total - paidAmount, 0) : undefined;
+    for (const groupedOrder of data.orders.filter((item) => item.groupCode === order.groupCode)) {
+      groupedOrder.payments = payments;
+      groupedOrder.paidAmount = paidAmount;
+      groupedOrder.balance = balance;
+      groupedOrder.paymentMethod = input.paymentMethod?.trim() || payments.at(-1)?.method;
+    }
+  }
   order.deliveryTerms = input.deliveryTerms?.trim() || undefined;
   order.entryDate = input.entryDate;
   order.deliveryDate = input.deliveryDate;
@@ -1281,6 +1301,16 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
     }
     if (order.total !== undefined && order.balance === undefined) {
       order.balance = Math.max(order.total - (order.paidAmount ?? 0), 0);
+      changed = true;
+    }
+    const paymentHistoryTotal = order.payments?.reduce((sum, payment) => sum + payment.amount, 0) ?? 0;
+    if (
+      paymentHistoryTotal > 0 &&
+      order.paidAmount !== undefined &&
+      paymentHistoryTotal * 1000 === order.paidAmount &&
+      (order.total === undefined || order.paidAmount <= order.total)
+    ) {
+      order.payments = order.payments?.map((payment) => ({ ...payment, amount: payment.amount * 1000 }));
       changed = true;
     }
     if (isSeededDemoPersonName(order.assignedTo) || order.assignedTo === "Sin asignar") {

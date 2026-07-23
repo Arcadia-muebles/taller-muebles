@@ -292,6 +292,20 @@ export async function updateOrder(
   }
   const previousOrder = (await listOrders()).find((order) => order.id === orderId);
   if (!previousOrder) return { status: "error", message: "No se encontró la orden." };
+  const paymentItems = parsePaymentItems(formData);
+  if (!paymentItems.success) return { status: "error", message: formatZodError(paymentItems.error) };
+  const recordedPayments = paymentItems.data.filter((payment) => (payment.amount ?? 0) > 0);
+  const shouldSyncPayments = previousOrder.store === "LR" && previousOrder.documentType !== "quote" && recordedPayments.length > 0;
+  const recordedPaidAmount = recordedPayments.reduce((sum, payment) => sum + (payment.amount ?? 0), 0);
+  if (paymentItems.data.length > 0 && recordedPayments.length === 0 && (previousOrder.payments?.length || previousOrder.paidAmount)) {
+    return { status: "error", message: "Mantén al menos un abono mayor a $0 o elimina el abono desde su historial." };
+  }
+  if (shouldSyncPayments) {
+    const existingPaymentIds = new Set((previousOrder.payments ?? []).map((payment) => payment.id));
+    if (recordedPayments.some((payment) => payment.id && !existingPaymentIds.has(payment.id))) {
+      return { status: "error", message: "Uno de los abonos no pertenece a esta orden." };
+    }
+  }
   const parsed = orderSchema.safeParse({
     store: formData.get("store"),
     documentType: normalizedDocumentType(formData),
@@ -313,9 +327,9 @@ export async function updateOrder(
     subtotal: formData.get("subtotal"),
     discount: formData.get("discount"),
     total: formData.get("total"),
-    paidAmount: formData.get("paidAmount"),
+    paidAmount: shouldSyncPayments ? recordedPaidAmount : formData.get("paidAmount"),
     sellerName: formData.get("sellerName")?.toString() || undefined,
-    paymentMethod: formData.get("paymentMethod")?.toString() || undefined,
+    paymentMethod: shouldSyncPayments ? recordedPayments.at(-1)?.method : formData.get("paymentMethod")?.toString() || undefined,
     deliveryTerms: formData.get("deliveryTerms")?.toString() || undefined,
     entryDate: formData.get("entryDate"),
     deliveryDate: formData.get("deliveryDate"),
@@ -340,6 +354,7 @@ export async function updateOrder(
       color: parsed.data.color || "Por definir",
       priority: orderPriority,
       steps: settings.production.steps,
+      payments: shouldSyncPayments ? recordedPayments : undefined,
     });
     if (!updated) return { status: "error", message: "No se encontró la orden." };
   } else {
@@ -390,6 +405,32 @@ export async function updateOrder(
       status: isQuote ? "draft" : wasQuote ? "scheduled" : previousOrder.status,
     } as never).eq("id", orderId);
     if (error) return { status: "error", message: error.message };
+    if (shouldSyncPayments) {
+      const paymentError = await syncSupabaseOrderPayments({
+        supabase,
+        orderId,
+        profileId,
+        previousPayments: previousOrder.payments ?? [],
+        payments: recordedPayments,
+      });
+      if (paymentError) return { status: "error", message: paymentError };
+      const groupOrderIds = (await listOrders())
+        .filter((item) => item.groupCode === previousOrder.groupCode)
+        .map((item) => item.id);
+      const ordersTable = supabase.from("orders") as unknown as {
+        update: (patch: Record<string, unknown>) => {
+          in: (column: string, values: string[]) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+      const { error: totalsError } = await ordersTable
+        .update({
+          paid_amount: recordedPaidAmount,
+          balance_amount: parsed.data.total !== undefined ? Math.max(parsed.data.total - recordedPaidAmount, 0) : null,
+          payment_method: parsed.data.paymentMethod || null,
+        })
+        .in("id", groupOrderIds);
+      if (totalsError) return { status: "error", message: totalsError.message };
+    }
     if (wasQuote && !isQuote && !previousOrder.steps.length) {
       const enabledSteps = settings.production.steps.filter((step) => step.enabled);
       const operatorByArea = operatorMapByArea(await listUsers());
@@ -780,12 +821,76 @@ function parseProductItems(formData: FormData) {
 function parsePaymentItems(formData: FormData) {
   const rows = new Map<number, Record<string, FormDataEntryValue>>();
   for (const [key, value] of formData.entries()) {
-    const match = key.match(/^payments\.(\d+)\.(paidAt|amount|method|note)$/);
+    const match = key.match(/^payments\.(\d+)\.(id|paidAt|amount|method|note)$/);
     if (!match) continue;
     const index = Number(match[1]);
-    rows.set(index, { ...(rows.get(index) ?? {}), [match[2]]: value });
+    const normalizedValue = match[2] === "amount" && typeof value === "string"
+      ? value.replace(/\D/g, "")
+      : value;
+    rows.set(index, { ...(rows.get(index) ?? {}), [match[2]]: normalizedValue });
   }
   return orderPaymentsSchema.safeParse([...rows.entries()].sort(([a], [b]) => a - b).map(([, row]) => row));
+}
+
+async function syncSupabaseOrderPayments({
+  supabase,
+  orderId,
+  profileId,
+  previousPayments,
+  payments,
+}: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  orderId: string;
+  profileId: string;
+  previousPayments: Array<{ id: string }>;
+  payments: Array<{ id?: string; paidAt: string; amount?: number; method?: string; note?: string }>;
+}) {
+  const paymentDb = supabase as unknown as {
+    from: (table: string) => {
+      delete: () => {
+        eq: (column: string, value: string) => {
+          in: (column: string, values: string[]) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+      update: (patch: Record<string, unknown>) => {
+        eq: (column: string, value: string) => {
+          eq: (column: string, value: string) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+      insert: (rows: Array<Record<string, unknown>>) => Promise<{ error: { message: string } | null }>;
+    };
+  };
+  const paymentsTable = paymentDb.from("order_payments");
+  const incomingIds = new Set(payments.flatMap((payment) => payment.id ? [payment.id] : []));
+  const removedIds = previousPayments.map((payment) => payment.id).filter((id) => !incomingIds.has(id));
+  if (removedIds.length) {
+    const { error } = await paymentsTable.delete().eq("order_id", orderId).in("id", removedIds);
+    if (error) return error.message;
+  }
+  for (const payment of payments.filter((item) => item.id)) {
+    const { error } = await paymentsTable
+      .update({
+        paid_at: payment.paidAt,
+        amount: payment.amount,
+        method: payment.method || "Sin especificar",
+        note: payment.note || null,
+      })
+      .eq("id", payment.id!)
+      .eq("order_id", orderId);
+    if (error) return error.message;
+  }
+  const newPayments = payments.filter((payment) => !payment.id);
+  if (newPayments.length) {
+    const { error } = await paymentsTable.insert(newPayments.map((payment) => ({
+      order_id: orderId,
+      paid_at: payment.paidAt,
+      amount: payment.amount,
+      method: payment.method || "Sin especificar",
+      note: payment.note || null,
+      created_by: profileId,
+    })));
+    if (error) return error.message;
+  }
 }
 
 function normalizedDocumentType(formData: FormData) {

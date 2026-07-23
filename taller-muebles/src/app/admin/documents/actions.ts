@@ -8,7 +8,13 @@ import { addLocalDocumentPayment, deleteLocalDocumentPayment, updateLocalDocumen
 import { getOrder, listOrders } from "@/lib/repositories/production";
 import { createClient } from "@/lib/supabase/server";
 
-const paymentSchema = z.object({ orderId: z.string().min(1), amount: z.coerce.number().positive().finite(), paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), method: z.string().trim().min(2).max(80), note: z.string().trim().max(300).optional() });
+const paymentSchema = z.object({
+  orderId: z.string().min(1),
+  amount: z.preprocess(parseClpAmount, z.number().positive().finite()),
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  method: z.string().trim().min(2).max(80),
+  note: z.string().trim().max(300).optional(),
+});
 const paymentCorrectionSchema = paymentSchema.extend({ paymentId: z.string().uuid() });
 const paymentDeleteSchema = z.object({ orderId: z.string().min(1), paymentId: z.string().uuid() });
 
@@ -103,4 +109,11 @@ async function syncSupabasePaymentTotals(supabase: Awaited<ReturnType<typeof cre
 function revalidateDocument(groupCode: string) {
   revalidatePath("/admin/documents");
   revalidatePath(`/admin/documents/${encodeURIComponent(groupCode)}`);
+}
+
+function parseClpAmount(value: unknown) {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return value;
+  const digits = value.replace(/\D/g, "");
+  return digits ? Number(digits) : 0;
 }
