@@ -657,7 +657,7 @@ function StoreStripe({ store }: { store: Order["store"] }) {
 }
 
 function DeliveryBlock({ order }: { order: Order }) {
-  const stopped = order.status === "completed" || isReadyForDelivery(order);
+  const stopped = order.status === "completed" || order.condition === "Entregado";
   const stoppedAt = order.completedAt ?? latestCompletedStepDate(order);
   const days = stopped ? (stoppedAt ? daysUntil(order.deliveryDate, stoppedAt) : 0) : daysUntil(order.deliveryDate);
   const late = days < 0;

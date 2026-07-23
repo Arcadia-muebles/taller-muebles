@@ -44,8 +44,8 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
     filters,
   );
   const pendingTasks = allAgendaItems
-    .filter((item) => item.kind === "task" && item.status === "pending")
-    .sort((a, b) => `${a.scheduledDate}${a.startTime}`.localeCompare(`${b.scheduledDate}${b.startTime}`));
+    .filter((item) => item.kind === "task" && item.status === "pending" && item.scheduledDate === selectedDate)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const activeFilters = activeFilterCount(filters);
 
   return (
@@ -177,18 +177,11 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
             ))}
             {ready.length > 3 ? <Link href="/admin/ready" className="block rounded-md bg-stone-50 py-2 text-center text-xs font-medium text-stone-700">Ver todas</Link> : null}
           </SidebarList>
-          <SidebarList
-            title="Tareas pendientes"
-            count={pendingTasks.length}
-            tone="orange"
-            empty="No hay tareas pendientes."
-          >
-            <div className="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
-              {pendingTasks.map((item) => (
-                <TaskSidebarItem key={item.id} item={item} canEdit={canEdit} />
-              ))}
-            </div>
-          </SidebarList>
+          <DailyTasksSidebar
+            tasks={pendingTasks}
+            selectedDate={selectedDate}
+            canEdit={canEdit}
+          />
         </aside>
       </div>
     </AppShell>
@@ -456,6 +449,56 @@ function SidebarList({ title, count, tone, empty, children }: { title: string; c
   );
 }
 
+function DailyTasksSidebar({
+  tasks,
+  selectedDate,
+  canEdit,
+}: {
+  tasks: AgendaItem[];
+  selectedDate: string;
+  canEdit: boolean;
+}) {
+  return (
+    <section className="panel-pad">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-stone-950">Tareas pendientes</h2>
+        <span className="rounded-full bg-orange-500 px-2 py-0.5 text-xs font-semibold text-white">{tasks.length}</span>
+      </div>
+
+      <div className="my-3 grid grid-cols-[32px_1fr_32px] items-center gap-2 rounded-md border border-stone-200 bg-stone-50 p-1.5">
+        <DateNavButton
+          href={`/admin/agenda?date=${addDays(selectedDate, -1)}`}
+          icon={ChevronLeft}
+          label="Tareas del día anterior"
+          compact
+        />
+        <div className="min-w-0 text-center">
+          <p className="text-sm font-semibold text-stone-950">{relativeDayLabel(selectedDate)}</p>
+          <p className="truncate text-[10px] font-medium capitalize text-stone-500">{shortDateLabel(selectedDate)}</p>
+        </div>
+        <DateNavButton
+          href={`/admin/agenda?date=${addDays(selectedDate, 1)}`}
+          icon={ChevronRight}
+          label="Tareas del día siguiente"
+          compact
+        />
+      </div>
+
+      {tasks.length ? (
+        <div className="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
+          {tasks.map((item) => (
+            <TaskSidebarItem key={item.id} item={item} canEdit={canEdit} />
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-md bg-stone-50 p-3 text-xs text-stone-500">
+          No hay tareas pendientes para {relativeDayLabel(selectedDate).toLocaleLowerCase("es-CL")}.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function ReadySidebarItem({
   order,
   groupOrders,
@@ -648,6 +691,22 @@ function longDateLabel(date: string) {
     year: "numeric",
   }).format(value);
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function relativeDayLabel(date: string) {
+  const today = todayLocalDate();
+  if (date === today) return "Hoy";
+  if (date === addDays(today, 1)) return "Mañana";
+  if (date === addDays(today, -1)) return "Ayer";
+  return new Intl.DateTimeFormat("es-CL", { weekday: "long" }).format(parseLocalDate(date))
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function shortDateLabel(date: string) {
+  return new Intl.DateTimeFormat("es-CL", {
+    day: "numeric",
+    month: "long",
+  }).format(parseLocalDate(date));
 }
 
 function calendarDays(date: string) {
