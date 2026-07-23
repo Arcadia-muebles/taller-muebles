@@ -657,19 +657,31 @@ function StoreStripe({ store }: { store: Order["store"] }) {
 }
 
 function DeliveryBlock({ order }: { order: Order }) {
-  const days = daysUntil(order.deliveryDate);
+  const stopped = order.status === "completed" || isReadyForDelivery(order);
+  const stoppedAt = order.completedAt ?? latestCompletedStepDate(order);
+  const days = stopped ? (stoppedAt ? daysUntil(order.deliveryDate, stoppedAt) : 0) : daysUntil(order.deliveryDate);
   const late = days < 0;
+  const label = stopped
+    ? late ? `Vencido ${Math.abs(days)}d` : "Listo"
+    : deliveryLabel(order.deliveryDate, false);
   return (
     <div className="min-w-0">
       <p className="inline-flex items-center gap-1 text-xs font-semibold text-stone-900">
         <CalendarDays className="size-3.5 text-stone-400" />
         {formatDate(order.deliveryDate)}
       </p>
-      <p className={cn("mt-1 text-xs font-semibold", late ? "text-rose-700" : days <= 7 ? "text-amber-700" : "text-emerald-700")}>
-        {deliveryLabel(order.deliveryDate, false)}
+      <p className={cn("mt-1 text-xs font-semibold", late ? "text-rose-700" : stopped ? "text-emerald-700" : days <= 7 ? "text-amber-700" : "text-emerald-700")}>
+        {label}
       </p>
     </div>
   );
+}
+
+function latestCompletedStepDate(order: Order) {
+  return order.steps
+    .flatMap((step) => step.completedAt ? [step.completedAt] : [])
+    .filter((value) => Number.isFinite(new Date(value).getTime()))
+    .sort((left, right) => right.localeCompare(left))[0];
 }
 
 function ObservationAlert({ order }: { order: Order }) {

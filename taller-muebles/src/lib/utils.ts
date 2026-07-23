@@ -80,10 +80,13 @@ export function workshopHoursBetween(start?: string | Date, end?: string | Date)
   return totalMilliseconds / 3_600_000;
 }
 
-export function daysUntil(value?: string | null) {
+export function daysUntil(value?: string | null, referenceDate?: string | Date | null) {
   const target = parseDate(value);
   if (!target) return Number.POSITIVE_INFINITY;
-  const today = new Date();
+  const today = referenceDate instanceof Date
+    ? new Date(referenceDate)
+    : referenceDate ? new Date(referenceDate) : new Date();
+  if (!Number.isFinite(today.getTime())) return Number.POSITIVE_INFINITY;
   today.setHours(0, 0, 0, 0);
   return Math.round((target.getTime() - today.getTime()) / 86400000);
 }
