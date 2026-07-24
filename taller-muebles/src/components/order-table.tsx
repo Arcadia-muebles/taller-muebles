@@ -228,7 +228,7 @@ export function OrderTable({
         </div>
       </div>
 
-      <div className="grid gap-3 p-3 lg:hidden">
+      <div className="grid gap-3 p-3 xl:hidden">
         {visibleRows.map((row) => (
           <OrderCard key={row.id} order={row.original} canEditOrders={canEditOrders} rowLinks={rowLinks} hideActions={hideActions} detailPathPrefix={detailPathPrefix} />
         ))}
@@ -237,7 +237,7 @@ export function OrderTable({
         ) : null}
       </div>
 
-      <div className="hidden min-w-0 overflow-x-auto bg-stone-50/70 px-2 pb-2 lg:block">
+      <div className="hidden min-w-0 overflow-x-auto bg-stone-50/70 px-2 pb-2 xl:block">
         <table className="w-full min-w-[1040px] border-separate border-spacing-y-1.5">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (

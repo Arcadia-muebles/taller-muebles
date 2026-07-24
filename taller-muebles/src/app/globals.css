@@ -31,6 +31,15 @@ select {
   -webkit-tap-highlight-color: transparent;
 }
 
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
+}
+
 button {
   cursor: pointer;
 }
@@ -66,6 +75,35 @@ select {
   background-repeat: no-repeat;
   background-size: 1rem;
   padding-right: 2.5rem;
+}
+
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+}
+
+@media (pointer: coarse) {
+  input:not([type="hidden"]),
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  button,
+  summary,
+  [role="button"] {
+    min-height: 44px;
+  }
+
+  button[aria-label]:not(.production-process-indicator) {
+    min-width: 44px;
+  }
+
+  .pagination-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 ::selection {

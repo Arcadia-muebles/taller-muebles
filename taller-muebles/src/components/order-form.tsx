@@ -22,6 +22,7 @@ import Image from "next/image";
 import { forwardRef, useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Controller, useFieldArray, useForm, useWatch, type Control, type Resolver, type UseFormRegister } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
+import { TouchDatePicker } from "@/components/touch-date-picker";
 import type { CommercialDocumentType, StoreCode } from "@/lib/types";
 import { newOrderSchema, orderSchema, type NewOrderFormValues, type OrderFormValues } from "@/lib/validation/order";
 
@@ -318,10 +319,36 @@ export function OrderForm({
               <input {...register("clientName")} className={inputClass} placeholder="Nombre del cliente" autoFocus />
             </Field>
             <Field label="Fecha de ingreso" error={typedErrors.entryDate?.message}>
-              <input {...register("entryDate")} type="date" className={inputClass} />
+              <Controller
+                control={control}
+                name="entryDate"
+                render={({ field }) => (
+                  <TouchDatePicker
+                    name={field.name}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    inputRef={field.ref}
+                    ariaLabel="Seleccionar fecha de ingreso"
+                  />
+                )}
+              />
             </Field>
             <Field label="Fecha de entrega" error={typedErrors.deliveryDate?.message}>
-              <input {...register("deliveryDate")} type="date" className={inputClass} />
+              <Controller
+                control={control}
+                name="deliveryDate"
+                render={({ field }) => (
+                  <TouchDatePicker
+                    name={field.name}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    inputRef={field.ref}
+                    ariaLabel="Seleccionar fecha de entrega"
+                  />
+                )}
+              />
             </Field>
           </div>
 
