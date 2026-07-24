@@ -874,6 +874,8 @@ function matchesSearch(order: Order, search: string) {
 }
 
 function sortOrders(a: Order, b: Order, sortKey: SortKey, steps: SystemSettings["production"]["steps"]) {
+  const deliveredDiff = Number(isDeliveredOrder(a)) - Number(isDeliveredOrder(b));
+  if (deliveredDiff) return deliveredDiff;
   if (sortKey === "code") return a.code.localeCompare(b.code) || stableOrderTieBreaker(a, b);
   if (sortKey === "progress") return dashboardCompletionPercent(a, steps) - dashboardCompletionPercent(b, steps) || stableOrderTieBreaker(a, b);
   if (sortKey === "recent") {
@@ -881,6 +883,10 @@ function sortOrders(a: Order, b: Order, sortKey: SortKey, steps: SystemSettings[
     return entryDiff || b.code.localeCompare(a.code) || stableOrderTieBreaker(a, b);
   }
   return a.deliveryDate.localeCompare(b.deliveryDate) || stableOrderTieBreaker(a, b);
+}
+
+function isDeliveredOrder(order: Order) {
+  return order.status === "completed" || order.condition === "Entregado";
 }
 
 function stableOrderTieBreaker(a: Order, b: Order) {
