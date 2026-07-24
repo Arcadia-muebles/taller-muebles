@@ -1,6 +1,6 @@
 import "server-only";
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgendaItem, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, ClientPortalLink, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
 import { defaultSystemSettings } from "@/lib/system-settings";
@@ -468,6 +468,39 @@ export async function cancelLocalOrder(id: string) {
   addAudit(data, order.id, "cancel_order", "Orden cancelada y enviada al historial");
   await writeData(data);
   return true;
+}
+
+export async function deleteLocalOrderGroup(id: string) {
+  const data = await readData();
+  const order = data.orders.find((item) => item.id === id);
+  if (!order) return 0;
+
+  const groupKey = `${order.store}:${order.groupCode?.trim() || order.code}`;
+  const orderIds = new Set(
+    data.orders
+      .filter((item) => `${item.store}:${item.groupCode?.trim() || item.code}` === groupKey)
+      .map((item) => item.id),
+  );
+  const deletedAttachments = data.attachments.filter((attachment) => orderIds.has(attachment.orderId));
+
+  data.orders = data.orders.filter((item) => !orderIds.has(item.id));
+  data.auditLogs = data.auditLogs.filter((entry) => !orderIds.has(entry.orderId));
+  data.comments = data.comments.filter((comment) => !orderIds.has(comment.orderId));
+  data.attachments = data.attachments.filter((attachment) => !orderIds.has(attachment.orderId));
+  data.agendaItems = data.agendaItems.filter((item) => !item.orderId || !orderIds.has(item.orderId));
+  data.structureRequests = data.structureRequests.filter((request) => !orderIds.has(request.orderId));
+  data.clientPortalLinks = (data.clientPortalLinks ?? []).filter((link) => !orderIds.has(link.orderId));
+  await writeData(data);
+
+  await Promise.all(deletedAttachments.map(async (attachment) => {
+    try {
+      await unlink(attachment.storagePath);
+    } catch {
+      // The metadata is authoritative; a missing local file needs no further cleanup.
+    }
+  }));
+
+  return orderIds.size;
 }
 
 export async function closeLocalOrder(id: string) {

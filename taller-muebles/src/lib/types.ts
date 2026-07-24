@@ -264,7 +264,6 @@ export type SystemSettings = {
     requireMaterialAndColor: boolean;
     requireObservationsForWarranty: boolean;
     enforceUniqueSalesNote: boolean;
-    allowPastDeliveryDates: boolean;
     archiveCompletedAfterDays: number;
   };
   alerts: {

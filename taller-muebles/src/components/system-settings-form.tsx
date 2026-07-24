@@ -284,7 +284,6 @@ function OrdersSection({ settings, setSettings, disabled }: SectionProps) {
       <RuleRow title="Exigir material y color" description="Mantiene la ficha productiva completa desde el ingreso." checked={settings.orders.requireMaterialAndColor} disabled={disabled} onChange={(value) => update({ requireMaterialAndColor: value })} />
       <RuleRow title="Exigir observaciones en garantías" description="Obliga a documentar el motivo y alcance del trabajo." checked={settings.orders.requireObservationsForWarranty} disabled={disabled} onChange={(value) => update({ requireObservationsForWarranty: value })} />
       <RuleRow title="Número de nota de venta único" description="Previene el ingreso duplicado de una misma venta." checked={settings.orders.enforceUniqueSalesNote} disabled={disabled} onChange={(value) => update({ enforceUniqueSalesNote: value })} />
-      <RuleRow title="Permitir fechas de entrega pasadas" description="Habilita carga historica con fechas anteriores a hoy." checked={settings.orders.allowPastDeliveryDates} disabled={disabled} onChange={(value) => update({ allowPastDeliveryDates: value })} />
     </div>
   </div>;
 }

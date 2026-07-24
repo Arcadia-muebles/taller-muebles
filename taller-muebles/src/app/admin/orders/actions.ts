@@ -5,9 +5,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder, updateLocalOrderObservations, updateLocalProductionStep } from "@/lib/local-store";
+import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, deleteLocalOrderGroup, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder, updateLocalOrderObservations, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
-import { isIndependentStartStep, isProductionOrder } from "@/lib/orders";
+import { isIndependentStartStep, isProductionOrder, orderGroupKey } from "@/lib/orders";
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -497,6 +497,71 @@ export async function cancelOrder(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/ready");
   revalidatePath("/admin/agenda");
+  revalidatePath("/taller");
+  redirect("/admin");
+}
+
+export async function deleteOrder(formData: FormData) {
+  await requireSession(["admin"]);
+  const parsed = z.object({ orderId: z.string().uuid() }).safeParse({
+    orderId: formData.get("orderId"),
+  });
+  if (!parsed.success) throw new Error("La orden indicada no es válida.");
+
+  const orders = await listOrders();
+  const order = orders.find((item) => item.id === parsed.data.orderId);
+  if (!order) {
+    redirect("/admin");
+  }
+  const groupKey = orderGroupKey(order);
+  const groupedOrders = orders.filter((item) => orderGroupKey(item) === groupKey);
+  const orderIds = groupedOrders.map((item) => item.id);
+
+  if (!hasSupabaseConfig()) {
+    await deleteLocalOrderGroup(order.id);
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) throw new Error("No se pudo identificar tu perfil.");
+
+    const { data: attachments, error: attachmentsError } = await supabase
+      .from("order_attachments")
+      .select("storage_path")
+      .in("order_id", orderIds);
+    if (attachmentsError) throw new Error(attachmentsError.message);
+
+    const storagePaths = (attachments ?? []).map((attachment) => attachment.storage_path);
+    if (storagePaths.length) {
+      const { error: storageError } = await supabase.storage.from("order-attachments").remove(storagePaths);
+      if (storageError) throw new Error(`No se pudieron eliminar los adjuntos: ${storageError.message}`);
+    }
+
+    const { data: deletedOrders, error: deleteError } = await supabase
+      .from("orders")
+      .delete()
+      .in("id", orderIds)
+      .select("id");
+    if (deleteError) throw new Error(deleteError.message);
+    if (deletedOrders?.length !== orderIds.length) {
+      throw new Error("No se eliminaron todos los productos de la orden.");
+    }
+
+    await supabase.from("audit_logs").insert({
+      order_id: null,
+      action: "delete_order",
+      entity: "orders",
+      entity_id: order.id,
+      profile_id: profileId,
+      old_value: `${order.code} · ${groupedOrders.map((item) => item.product).join(", ")}`,
+      new_value: "deleted",
+    });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/ready");
+  revalidatePath("/admin/agenda");
+  revalidatePath("/admin/documents");
+  revalidatePath("/admin/history");
   revalidatePath("/taller");
   redirect("/admin");
 }
@@ -1063,9 +1128,6 @@ async function validateOrderRules(
   settings: Awaited<ReturnType<typeof getSystemSettings>>,
   currentOrderId?: string,
 ) {
-  if (!settings.orders.allowPastDeliveryDates && input.deliveryDate < new Date().toISOString().slice(0, 10)) {
-    return "La fecha de entrega no puede estar en el pasado.";
-  }
   if (settings.orders.requireObservationsForWarranty && input.isWarranty && !input.observations?.trim()) {
     return "Las órdenes de garantía requieren observaciones.";
   }

@@ -1,11 +1,21 @@
 "use client";
 
-import { CheckCircle2, Ban, Pencil } from "lucide-react";
+import { CheckCircle2, Ban, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { cancelOrder, closeOrder } from "@/app/admin/orders/actions";
+import { cancelOrder, closeOrder, deleteOrder } from "@/app/admin/orders/actions";
 import { ConfirmSubmitButton } from "./confirm-submit-button";
 
-export function OrderActions({ orderId, canClose }: { orderId: string; canClose: boolean }) {
+export function OrderActions({
+  orderId,
+  orderCode,
+  canClose,
+  canDelete = false,
+}: {
+  orderId: string;
+  orderCode: string;
+  canClose: boolean;
+  canDelete?: boolean;
+}) {
   return (
     <div className="flex flex-wrap gap-2">
       <Link href={`/admin/orders/${orderId}/edit`} className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 transition hover:bg-stone-50">
@@ -37,6 +47,24 @@ export function OrderActions({ orderId, canClose }: { orderId: string; canClose:
           trigger={<><CheckCircle2 className="size-4" />Cerrar orden</>}
         />
       </form>
+      {canDelete ? <DeleteOrderAction orderId={orderId} orderCode={orderCode} /> : null}
     </div>
+  );
+}
+
+export function DeleteOrderAction({ orderId, orderCode }: { orderId: string; orderCode: string }) {
+  return (
+    <form action={deleteOrder}>
+      <input type="hidden" name="orderId" value={orderId} />
+      <ConfirmSubmitButton
+        title="Eliminar orden definitivamente"
+        description="Se eliminarán esta nota y todos sus productos, etapas, pagos, agenda, adjuntos y actividad relacionada. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar definitivamente"
+        pendingLabel="Eliminando..."
+        confirmationText={orderCode}
+        triggerClassName="inline-flex h-10 items-center gap-2 rounded-md border border-rose-300 bg-rose-50 px-3 text-sm font-medium text-rose-800 transition hover:bg-rose-100 disabled:opacity-50"
+        trigger={<><Trash2 className="size-4" />Eliminar</>}
+      />
+    </form>
   );
 }

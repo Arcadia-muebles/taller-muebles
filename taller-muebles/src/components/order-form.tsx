@@ -343,16 +343,10 @@ export function OrderForm({
 
             <div className="grid gap-3">
               {productFields.map((field, index) => (
-                <div key={field.id} className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_auto] sm:items-start">
+                <div key={field.id} className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4 sm:grid-cols-[auto_7rem_minmax(0,1.4fr)_minmax(0,1fr)_auto] sm:items-start">
                   <span className="grid size-9 place-items-center rounded-md bg-stone-100 font-mono text-sm font-semibold text-stone-600">
                     {index + 1}
                   </span>
-                  <Field label="Producto" error={typedErrors.products?.[index]?.productName?.message}>
-                    <input {...register(`products.${index}.productName`)} className={inputClass} placeholder="Producto o modelo" />
-                  </Field>
-                  <Field label="Color (opcional)" error={typedErrors.products?.[index]?.color?.message}>
-                    <input {...register(`products.${index}.color`)} className={inputClass} placeholder="Color" />
-                  </Field>
                   <Field label="Cantidad" error={typedErrors.products?.[index]?.quantity?.message}>
                     <input
                       {...register(`products.${index}.quantity`)}
@@ -362,6 +356,12 @@ export function OrderForm({
                       inputMode="numeric"
                       className={inputClass}
                     />
+                  </Field>
+                  <Field label="Producto" error={typedErrors.products?.[index]?.productName?.message}>
+                    <input {...register(`products.${index}.productName`)} className={inputClass} placeholder="Producto o modelo" />
+                  </Field>
+                  <Field label="Color (opcional)" error={typedErrors.products?.[index]?.color?.message}>
+                    <input {...register(`products.${index}.color`)} className={inputClass} placeholder="Color" />
                   </Field>
                   <div className="sm:pt-6">
                     <button

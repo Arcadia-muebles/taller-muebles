@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ClientPortalAccess } from "@/components/client-portal-access";
-import { OrderActions } from "@/components/order-actions";
+import { DeleteOrderAction, OrderActions } from "@/components/order-actions";
 import { OrderCollaboration } from "@/components/order-collaboration";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { OrderForm } from "@/components/order-form";
@@ -71,11 +71,14 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             <ArrowLeft className="size-4" />
             Volver al panel
           </Link>
-          {canEditOrder ? (
-            <Link href={`/admin/orders/${order.id}/edit`} className="btn btn-primary">
-              Editar orden
-            </Link>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {canEditOrder ? (
+              <Link href={`/admin/orders/${order.id}/edit`} className="btn btn-primary">
+                Editar orden
+              </Link>
+            ) : null}
+            {user.role === "admin" ? <DeleteOrderAction orderId={order.id} orderCode={documentCode} /> : null}
+          </div>
         </div>
         <OrderForm
           orderId={order.id}
@@ -164,7 +167,14 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
 
         <div className="flex flex-wrap gap-2">
           <OrderLabelPrintButton order={order} groupOrders={groupOrders} />
-          {canEditOrder ? <OrderActions orderId={order.id} canClose={canClose} /> : null}
+          {canEditOrder ? (
+            <OrderActions
+              orderId={order.id}
+              orderCode={documentCode}
+              canClose={canClose}
+              canDelete={user.role === "admin"}
+            />
+          ) : null}
         </div>
       </header>
 

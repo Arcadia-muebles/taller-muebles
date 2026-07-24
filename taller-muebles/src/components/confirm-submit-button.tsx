@@ -14,6 +14,7 @@ type ConfirmSubmitButtonProps = {
   disabled?: boolean;
   tone?: "danger" | "neutral";
   triggerTitle?: string;
+  confirmationText?: string;
 };
 
 export function ConfirmSubmitButton({
@@ -26,10 +27,13 @@ export function ConfirmSubmitButton({
   disabled = false,
   tone = "danger",
   triggerTitle,
+  confirmationText,
 }: ConfirmSubmitButtonProps) {
   const [open, setOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
   const { pending } = useFormStatus();
   const danger = tone === "danger";
+  const confirmationMatches = !confirmationText || confirmation === confirmationText;
 
   return (
     <>
@@ -37,7 +41,10 @@ export function ConfirmSubmitButton({
         type="button"
         disabled={disabled || pending}
         title={triggerTitle}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setConfirmation("");
+          setOpen(true);
+        }}
         className={triggerClassName}
       >
         {pending ? pendingLabel : trigger}
@@ -79,6 +86,18 @@ export function ConfirmSubmitButton({
               </button>
             </div>
 
+            {confirmationText ? (
+              <label className="mt-5 grid gap-2 text-sm font-medium text-stone-700">
+                Escribe <span className="font-mono font-semibold text-stone-950">{confirmationText}</span> para confirmar
+                <input
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                  autoComplete="off"
+                  className="control bg-white"
+                />
+              </label>
+            ) : null}
+
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -89,7 +108,7 @@ export function ConfirmSubmitButton({
               </button>
               <button
                 type="submit"
-                disabled={pending}
+                disabled={pending || !confirmationMatches}
                 className={
                   danger
                     ? "h-10 rounded-md bg-rose-700 px-4 text-sm font-medium text-white transition hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-50"

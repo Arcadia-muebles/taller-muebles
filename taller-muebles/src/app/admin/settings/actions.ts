@@ -33,7 +33,6 @@ const settingsSchema = z.object({
     requireMaterialAndColor: boolean,
     requireObservationsForWarranty: boolean,
     enforceUniqueSalesNote: boolean,
-    allowPastDeliveryDates: boolean,
     archiveCompletedAfterDays: z.number().int().min(0).max(3650),
   }),
   alerts: z.object({

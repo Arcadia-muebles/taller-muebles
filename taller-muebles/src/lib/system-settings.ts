@@ -27,8 +27,7 @@ export const defaultSystemSettings: SystemSettings = {
     requireAssignedPerson: true,
     requireMaterialAndColor: true,
     requireObservationsForWarranty: true,
-    enforceUniqueSalesNote: true,
-    allowPastDeliveryDates: false,
+    enforceUniqueSalesNote: false,
     archiveCompletedAfterDays: 30,
   },
   alerts: {
