@@ -343,7 +343,7 @@ export function OrderForm({
 
             <div className="grid gap-3">
               {productFields.map((field, index) => (
-                <div key={field.id} className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_auto] sm:items-start">
+                <div key={field.id} className="grid gap-3 rounded-lg border border-stone-200 bg-white p-4 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_auto] sm:items-start">
                   <span className="grid size-9 place-items-center rounded-md bg-stone-100 font-mono text-sm font-semibold text-stone-600">
                     {index + 1}
                   </span>
@@ -352,6 +352,16 @@ export function OrderForm({
                   </Field>
                   <Field label="Color (opcional)" error={typedErrors.products?.[index]?.color?.message}>
                     <input {...register(`products.${index}.color`)} className={inputClass} placeholder="Color" />
+                  </Field>
+                  <Field label="Cantidad" error={typedErrors.products?.[index]?.quantity?.message}>
+                    <input
+                      {...register(`products.${index}.quantity`)}
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      className={inputClass}
+                    />
                   </Field>
                   <div className="sm:pt-6">
                     <button
@@ -366,7 +376,6 @@ export function OrderForm({
                     </button>
                   </div>
                   <input type="hidden" {...register(`products.${index}.material`)} value="Por definir" />
-                  <input type="hidden" {...register(`products.${index}.quantity`)} value={1} />
                 </div>
               ))}
             </div>
