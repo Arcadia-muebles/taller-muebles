@@ -4,6 +4,7 @@ import type { ElementType, ReactNode } from "react";
 import { cancelAgendaItem, completeAgendaItem, createAgendaTask, scheduleOrderDelivery, updateAgendaItem } from "@/app/admin/agenda/actions";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { DismissibleDetails } from "@/components/dismissible-details";
 import { PrintPageButton } from "@/components/print-page-button";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
@@ -274,7 +275,7 @@ function AgendaCard({ item, order, canEdit }: { item: AgendaItem; order?: Order;
           {item.status === "done" ? "Hecha" : "Pendiente"}
         </span>
         {canEdit && item.status === "pending" ? (
-          <details className="relative z-30 open:z-50">
+          <DismissibleDetails className="relative z-30 open:z-50">
             <summary className="grid size-8 cursor-pointer list-none place-items-center rounded-md border border-stone-200 bg-white text-stone-500 hover:text-stone-950">
               <MoreVertical className="size-4" />
             </summary>
@@ -317,7 +318,7 @@ function AgendaCard({ item, order, canEdit }: { item: AgendaItem; order?: Order;
                 />
               </form>
             </div>
-          </details>
+          </DismissibleDetails>
         ) : null}
       </div>
     </article>
@@ -362,7 +363,7 @@ function ActionDetails({
   children: ReactNode;
 }) {
   return (
-    <details className="relative">
+    <DismissibleDetails className="relative">
       <summary className={cn(
         "btn list-none border",
         label === "Nueva tarea" ? "border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800" : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
@@ -377,7 +378,7 @@ function ActionDetails({
       <div className="absolute right-0 z-30 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-stone-200 bg-white p-4 shadow-xl shadow-stone-950/10">
         {children}
       </div>
-    </details>
+    </DismissibleDetails>
   );
 }
 
@@ -610,7 +611,7 @@ function TaskSidebarItem({ item, canEdit }: { item: AgendaItem; canEdit: boolean
 
 function DatePickerDetails({ selectedDate }: { selectedDate: string }) {
   return (
-    <details className="relative">
+    <DismissibleDetails className="relative">
       <summary className="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-stone-900 transition hover:bg-stone-50">
         <CalendarDays className="size-4 text-stone-500" />
         <span className="text-base font-semibold sm:text-lg">{longDateLabel(selectedDate)}</span>
@@ -622,7 +623,7 @@ function DatePickerDetails({ selectedDate }: { selectedDate: string }) {
         </label>
         <button type="submit" className="btn btn-primary mt-3 w-full">Ir a fecha</button>
       </form>
-    </details>
+    </DismissibleDetails>
   );
 }
 

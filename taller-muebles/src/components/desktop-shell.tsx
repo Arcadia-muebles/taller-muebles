@@ -42,7 +42,7 @@ export function DesktopShell({ sidebar, children }: DesktopShellProps) {
 
         <div
           className={cn(
-            "h-full w-64 px-4 py-5 transition-opacity duration-150",
+            "h-full w-64 overflow-y-auto overscroll-y-contain px-4 py-5 [scrollbar-gutter:stable] transition-opacity duration-150",
             sidebarExpanded ? "opacity-100" : "pointer-events-none invisible opacity-0",
           )}
         >

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { DismissibleDetails } from "@/components/dismissible-details";
 import { completionPercent } from "@/lib/metrics";
 import type { Order, OrderStatus, ProductionStep } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, formatDate, hasMeaningfulObservations, priorityLabel } from "@/lib/utils";
@@ -420,7 +421,7 @@ function ActionMenu({ order, canEditOrders, detailPathPrefix }: { order: Order; 
   const canEdit = canEditOrders && !["completed", "cancelled"].includes(order.status);
 
   return (
-    <details className="group/action relative">
+    <DismissibleDetails className="group/action relative">
       <summary
         aria-label={`Acciones para ${order.code}`}
         className="grid size-9 cursor-pointer list-none place-items-center rounded-md border border-stone-200 bg-white text-stone-500 transition hover:border-stone-300 hover:text-stone-950 [&::-webkit-details-marker]:hidden"
@@ -441,7 +442,7 @@ function ActionMenu({ order, canEditOrders, detailPathPrefix }: { order: Order; 
           <p className="px-2.5 py-2 text-xs leading-5 text-stone-400">Solo lectura</p>
         )}
       </div>
-    </details>
+    </DismissibleDetails>
   );
 }
 
