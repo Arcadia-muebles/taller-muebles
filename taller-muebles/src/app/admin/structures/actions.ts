@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { createLocalStructureRequest, updateLocalProductionStep, updateLocalStructureRequestStatus } from "@/lib/local-store";
+import { createLocalStructureRequest, updateLocalStructureRequestStatus } from "@/lib/local-store";
 import { isProductionOrder } from "@/lib/orders";
-import { getOrder } from "@/lib/repositories/production";
+import { getOrder, listStructureRequests } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { createClient } from "@/lib/supabase/server";
 import type { StructureRequestStatus } from "@/lib/types";
@@ -44,9 +44,11 @@ const structureSchema = z.object({
 
 const structureOrderStatusSchema = z.object({
   orderId: z.string().min(1),
-  specifications: z.string().trim().min(3).max(1200),
-  status: z.enum(["requested", "in_progress", "done"]),
+  specifications: z.string().trim().min(3).max(1200).optional(),
+  status: z.enum(["draft", "requested", "in_progress", "done"]),
 });
+
+export type StructureStageResult = { ok: true; message: string } | { ok: false; message: string };
 
 export async function createStructureRequest(formData: FormData) {
   const user = await requireSession(["admin", "manager"]);
@@ -127,31 +129,48 @@ export async function saveStructureSpecification(formData: FormData) {
 }
 
 export async function setStructureOrderStatus(formData: FormData) {
-  const user = await requireSession(["admin", "manager"]);
-  const settings = await getSystemSettings();
-  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) return;
-
-  const parsed = structureOrderStatusSchema.safeParse({
+  await changeStructureOrderStatus({
     orderId: formData.get("orderId"),
-    specifications: formData.get("specifications"),
+    specifications: formData.get("specifications") || undefined,
     status: formData.get("status"),
   });
-  if (!parsed.success) return;
+}
+
+export async function updateStructureStage(input: {
+  orderId: string;
+  status: "draft" | "requested" | "in_progress" | "done";
+}): Promise<StructureStageResult> {
+  return changeStructureOrderStatus(input);
+}
+
+async function changeStructureOrderStatus(input: unknown): Promise<StructureStageResult> {
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
+    return { ok: false, message: "Tu perfil no tiene permiso para actualizar estructuras." };
+  }
+
+  const parsed = structureOrderStatusSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "El cambio de estructura no es válido." };
   const order = await getOrder(parsed.data.orderId);
-  if (!order || !isProductionOrder(order)) return;
+  if (!order || !isProductionOrder(order)) return { ok: false, message: "No se encontró una orden de producción válida." };
+  if (parsed.data.status === "draft" && order.steps.some((step) => step.status !== "pending")) {
+    return { ok: false, message: "No puedes quitar Pedida porque la orden ya tiene procesos iniciados." };
+  }
+  const currentRequest = (await listStructureRequests()).find(
+    (request) => request.orderId === parsed.data.orderId && request.status !== "cancelled",
+  );
+  const specifications = parsed.data.specifications ?? currentRequest?.specifications ?? `01 · ${order.product}`;
 
   if (!hasSupabaseConfig()) {
-    await createLocalStructureRequest({
-      orderId: parsed.data.orderId,
-      specifications: parsed.data.specifications,
-      status: parsed.data.status,
-    });
-    await updateLocalProductionStep({
-      orderId: parsed.data.orderId,
-      stepKey: "structure",
-      status: parsed.data.status === "done" ? "done" : parsed.data.status === "in_progress" ? "active" : "pending",
-      reason: parsed.data.specifications,
-    });
+    const updated = currentRequest
+      ? await updateLocalStructureRequestStatus(currentRequest.id, parsed.data.status)
+      : await createLocalStructureRequest({
+          orderId: parsed.data.orderId,
+          specifications,
+          status: parsed.data.status,
+        });
+    if (!updated) return { ok: false, message: "No fue posible guardar el estado de la estructura." };
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
@@ -165,7 +184,7 @@ export async function setStructureOrderStatus(formData: FormData) {
 
     if (existing?.id) {
       await structureDb.from("structure_requests").update({
-        specifications: parsed.data.specifications,
+        specifications,
         status: parsed.data.status,
         completed_at: parsed.data.status === "done" ? new Date().toISOString() : null,
         updated_by: profileId,
@@ -173,7 +192,7 @@ export async function setStructureOrderStatus(formData: FormData) {
     } else {
       await structureDb.from("structure_requests").insert({
         order_id: parsed.data.orderId,
-        specifications: parsed.data.specifications,
+        specifications,
         status: parsed.data.status,
         requested_by: profileId,
         updated_by: profileId,
@@ -185,8 +204,18 @@ export async function setStructureOrderStatus(formData: FormData) {
       supabase,
       orderId: parsed.data.orderId,
       status: parsed.data.status,
-      notes: parsed.data.specifications,
+      notes: specifications,
       profileId,
+    });
+    await supabase.from("audit_logs").insert({
+      order_id: parsed.data.orderId,
+      action: "structure_status",
+      entity: "structure_requests",
+      entity_id: existing?.id ?? parsed.data.orderId,
+      profile_id: profileId,
+      field_name: "status",
+      old_value: currentRequest?.status ?? "unrequested",
+      new_value: parsed.data.status,
     });
   }
 
@@ -195,6 +224,8 @@ export async function setStructureOrderStatus(formData: FormData) {
   revalidatePath("/admin/structures");
   revalidatePath("/taller");
   revalidatePath(`/admin/orders/${parsed.data.orderId}`);
+  revalidatePath(`/taller/orders/${parsed.data.orderId}`);
+  return { ok: true, message: structureStageMessage(parsed.data.status) };
 }
 
 export async function setStructureRequestStatus(formData: FormData) {
@@ -255,6 +286,16 @@ async function updateStructureStep({
         ? { status: "active", started_at: now, completed_at: null, blocked_reason: null, notes, updated_by: profileId }
         : { status: "pending", started_at: null, completed_at: null, blocked_reason: null, notes, updated_by: profileId };
   await (supabase as unknown as LooseDb<ProductionStepRow>).from("production_steps").update(patch).eq("order_id", orderId).eq("step", "structure");
+}
+
+function structureStageMessage(status: "draft" | "requested" | "in_progress" | "done") {
+  const labels = {
+    draft: "La estructura quedó En blanco.",
+    requested: "La estructura quedó Pedida.",
+    in_progress: "La estructura quedó En estructura.",
+    done: "La estructura quedó Lista.",
+  };
+  return labels[status];
 }
 
 async function saveStructureAttachment({

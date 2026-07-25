@@ -5,13 +5,14 @@ import { AppShell } from "@/components/app-shell";
 import { requireSession } from "@/lib/auth";
 import { isReadyForDelivery, readyForDeliveryOrders } from "@/lib/metrics";
 import { isProductionOrder } from "@/lib/orders";
-import { listAgendaItems, listOrders, listStructureRequests } from "@/lib/repositories/production";
+import { listAgendaItems, listCommentsForOrders, listOrders, listStructureRequests } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 
 export default async function AdminPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const [orders, settings, structureRequests, agendaItems] = await Promise.all([listOrders(), getSystemSettings(), listStructureRequests(), listAgendaItems()]);
   const productionOrders = orders.filter(isProductionOrder);
+  const commentsByOrder = await listCommentsForOrders(productionOrders.map((order) => order.id));
   const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
   const ready = readyForDeliveryOrders(productionOrders, agendaItems);
   const productionFinished = productionOrders.filter((order) => !["completed", "cancelled"].includes(order.status) && isReadyForDelivery(order));
@@ -41,6 +42,8 @@ export default async function AdminPage() {
         orders={productionOrders}
         steps={settings.production.steps}
         canMove={canEditOrders}
+        canComment={user.role !== "viewer"}
+        commentsByOrder={commentsByOrder}
         structureRequests={structureRequests}
         finishedCount={productionFinished.length}
       />

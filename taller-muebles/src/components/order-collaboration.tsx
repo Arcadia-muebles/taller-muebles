@@ -1,20 +1,25 @@
 "use client";
 
-import { CheckCircle2, Download, FileUp, Paperclip, XCircle } from "lucide-react";
+import { CheckCircle2, Download, FileUp, MessageSquareText, Paperclip, XCircle } from "lucide-react";
 import { useActionState, useRef } from "react";
 import { type CollaborationActionResult, uploadOrderAttachment } from "@/app/admin/orders/collaboration-actions";
-import type { OrderAttachment } from "@/lib/types";
+import type { OrderAttachment, OrderComment } from "@/lib/types";
+import { OrderNotes } from "./order-notes";
 import { SubmitButton } from "./submit-button";
 
 const initialActionState: CollaborationActionResult = { ok: false, message: "" };
 
 export function OrderCollaboration({
   orderId,
+  comments,
   attachments,
+  canComment,
   canUpload,
 }: {
   orderId: string;
+  comments: OrderComment[];
   attachments: OrderAttachment[];
+  canComment: boolean;
   canUpload: boolean;
 }) {
   const uploadFormRef = useRef<HTMLFormElement>(null);
@@ -28,12 +33,21 @@ export function OrderCollaboration({
   );
 
   return (
-    <section className="rounded-lg border border-stone-200 bg-white">
+    <section className="overflow-hidden rounded-lg border border-stone-200 bg-white">
       <div className="flex items-center gap-3 border-b border-stone-200 p-4">
+        <MessageSquareText className="size-5 text-stone-500" />
+        <div>
+          <h2 className="text-base font-semibold">Comunicación interna</h2>
+          <p className="text-sm text-stone-500">Notas entre administración y los procesos del taller.</p>
+        </div>
+      </div>
+      <OrderNotes orderId={orderId} comments={comments} canComment={canComment} />
+
+      <div className="flex items-center gap-3 border-y border-stone-200 bg-stone-50/70 p-4">
         <Paperclip className="size-5 text-stone-500" />
         <div>
-          <h2 className="text-base font-semibold">Adjuntos</h2>
-          <p className="text-sm text-stone-500">Planos, fotografías y documentos de apoyo.</p>
+          <h3 className="text-sm font-semibold">Adjuntos</h3>
+          <p className="text-xs text-stone-500">Planos, fotografías y documentos de apoyo.</p>
         </div>
       </div>
       {canUpload ? (

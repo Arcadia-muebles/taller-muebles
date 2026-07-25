@@ -283,7 +283,7 @@ select {
   }
 
   @page sales-note {
-    size: A4 portrait;
+    size: 216mm 330mm;
     margin: 6mm;
   }
 
@@ -300,7 +300,7 @@ select {
     page: sales-note;
     position: absolute;
     inset: 0 auto auto 0;
-    width: 198mm;
+    width: 204mm;
     min-height: 0;
     overflow: visible !important;
     border: 0 !important;

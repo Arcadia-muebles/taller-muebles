@@ -8,8 +8,6 @@ import {
   Circle,
   CircleDashed,
   Clock3,
-  MessageSquare,
-  Pencil,
   Printer,
   Scissors,
   Search,
@@ -19,19 +17,23 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { moveOrderStage, updateOrderObservation } from "@/app/admin/orders/actions";
+import { useMemo, useState, useTransition } from "react";
+import { moveOrderStage } from "@/app/admin/orders/actions";
+import { updateStructureStage } from "@/app/admin/structures/actions";
 import { updateProductionStep } from "@/app/taller/actions";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
+import { OrderNotesDialog } from "@/components/order-notes-dialog";
 import { completionPercent, isReadyForDelivery } from "@/lib/metrics";
-import { compareOrderGroupMembers, isIndependentStartStep, isProductionOrder, orderGroupPositions, productionOrderGroup, productionStepPrerequisitesMet } from "@/lib/orders";
-import type { AreaKey, Order, ProductionStep, StepStatus, StructureRequest, SystemSettings } from "@/lib/types";
-import { cn, daysUntil, deliveryLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
+import { compareOrderGroupMembers, isIndependentStartStep, isProductionOrder, orderGroupPositions, productionOrderGroup, productionStepPrerequisitesMet, structureRequestCompleted } from "@/lib/orders";
+import type { AreaKey, Order, OrderComment, ProductionStep, StepStatus, StructureRequest, SystemSettings } from "@/lib/types";
+import { cn, daysUntil, deliveryLabel, formatDate } from "@/lib/utils";
 
 type ActiveProductionDashboardProps = {
   orders: Order[];
   steps: SystemSettings["production"]["steps"];
   canMove: boolean;
+  canComment: boolean;
+  commentsByOrder?: Record<string, OrderComment[]>;
   structureRequests?: StructureRequest[];
   finishedCount?: number;
 };
@@ -41,6 +43,7 @@ type SortKey = "recent" | "delivery" | "code" | "progress";
 type Tone = "green" | "blue" | "amber" | "purple" | "rose" | "stone";
 type DashboardColumnKey = "code" | "product" | "color" | "process" | "status" | "delivery" | "progress";
 type OptimisticStepStatus = { status: StepStatus; previousStatus: StepStatus };
+type StructureStage = "unrequested" | "requested" | "in_progress" | "done";
 
 const ORDERS_PER_PAGE = 30;
 
@@ -55,7 +58,7 @@ const dashboardColumns: Array<{
   { key: "code", label: "Codigo / cliente", width: 145, min: 120, max: 280 },
   { key: "product", label: "Producto", width: 190, min: 150, max: 420 },
   { key: "color", label: "Color", width: 75, min: 65, max: 170 },
-  { key: "process", label: "Procesos", width: 220, min: 190, max: 460, align: "center" },
+  { key: "process", label: "Procesos", width: 250, min: 220, max: 500, align: "center" },
   { key: "status", label: "Estado actual", width: 120, min: 110, max: 260 },
   { key: "delivery", label: "Entrega", width: 100, min: 90, max: 190 },
   { key: "progress", label: "Avance", width: 70, min: 65, max: 130 },
@@ -63,7 +66,7 @@ const dashboardColumns: Array<{
 
 const defaultColumnWidths = Object.fromEntries(dashboardColumns.map((column) => [column.key, column.width])) as Record<DashboardColumnKey, number>;
 
-export function ActiveProductionDashboard({ orders, steps, canMove, structureRequests = [], finishedCount = 0 }: ActiveProductionDashboardProps) {
+export function ActiveProductionDashboard({ orders, steps, canMove, canComment, commentsByOrder = {}, structureRequests = [], finishedCount = 0 }: ActiveProductionDashboardProps) {
   const enabledSteps = useMemo(() => steps.filter((step) => step.enabled), [steps]);
   const dashboardSteps = useMemo(() => enabledSteps.filter((step) => !isDashboardHiddenStep(step)), [enabledSteps]);
   const normalizedOrders = useMemo(
@@ -81,6 +84,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
   const [page, setPage] = useState(1);
   const [optimisticStage, setOptimisticStage] = useState<Record<string, AreaKey>>({});
   const [optimisticStepStatuses, setOptimisticStepStatuses] = useState<Record<string, OptimisticStepStatus>>({});
+  const [optimisticStructureStages, setOptimisticStructureStages] = useState<Record<string, StructureStage>>({});
   const [pendingStepStatuses, setPendingStepStatuses] = useState<Record<string, true>>({});
   const [columnWidths, setColumnWidths] = useState<Record<DashboardColumnKey, number>>(defaultColumnWidths);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
@@ -117,10 +121,14 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
   const pageNumbers = useMemo(() => visiblePageNumbers(currentPage, totalPages), [currentPage, totalPages]);
 
   const counters = useMemo(() => buildCounters(activeOrders, enabledSteps.filter((step) => !isDashboardMetricHiddenStep(step)), finishedCount), [activeOrders, enabledSteps, finishedCount]);
-  const requestedStructureOrders = useMemo(
-    () => new Set(structureRequests.filter((request) => request.status === "requested" || request.status === "in_progress").map((request) => request.orderId)),
+  const structureRequestStatusByOrder = useMemo(
+    () => new Map(structureRequests.filter((request) => request.status !== "cancelled").map((request) => [request.orderId, request.status])),
     [structureRequests],
   );
+  const dashboardProcessCount = dashboardSteps.length + (dashboardSteps.some((step) => step.key === "structure") ? 1 : 0);
+  const requestedStructureCount = activeOrders.filter((order) => (
+    (optimisticStructureStages[order.id] ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id))) === "requested"
+  )).length;
   const tableWidth = useMemo(() => dashboardColumns.reduce((total, column) => total + columnWidths[column.key], 0), [columnWidths]);
 
   function move(order: Order, stepKey: AreaKey) {
@@ -129,6 +137,17 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
     const statusKey = optimisticStepStatusKey(order.id, stepKey);
     if (!canMove || order.status === "completed" || order.status === "cancelled") return;
     if (pendingStepStatuses[statusKey]) return;
+    const structureStage = optimisticStructureStages[order.id]
+      ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id));
+    if (structureStage === "unrequested" && stepKey !== "structure") {
+      setFeedback({ tone: "error", message: "Marca Pedida antes de continuar con cualquier proceso." });
+      return;
+    }
+
+    if (stepKey === "structure" && target) {
+      moveStructure(order, target);
+      return;
+    }
 
     if (target && isIndependentStartStep(stepKey)) {
       const nextStatus = target.status === "active" ? "done" : target.status === "done" ? "pending" : "active";
@@ -159,6 +178,63 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
         });
         setFeedback({ tone: "error", message: result.message });
         return;
+      }
+    });
+  }
+
+  function moveStructure(order: Order, step: ProductionStep) {
+    const currentStage = optimisticStructureStages[order.id]
+      ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id));
+    if (currentStage === "unrequested") {
+      setFeedback({ tone: "error", message: "Primero marca la estructura como Pedida." });
+      return;
+    }
+    const nextStage = currentStage === "requested" ? "in_progress" : currentStage === "in_progress" ? "done" : "in_progress";
+    persistStructureStage(order, step, nextStage);
+  }
+
+  function moveStructureRequest(order: Order, step: ProductionStep) {
+    const currentStage = optimisticStructureStages[order.id]
+      ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id));
+    if (currentStage === "in_progress" || currentStage === "done") return;
+    persistStructureStage(order, step, currentStage === "requested" ? "unrequested" : "requested");
+  }
+
+  function persistStructureStage(order: Order, step: ProductionStep, nextStage: StructureStage) {
+    const statusKey = optimisticStepStatusKey(order.id, step.key);
+    const nextStepStatus: StepStatus = nextStage === "done" ? "done" : nextStage === "in_progress" ? "active" : "pending";
+    const persistedStatus = dashboardOrders
+      .find((candidate) => candidate.id === order.id)
+      ?.steps.find((candidate) => candidate.key === "structure")
+      ?.status ?? step.status;
+
+    setFeedback(null);
+    setOptimisticStructureStages((current) => ({ ...current, [order.id]: nextStage }));
+    setOptimisticStepStatuses((current) => ({
+      ...current,
+      [statusKey]: { status: nextStepStatus, previousStatus: persistedStatus },
+    }));
+    setPendingStepStatuses((current) => ({ ...current, [statusKey]: true }));
+
+    startTransition(async () => {
+      try {
+        const result = await updateStructureStage({
+          orderId: order.id,
+          status: nextStage === "unrequested" ? "draft" : nextStage,
+        });
+        if (result.ok) {
+          setFeedback({ tone: "success", message: result.message });
+          return;
+        }
+        setOptimisticStructureStages((current) => removeRecordKey(current, order.id));
+        setOptimisticStepStatuses((current) => removeRecordKey(current, statusKey));
+        setFeedback({ tone: "error", message: result.message });
+      } catch {
+        setOptimisticStructureStages((current) => removeRecordKey(current, order.id));
+        setOptimisticStepStatuses((current) => removeRecordKey(current, statusKey));
+        setFeedback({ tone: "error", message: "No fue posible actualizar la estructura. Intenta nuevamente." });
+      } finally {
+        setPendingStepStatuses((current) => removeRecordKey(current, statusKey));
       }
     });
   }
@@ -250,7 +326,14 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
 
   return (
     <section className="mt-5 space-y-3">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[repeat(6,minmax(0,1fr))]">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[repeat(7,minmax(0,1fr))]">
+        <MetricCard
+          label="Pedidas"
+          value={String(requestedStructureCount)}
+          helper=""
+          icon={Clock3}
+          tone="green"
+        />
         {counters.byStep.map((item) => (
           <MetricCard
             key={item.key}
@@ -356,16 +439,21 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                 <th />
                 <th />
                 <th className="px-3 pb-2">
-                  <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardSteps.length, 1)}, minmax(30px, 1fr))` }}>
-                    {dashboardSteps.map((step) => (
-                      <span
-                        key={step.key}
-                        title={step.label}
-                        className="whitespace-nowrap text-center text-[9px] font-semibold uppercase leading-none tracking-[0.04em] text-stone-500"
-                      >
-                        {processColumnLabel(step.label)}
-                      </span>
-                    ))}
+                  <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardProcessCount, 1)}, minmax(30px, 1fr))` }}>
+                    {dashboardSteps.flatMap((step) => {
+                      const columns = step.key === "structure"
+                        ? [{ key: "structure_requested", label: "Pedida", shortLabel: "Ped" }, { key: step.key, label: step.label, shortLabel: processColumnLabel(step.label) }]
+                        : [{ key: step.key, label: step.label, shortLabel: processColumnLabel(step.label) }];
+                      return columns.map((column) => (
+                        <span
+                          key={column.key}
+                          title={column.label}
+                          className="whitespace-nowrap text-center text-[9px] font-semibold uppercase leading-none tracking-[0.04em] text-stone-500"
+                        >
+                          {column.shortLabel}
+                        </span>
+                      ));
+                    })}
                   </div>
                 </th>
                 <th />
@@ -375,7 +463,9 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
             </thead>
             <tbody>
               {paginatedOrders.map((order) => {
-                const presentation = statusPresentation(order);
+                const structureStage = optimisticStructureStages[order.id]
+                  ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id));
+                const presentation = statusPresentation(order, structureStage);
                 const StatusIcon = presentation.icon;
                 const progress = dashboardCompletionPercent(order, dashboardSteps);
                 const groupOrders = productionOrderGroup(normalizedOrders, order);
@@ -393,7 +483,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                               <p className="truncate text-lg font-semibold text-stone-950 group-hover:underline">{order.code}</p>
                             </Link>
                             <OrderLabelPrintButton order={order} groupOrders={groupOrders} compact />
-                            <ObservationAlert order={order} />
+                            <OrderNotesDialog order={order} comments={commentsByOrder[order.id] ?? []} canComment={canComment} />
                           </div>
                           <Link href={`/admin/orders/${order.id}`} className="block min-w-0">
                             <p className="mt-1 truncate text-xs font-medium text-stone-600">{order.store === "LH" ? "Leather House" : "La Reina"}</p>
@@ -418,20 +508,33 @@ export function ActiveProductionDashboard({ orders, steps, canMove, structureReq
                       </p>
                     </BodyCell>
                     <BodyCell className="text-center">
-                      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardSteps.length, 1)}, minmax(30px, 1fr))` }}>
-                        {dashboardSteps.map((step) => {
+                      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardProcessCount, 1)}, minmax(30px, 1fr))` }}>
+                        {dashboardSteps.flatMap((step) => {
                           const orderStep = order.steps.find((item) => item.key === step.key);
-                          return (
+                          const resolvedStep = orderStep ?? { key: step.key, label: step.label, owner: step.label, status: "pending" as const };
+                          const stepDot = (
                             <StepDot
                               key={step.key}
                               order={order}
-                              step={orderStep ?? { key: step.key, label: step.label, owner: step.label, status: "pending" }}
-                              requested={step.key === "structure" && requestedStructureOrders.has(order.id)}
-                              canMove={canMove}
+                              step={resolvedStep}
+                              structureStage={step.key === "structure" ? structureStage : undefined}
+                              canMove={canMove && structureStage !== "unrequested"}
                               pending={Boolean(pendingStepStatuses[optimisticStepStatusKey(order.id, step.key)])}
                               onMove={() => move(order, step.key)}
                             />
                           );
+                          if (step.key !== "structure") return [stepDot];
+                          return [
+                            <StructureRequestDot
+                              key="structure_requested"
+                              order={order}
+                              stage={structureStage}
+                              canMove={canMove}
+                              pending={Boolean(pendingStepStatuses[optimisticStepStatusKey(order.id, step.key)])}
+                              onMove={() => moveStructureRequest(order, resolvedStep)}
+                            />,
+                            stepDot,
+                          ];
                         })}
                       </div>
                     </BodyCell>
@@ -554,25 +657,75 @@ function FilterChip({
   );
 }
 
+function StructureRequestDot({
+  order,
+  stage,
+  canMove,
+  pending,
+  onMove,
+}: {
+  order: Order;
+  stage: StructureStage;
+  canMove: boolean;
+  pending: boolean;
+  onMove: () => void;
+}) {
+  const completed = stage !== "unrequested";
+  const locked = stage === "in_progress" || stage === "done" || order.steps.some((step) => step.status !== "pending");
+  const disabled = pending || !canMove || locked || order.status === "completed" || order.status === "cancelled";
+  const action = stage === "unrequested"
+    ? "Marcar estructura como Pedida"
+    : stage === "requested"
+      ? "Volver estructura a En blanco"
+      : "Estructura Pedida";
+  return (
+    <button
+      type="button"
+      data-order-id={order.id}
+      data-step-key="structure_requested"
+      data-structure-status={stage}
+      disabled={disabled}
+      onClick={onMove}
+      title={action}
+      aria-label={`${action} para ${order.code}`}
+      className={cn(
+        "production-process-indicator mx-auto grid size-6 place-items-center rounded-md border transition",
+        completed ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-stone-300 bg-white text-stone-400",
+        !disabled && "hover:-translate-y-0.5 hover:border-emerald-400 hover:shadow-sm",
+        disabled && "cursor-default opacity-60",
+      )}
+    >
+      {completed ? <Check className="size-3.5" /> : <Circle className="size-3.5" />}
+    </button>
+  );
+}
+
 function StepDot({
   order,
   step,
-  requested,
+  structureStage,
   canMove,
   pending,
   onMove,
 }: {
   order: Order;
   step: ProductionStep;
-  requested?: boolean;
+  structureStage?: StructureStage;
   canMove: boolean;
   pending: boolean;
   onMove: () => void;
 }) {
   const disabled = pending || !canMove || order.status === "completed" || order.status === "cancelled";
   const waiting = isWaitingForStep(order, step);
-  const requestedAndPending = requested && step.status === "pending";
-  const directAction = step.status === "active"
+  const directAction = structureStage
+    ? structureStage === "unrequested"
+      ? `Primero marca ${step.label} como Pedida`
+      : structureStage === "requested"
+        ? `Marcar ${step.label} como En estructura`
+        : structureStage === "in_progress"
+          ? `Marcar ${step.label} como Lista`
+          : `Reabrir ${step.label} como En estructura`
+    : step.status === "active"
       ? `Marcar ${step.label} como listo`
       : isIndependentStartStep(step.key)
         ? step.status === "done"
@@ -588,11 +741,12 @@ function StepDot({
       data-step-status={step.status}
       disabled={disabled}
       onClick={onMove}
-      title={directAction ?? (requestedAndPending ? `${step.label}: solicitada, pendiente` : waiting ? `${step.label}: disponible para iniciar` : disabled ? step.label : `Mover a ${step.label}`)}
-      aria-label={directAction ? `${directAction} para ${order.code}` : requestedAndPending ? `${step.label}: solicitada, pendiente` : disabled ? `${step.label}: ${step.status}` : `Mover ${order.code} a ${step.label}`}
+      title={directAction ?? (waiting ? `${step.label}: disponible para iniciar` : disabled ? step.label : `Mover a ${step.label}`)}
+      aria-label={directAction ? `${directAction} para ${order.code}` : disabled ? `${step.label}: ${step.status}` : `Mover ${order.code} a ${step.label}`}
+      data-structure-status={structureStage}
       className={cn(
         "production-process-indicator mx-auto grid size-6 place-items-center rounded-md border transition",
-        requestedAndPending ? "border-amber-300 bg-amber-50 text-amber-700" : stepDotClass(step.status, stepTone(step)),
+        structureStage ? structureProductionStageClass(structureStage) : stepDotClass(step.status, stepTone(step)),
         !disabled && "hover:-translate-y-0.5 hover:border-stone-400 hover:shadow-sm",
         disabled && "cursor-default opacity-60",
       )}
@@ -684,130 +838,6 @@ function latestCompletedStepDate(order: Order) {
     .sort((left, right) => right.localeCompare(left))[0];
 }
 
-function ObservationAlert({ order }: { order: Order }) {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(order.observations);
-  const [savedValue, setSavedValue] = useState(order.observations);
-  const [message, setMessage] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function closeOnPointerDown(event: PointerEvent) {
-      if (popoverRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
-    }
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    document.addEventListener("pointerdown", closeOnPointerDown);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnPointerDown);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [open]);
-
-  if (!hasMeaningfulObservations(order.observations)) return null;
-  function saveObservation() {
-    const nextValue = value.trim();
-    if (!nextValue) {
-      setMessage("La observacion no puede quedar vacia.");
-      return;
-    }
-    setMessage(null);
-    startTransition(async () => {
-      const result = await updateOrderObservation({ orderId: order.id, observations: nextValue });
-      if (!result.ok) {
-        setMessage(result.message);
-        return;
-      }
-      setSavedValue(result.observations ?? nextValue);
-      setValue(result.observations ?? nextValue);
-      setEditing(false);
-      setMessage("Guardado.");
-    });
-  }
-
-  return (
-    <div ref={popoverRef} className="group/comment relative shrink-0">
-      <button
-        type="button"
-        aria-label={`Ver observacion de ${order.code}`}
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-        className="grid size-7 place-items-center rounded-full border border-amber-200 bg-amber-50 text-amber-700 transition hover:border-amber-300 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 md:size-5"
-      >
-        <MessageSquare className="size-3.5 md:size-3" />
-      </button>
-      <div
-        role="dialog"
-        aria-label={`Observacion de ${order.code}`}
-        className={cn(
-          "absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-left text-sm font-medium leading-5 text-stone-800 shadow-lg shadow-stone-950/10 ring-1 ring-amber-100",
-          open ? "block" : "hidden group-hover/comment:block group-focus-within/comment:block",
-        )}
-      >
-        <span className="absolute -top-1.5 left-1/2 size-3 -translate-x-1/2 rotate-45 border-l border-t border-amber-200 bg-white" />
-        {editing ? (
-          <div className="relative">
-            <textarea
-              value={value}
-              onChange={(event) => setValue(event.target.value)}
-              className="min-h-24 w-full resize-none rounded-md border border-amber-200 bg-white p-2 text-sm outline-none focus:border-amber-500"
-            />
-            <div className="mt-2 flex items-center gap-2">
-              <button
-                type="button"
-                disabled={pending}
-                onClick={saveObservation}
-                className="inline-flex h-8 items-center rounded-md bg-stone-950 px-2.5 text-xs font-semibold text-white transition hover:bg-stone-800 disabled:opacity-50"
-              >
-                Guardar
-              </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => {
-                  setValue(savedValue);
-                  setEditing(false);
-                  setMessage(null);
-                }}
-                className="inline-flex h-8 items-center rounded-md border border-stone-200 px-2.5 text-xs font-semibold text-stone-700 transition hover:bg-stone-50 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        ) : (
-          <p className="relative max-h-32 overflow-y-auto whitespace-pre-line pr-1">{savedValue}</p>
-        )}
-        {message ? <p className="relative mt-2 text-xs font-semibold text-stone-600">{message}</p> : null}
-        <div className="relative mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setEditing((current) => !current)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-amber-200 px-2.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-50"
-          >
-            <Pencil className="size-3.5" />
-            Editar
-          </button>
-          <Link
-            href={`/admin/orders/${order.id}#observaciones`}
-            className="inline-flex h-8 items-center rounded-md border border-stone-200 px-2.5 text-xs font-semibold text-stone-700 transition hover:bg-stone-50"
-          >
-            Abrir detalle
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
 function buildCounters(orders: Order[], steps: SystemSettings["production"]["steps"], finishedCount: number) {
   const byStep = steps.map((step) => ({
     key: step.key,
@@ -920,12 +950,19 @@ function visiblePageNumbers(currentPage: number, totalPages: number) {
   return Array.from({ length: 5 }, (_, index) => start + index);
 }
 
-function statusPresentation(order: Order): { label: string; tone: Tone; icon: React.ElementType } {
+function statusPresentation(order: Order, structureStage?: StructureStage): { label: string; tone: Tone; icon: React.ElementType } {
   if (order.status === "completed") return { label: "Entregado", tone: "green", icon: Truck };
   if (order.status === "blocked" || order.steps.some((step) => step.status === "blocked")) return { label: "Bloqueada", tone: "rose", icon: CircleDashed };
   if (isReadyForDelivery(order)) return { label: "Terminado", tone: "green", icon: CheckCircle2 };
+  const current = currentStep(order);
+  if (current?.key === "structure" && structureStage === "unrequested") {
+    return { label: "Estructura en blanco", tone: "stone", icon: Clock3 };
+  }
+  if (current?.key === "structure" && structureStage === "requested") {
+    return { label: "Estructura pedida", tone: "green", icon: CheckCircle2 };
+  }
   if (order.steps.length && order.steps.every((step) => step.status === "pending")) return { label: "Sin empezar", tone: "stone", icon: Clock3 };
-  const step = currentStep(order);
+  const step = current;
   if (!step) return { label: "Sin empezar", tone: "stone", icon: Clock3 };
   if (isWaitingForStep(order, step)) return { label: `En espera de ${cleanStepLabel(step.label)}`, tone: "blue", icon: Clock3 };
   return { label: currentStepStatusLabel(step), tone: stepTone(step), icon: stepIconByKey(step.key, step.label) };
@@ -986,6 +1023,30 @@ function orderWithStepStatuses(order: Order, statuses: Record<string, Optimistic
 
 function optimisticStepStatusKey(orderId: string, stepKey: AreaKey) {
   return `${orderId}:${stepKey}`;
+}
+
+function structureStageFor(order: Order, requestStatus?: StructureRequest["status"]): StructureStage {
+  const step = order.steps.find((item) => item.key === "structure");
+  if (step?.status === "done" || requestStatus === "done") return "done";
+  if (step?.status === "active" || requestStatus === "in_progress") return "in_progress";
+  if (structureRequestCompleted(order, requestStatus)) return "requested";
+  return "unrequested";
+}
+
+function structureProductionStageClass(stage: StructureStage) {
+  const classes: Record<StructureStage, string> = {
+    unrequested: "border-stone-300 bg-white text-stone-400",
+    requested: "border-stone-300 bg-white text-stone-400",
+    in_progress: "border-blue-300 bg-blue-50 text-blue-700",
+    done: "border-emerald-300 bg-emerald-50 text-emerald-700",
+  };
+  return classes[stage];
+}
+
+function removeRecordKey<T>(record: Record<string, T>, key: string) {
+  const next = { ...record };
+  delete next[key];
+  return next;
 }
 
 function removeOrderStepStatuses(statuses: Record<string, OptimisticStepStatus>, orderId: string) {

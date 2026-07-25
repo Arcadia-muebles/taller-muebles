@@ -29,6 +29,11 @@ import { newOrderSchema, orderSchema, type NewOrderFormValues, type OrderFormVal
 const inputClass = "control-lg bg-white";
 const labelClass = "field-label";
 const deliveryDayOptions = [10, 20, 30, 40, 50];
+const salesNotePage = {
+  widthMm: 216,
+  heightMm: 330,
+  marginMm: 6,
+} as const;
 const paymentMethodOptions = ["Transferencia", "Efectivo", "Débito", "Crédito", "Webpay", "Cheque", "Otro"];
 const initialState: CreateOrderState = {
   status: "idle",
@@ -225,17 +230,51 @@ export function OrderForm({
     setPdfError(null);
     setPdfSuccess(null);
     try {
+      const fileName = pdfFileName(documentLabel, getValues("salesNoteNumber"));
+      const saveFilePicker = getSaveFilePicker();
+      let fileHandle: SaveFileHandle | undefined;
+
+      if (saveFilePicker) {
+        try {
+          fileHandle = await saveFilePicker({
+            suggestedName: fileName,
+            types: [
+              {
+                description: "Documento PDF",
+                accept: { "application/pdf": [".pdf"] },
+              },
+            ],
+          });
+        } catch (error) {
+          if (isFilePickerCancellation(error)) return;
+          throw error;
+        }
+      }
+
       const [canvas, { jsPDF }] = await Promise.all([renderSalesNoteCanvas(printArea), import("jspdf")]);
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
-      const margin = 6;
-      const availableWidth = 210 - margin * 2;
-      const availableHeight = 297 - margin * 2;
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [salesNotePage.widthMm, salesNotePage.heightMm],
+        compress: true,
+      });
+      const margin = salesNotePage.marginMm;
+      const availableWidth = salesNotePage.widthMm - margin * 2;
+      const availableHeight = salesNotePage.heightMm - margin * 2;
       const scale = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
       const width = canvas.width * scale;
       const height = canvas.height * scale;
       pdf.addImage(canvas.toDataURL("image/jpeg", 0.96), "JPEG", margin, margin, width, height, undefined, "FAST");
-      pdf.save(pdfFileName(documentLabel, getValues("salesNoteNumber")));
-      setPdfSuccess("PDF generado y descargado.");
+
+      if (fileHandle) {
+        const writable = await fileHandle.createWritable();
+        await writable.write(pdf.output("blob"));
+        await writable.close();
+        setPdfSuccess("PDF guardado correctamente.");
+      } else {
+        pdf.save(fileName);
+        setPdfSuccess("PDF descargado. Tu navegador no permite elegir la ubicación.");
+      }
     } catch (error) {
       console.error("No se pudo generar el PDF", error);
       setPdfError("No se pudo generar el PDF. Intenta nuevamente.");
@@ -259,7 +298,9 @@ export function OrderForm({
       const frameDocument = frame.contentDocument;
       if (!frameDocument) throw new Error("No se pudo preparar la hoja de impresión.");
       frameDocument.open();
-      frameDocument.write('<!doctype html><html><head><title>Nota de venta</title><style>@page{size:A4 portrait;margin:6mm}html,body{width:198mm;height:285mm;margin:0;overflow:hidden;background:#fff}img{display:block;width:100%;height:100%;object-fit:contain;object-position:top left}</style></head><body><img alt="Nota de venta"></body></html>');
+      frameDocument.write(
+        `<!doctype html><html><head><title>Nota de venta</title><style>@page{size:${salesNotePage.widthMm}mm ${salesNotePage.heightMm}mm;margin:${salesNotePage.marginMm}mm}html,body{width:${salesNotePage.widthMm - salesNotePage.marginMm * 2}mm;height:${salesNotePage.heightMm - salesNotePage.marginMm * 2}mm;margin:0;overflow:hidden;background:#fff}img{display:block;width:100%;height:100%;object-fit:contain;object-position:top left}</style></head><body><img alt="Nota de venta"></body></html>`,
+      );
       frameDocument.close();
       const image = frameDocument.querySelector("img");
       if (!image) throw new Error("No se pudo preparar la nota para impresión.");
@@ -1527,6 +1568,30 @@ function pdfFileName(documentLabel: string, documentCode?: string) {
     .replace(/^-|-$/g, "");
   const safeCode = documentCode?.trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "sin-numero";
   return `${safeLabel || "documento"}-${safeCode}.pdf`;
+}
+
+type SaveFileHandle = {
+  createWritable: () => Promise<{
+    write: (data: Blob) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
+};
+
+type SaveFilePicker = (options: {
+  suggestedName: string;
+  types: Array<{
+    description: string;
+    accept: Record<string, string[]>;
+  }>;
+}) => Promise<SaveFileHandle>;
+
+function getSaveFilePicker() {
+  const browserWindow = window as Window & { showSaveFilePicker?: SaveFilePicker };
+  return browserWindow.showSaveFilePicker?.bind(browserWindow);
+}
+
+function isFilePickerCancellation(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function lineTotal(quantity?: number, unitPrice?: number) {

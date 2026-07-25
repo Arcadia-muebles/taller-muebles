@@ -10,9 +10,10 @@ import type { StructureListRow } from "@/app/admin/structures/page";
 type Filter = "all" | StructureListRow["structureStatus"];
 
 const statusCopy = {
-  pending: { label: "Pendiente", className: "border-amber-200 bg-amber-50 text-amber-800" },
-  in_progress: { label: "En confección", className: "border-sky-200 bg-sky-50 text-sky-800" },
-  done: { label: "Completada", className: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+  unrequested: { label: "En blanco", className: "border-stone-200 bg-stone-50 text-stone-700" },
+  requested: { label: "Pedida", className: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+  in_progress: { label: "En estructura", className: "border-sky-200 bg-sky-50 text-sky-800" },
+  done: { label: "Lista", className: "border-emerald-200 bg-emerald-50 text-emerald-800" },
 };
 
 export function StructuresWorkspace({ rows, canEdit }: { rows: StructureListRow[]; canEdit: boolean }) {
@@ -20,7 +21,8 @@ export function StructuresWorkspace({ rows, canEdit }: { rows: StructureListRow[
   const [filter, setFilter] = useState<Filter>("all");
   const normalizedQuery = query.trim().toLocaleLowerCase("es");
   const counts = useMemo(() => ({
-    pending: rows.filter((row) => row.structureStatus === "pending").length,
+    unrequested: rows.filter((row) => row.structureStatus === "unrequested").length,
+    requested: rows.filter((row) => row.structureStatus === "requested").length,
     in_progress: rows.filter((row) => row.structureStatus === "in_progress").length,
     done: rows.filter((row) => row.structureStatus === "done").length,
   }), [rows]);
@@ -41,10 +43,11 @@ export function StructuresWorkspace({ rows, canEdit }: { rows: StructureListRow[
         </div>
       </header>
 
-      <section className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
-        <Metric label="Pendientes" value={counts.pending} tone="amber" />
-        <Metric label="En confección" value={counts.in_progress} tone="sky" />
-        <Metric label="Completadas" value={counts.done} tone="emerald" />
+      <section className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+        <Metric label="En blanco" value={counts.unrequested} tone="stone" />
+        <Metric label="Pedidas" value={counts.requested} tone="emerald" />
+        <Metric label="En estructura" value={counts.in_progress} tone="sky" />
+        <Metric label="Listas" value={counts.done} tone="emerald" />
       </section>
 
       <section className="panel mt-4 overflow-hidden">
@@ -55,9 +58,10 @@ export function StructuresWorkspace({ rows, canEdit }: { rows: StructureListRow[
           </label>
           <div className="flex gap-1 overflow-x-auto" aria-label="Filtrar estructuras por estado">
             <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>Todas <b>{rows.length}</b></FilterButton>
-            <FilterButton active={filter === "pending"} onClick={() => setFilter("pending")}>Pendientes <b>{counts.pending}</b></FilterButton>
-            <FilterButton active={filter === "in_progress"} onClick={() => setFilter("in_progress")}>En confección <b>{counts.in_progress}</b></FilterButton>
-            <FilterButton active={filter === "done"} onClick={() => setFilter("done")}>Completadas <b>{counts.done}</b></FilterButton>
+            <FilterButton active={filter === "unrequested"} onClick={() => setFilter("unrequested")}>En blanco <b>{counts.unrequested}</b></FilterButton>
+            <FilterButton active={filter === "requested"} onClick={() => setFilter("requested")}>Pedidas <b>{counts.requested}</b></FilterButton>
+            <FilterButton active={filter === "in_progress"} onClick={() => setFilter("in_progress")}>En estructura <b>{counts.in_progress}</b></FilterButton>
+            <FilterButton active={filter === "done"} onClick={() => setFilter("done")}>Listas <b>{counts.done}</b></FilterButton>
           </div>
         </div>
 
@@ -94,7 +98,7 @@ function StructureCard({ row, canEdit }: { row: StructureListRow; canEdit: boole
         </div>
 
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">Estructura solicitada</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">Detalle de estructura</p>
           <p className="mt-1 whitespace-pre-line text-sm font-semibold leading-5 text-stone-900">{specification}</p>
           <p className="mt-1 truncate text-xs text-stone-500">{row.request?.assignedTo ? `Responsable: ${row.request.assignedTo}` : "Sin responsable asignado"}</p>
         </div>
@@ -103,7 +107,13 @@ function StructureCard({ row, canEdit }: { row: StructureListRow; canEdit: boole
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${status.className}`}>
             <CircleDot className="size-3" />{status.label}
           </span>
-          <p className="mt-1.5 text-xs text-stone-500">{row.request ? `Actualizada ${formatDate(row.request.completedAt || row.request.requestedAt)}` : "Aún sin ficha técnica"}</p>
+          <p className="mt-1.5 text-xs text-stone-500">
+            {row.structureStatus === "unrequested"
+              ? "Aún no solicitada al taller"
+              : row.request
+                ? `Actualizada ${formatDate(row.request.completedAt || row.request.requestedAt)}`
+                : "Sin ficha técnica"}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
@@ -146,9 +156,10 @@ function StructureCard({ row, canEdit }: { row: StructureListRow; canEdit: boole
           <div className="mt-4 border-t border-stone-200 pt-3">
             <p className="field-label mb-2">Cambiar estado</p>
             <div className="flex flex-wrap gap-2">
-              <StatusButton row={row} status="requested" label="Pendiente" />
-              <StatusButton row={row} status="in_progress" label="Iniciar confección" />
-              <StatusButton row={row} status="done" label="Marcar completada" />
+              <StatusButton row={row} status="draft" label="En blanco" />
+              <StatusButton row={row} status="requested" label="Pedida" />
+              <StatusButton row={row} status="in_progress" label="En estructura" />
+              <StatusButton row={row} status="done" label="Lista" />
             </div>
           </div>
         </div>
@@ -157,7 +168,7 @@ function StructureCard({ row, canEdit }: { row: StructureListRow; canEdit: boole
   );
 }
 
-function StatusButton({ row, status, label }: { row: StructureListRow; status: "requested" | "in_progress" | "done"; label: string }) {
+function StatusButton({ row, status, label }: { row: StructureListRow; status: "draft" | "requested" | "in_progress" | "done"; label: string }) {
   const active = requestStatus(row.structureStatus) === status;
   return (
     <form action={setStructureOrderStatus}>
@@ -180,13 +191,13 @@ function FilterButton({ active, onClick, children }: { active: boolean; onClick:
   return <button type="button" onClick={onClick} className={`shrink-0 rounded-md px-3 py-2 text-xs font-medium transition ${active ? "bg-stone-950 text-white" : "text-stone-600 hover:bg-stone-100"}`}>{children}</button>;
 }
 
-function Metric({ label, value, tone }: { label: string; value: number; tone: "amber" | "sky" | "emerald" }) {
-  const tones = { amber: "border-amber-200 bg-amber-50", sky: "border-sky-200 bg-sky-50", emerald: "border-emerald-200 bg-emerald-50" };
+function Metric({ label, value, tone }: { label: string; value: number; tone: "stone" | "amber" | "sky" | "emerald" }) {
+  const tones = { stone: "border-stone-200 bg-stone-50", amber: "border-amber-200 bg-amber-50", sky: "border-sky-200 bg-sky-50", emerald: "border-emerald-200 bg-emerald-50" };
   return <div className={`rounded-lg border p-3 sm:p-4 ${tones[tone]}`}><p className="text-xl font-bold text-stone-950 sm:text-2xl">{value}</p><p className="mt-0.5 truncate text-xs font-medium text-stone-600 sm:text-sm">{label}</p></div>;
 }
 
 function requestStatus(status: StructureListRow["structureStatus"]) {
-  return status === "pending" ? "requested" : status;
+  return status === "unrequested" ? "draft" : status;
 }
 
 function formatDate(value: string) {

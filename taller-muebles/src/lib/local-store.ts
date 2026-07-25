@@ -827,6 +827,23 @@ export async function updateLocalProductionStep(input: {
     }
   }
 
+  if (step.key === "structure") {
+    const structureRequest = data.structureRequests.find(
+      (request) => request.orderId === order.id && request.status !== "cancelled",
+    );
+    if (structureRequest) {
+      if (input.status === "active") structureRequest.status = "in_progress";
+      if (input.status === "done") {
+        structureRequest.status = "done";
+        structureRequest.completedAt = now;
+      }
+      if (input.status === "pending" && previousStatus !== "pending") {
+        structureRequest.status = "requested";
+        structureRequest.completedAt = undefined;
+      }
+    }
+  }
+
   if (order.steps.some((item) => item.status === "blocked")) {
     order.status = "blocked";
   } else if (order.steps.every((item) => item.status === "pending")) {
@@ -941,12 +958,18 @@ export async function listLocalOrderComments(orderId: string) {
   return (await readData()).comments.filter((comment) => comment.orderId === orderId);
 }
 
-export async function createLocalOrderComment(orderId: string, author: string, body: string) {
+export async function listLocalOrderCommentsForOrders(orderIds: string[]) {
+  const allowedOrderIds = new Set(orderIds);
+  return (await readData()).comments.filter((comment) => allowedOrderIds.has(comment.orderId));
+}
+
+export async function createLocalOrderComment(orderId: string, author: string, body: string, authorContext?: string) {
   const data = await readData();
   data.comments.unshift({
     id: crypto.randomUUID(),
     orderId,
     author,
+    authorContext,
     body,
     createdAt: new Date().toISOString(),
   });
@@ -1109,7 +1132,9 @@ export async function updateLocalStructureRequestStatus(id: string, status: Stru
   const request = data.structureRequests.find((item) => item.id === id);
   const order = request ? data.orders.find((item) => item.id === request.orderId) : undefined;
   if (!request || !order) return false;
+  const previousStatus = request.status;
   request.status = status;
+  if (status === "requested" && previousStatus === "draft") request.requestedAt = nowIso();
   request.completedAt = status === "done" ? nowIso() : undefined;
 
   const step = order.steps.find((item) => item.key === "structure");
@@ -1118,7 +1143,7 @@ export async function updateLocalStructureRequestStatus(id: string, status: Stru
       step.status = "done";
       step.startedAt = step.startedAt ?? nowIso();
       step.completedAt = nowIso();
-    } else if (status === "requested" || status === "in_progress") {
+    } else if (status === "draft" || status === "requested" || status === "in_progress") {
       step.notes = request.specifications;
       step.status = status === "in_progress" ? "active" : "pending";
       step.startedAt = status === "in_progress" ? (step.startedAt ?? nowIso()) : undefined;

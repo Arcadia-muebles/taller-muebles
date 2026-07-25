@@ -9,7 +9,7 @@ import type { Order, StructureRequest } from "@/lib/types";
 export type StructureListRow = {
   order: Order;
   request?: StructureRequest;
-  structureStatus: "pending" | "in_progress" | "done";
+  structureStatus: "unrequested" | "requested" | "in_progress" | "done";
 };
 
 export default async function StructuresPage() {
@@ -33,16 +33,20 @@ function buildRows(orders: Order[], requests: StructureRequest[]): StructureList
 
   return activeOrders(orders)
     .filter((order) => order.steps.some((step) => step.key === "structure"))
-    .map((order) => ({ order, request: requestByOrderId.get(order.id), structureStatus: structureStatusFromOrder(order) }))
+    .map((order) => {
+      const request = requestByOrderId.get(order.id);
+      return { order, request, structureStatus: structureStatusFromOrder(order, request) };
+    })
     .sort((a, b) => {
-      const rank = { in_progress: 0, pending: 1, done: 2 };
+      const rank = { in_progress: 0, requested: 1, unrequested: 2, done: 3 };
       return rank[a.structureStatus] - rank[b.structureStatus] || a.order.deliveryDate.localeCompare(b.order.deliveryDate);
     });
 }
 
-function structureStatusFromOrder(order: Order): StructureListRow["structureStatus"] {
+function structureStatusFromOrder(order: Order, request?: StructureRequest): StructureListRow["structureStatus"] {
   const step = order.steps.find((item) => item.key === "structure");
   if (step?.status === "done") return "done";
   if (step?.status === "active") return "in_progress";
-  return "pending";
+  if (request?.status === "requested") return "requested";
+  return "unrequested";
 }

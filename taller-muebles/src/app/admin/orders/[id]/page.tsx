@@ -23,7 +23,7 @@ import { completionPercent } from "@/lib/metrics";
 import { productionStepPrerequisitesMet } from "@/lib/orders";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getClientPortalLinkSummary } from "@/lib/client-portal";
-import { getOrder, listOrderAttachments, listOrderAudit, listOrders } from "@/lib/repositories/production";
+import { getOrder, listOrderAttachments, listOrderAudit, listOrderComments, listOrders } from "@/lib/repositories/production";
 import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel } from "@/lib/utils";
 
 type OrderDetailPageProps = {
@@ -34,9 +34,10 @@ type OrderDetailPageProps = {
 export default async function OrderDetailPage({ params, searchParams }: OrderDetailPageProps) {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  const [order, audit, attachments, settings, orders] = await Promise.all([
+  const [order, audit, comments, attachments, settings, orders] = await Promise.all([
     getOrder(id),
     listOrderAudit(id),
+    listOrderComments(id),
     listOrderAttachments(id),
     getSystemSettings(),
     listOrders(),
@@ -359,7 +360,9 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
       <div className="mt-5">
         <OrderCollaboration
           orderId={order.id}
+          comments={comments}
           attachments={attachments}
+          canComment={user.role !== "viewer"}
           canUpload={canEditOrder}
         />
       </div>

@@ -19,7 +19,7 @@ import type {
   CommercialDocumentType,
 } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { getLocalOrder, listLocalAgendaItems, listLocalAuditLogs, listLocalOrderAttachments, listLocalOrderComments, listLocalOrders, listLocalStockItems, listLocalStockMovements, listLocalStructureRequests, listLocalSuppliers } from "@/lib/local-store";
+import { getLocalOrder, listLocalAgendaItems, listLocalAuditLogs, listLocalOrderAttachments, listLocalOrderCommentsForOrders, listLocalOrders, listLocalStockItems, listLocalStockMovements, listLocalStructureRequests, listLocalSuppliers } from "@/lib/local-store";
 import { shortOrderCode } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -365,29 +365,69 @@ export async function listUsers(): Promise<AppUser[]> {
 }
 
 export async function listOrderComments(orderId: string): Promise<OrderComment[]> {
-  if (!hasSupabaseConfig()) return listLocalOrderComments(orderId);
+  const commentsByOrder = await listCommentsForOrders([orderId]);
+  return commentsByOrder[orderId] ?? [];
+}
+
+export async function listCommentsForOrders(orderIds: string[]): Promise<Record<string, OrderComment[]>> {
+  const uniqueOrderIds = [...new Set(orderIds.filter(Boolean))];
+  if (!uniqueOrderIds.length) return {};
+
+  if (!hasSupabaseConfig()) {
+    return groupCommentsByOrder(await listLocalOrderCommentsForOrders(uniqueOrderIds));
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_comments")
-    .select("id, order_id, body, created_at, profiles(full_name)")
-    .eq("order_id", orderId)
+    .select("id, order_id, body, created_at, profiles(full_name, role, area)")
+    .in("order_id", uniqueOrderIds)
     .order("created_at", { ascending: false });
-  if (error || !data) return [];
+  if (error || !data) return {};
 
-  return (data as unknown as Array<{
+  const comments = (data as unknown as Array<{
     id: string;
     order_id: string;
     body: string;
     created_at: string;
-    profiles: { full_name: string } | null;
+    profiles: { full_name: string; role: string; area: string | string[] | null } | null;
   }>).map((comment) => ({
     id: comment.id,
     orderId: comment.order_id,
     author: comment.profiles?.full_name ?? "Usuario",
+    authorContext: profileContext(comment.profiles),
     body: comment.body,
     createdAt: comment.created_at,
   }));
+  return groupCommentsByOrder(comments);
+}
+
+function groupCommentsByOrder(comments: OrderComment[]) {
+  return comments.reduce<Record<string, OrderComment[]>>((grouped, comment) => {
+    (grouped[comment.orderId] ??= []).push(comment);
+    return grouped;
+  }, {});
+}
+
+function profileContext(profile: { role: string; area: string | string[] | null } | null) {
+  if (!profile) return undefined;
+  if (profile.role === "admin") return "Administración";
+  if (profile.role === "manager") return "Supervisión";
+  const areas = Array.isArray(profile.area) ? profile.area : profile.area ? [profile.area] : [];
+  return areas.length ? areas.map(areaLabel).join(", ") : "Taller";
+}
+
+function areaLabel(area: string) {
+  const labels: Record<string, string> = {
+    structure: "Estructura",
+    en_blanco: "En Blanco",
+    cutting: "Corte",
+    sewing: "Costura",
+    upholstery: "Tapicería",
+    quality: "Calidad",
+    dispatch: "Despacho",
+  };
+  return labels[area] ?? area;
 }
 
 export async function listOrderAttachments(orderId: string): Promise<OrderAttachment[]> {

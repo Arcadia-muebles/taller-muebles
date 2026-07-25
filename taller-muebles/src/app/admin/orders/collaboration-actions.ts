@@ -45,7 +45,7 @@ export async function addOrderComment(formData: FormData) {
   }
 
   if (!hasSupabaseConfig()) {
-    await createLocalOrderComment(parsed.data.orderId, user.name, parsed.data.body);
+    await createLocalOrderComment(parsed.data.orderId, user.name, parsed.data.body, userContext(user));
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
@@ -68,6 +68,7 @@ export async function addOrderComment(formData: FormData) {
   }
 
   revalidatePath(`/admin/orders/${parsed.data.orderId}`);
+  revalidatePath("/admin");
   revalidatePath(`/taller/orders/${parsed.data.orderId}`);
   revalidatePath("/taller");
   return { ok: true, message: "Comentario publicado." };
@@ -191,6 +192,22 @@ export async function saveProductionStepComment(formData: FormData): Promise<Col
   revalidatePath("/admin");
   revalidatePath("/taller");
   return { ok: true, message: "Comentario guardado." };
+}
+
+function userContext(user: Awaited<ReturnType<typeof requireSession>>) {
+  if (user.role === "admin") return "Administración";
+  if (user.role === "manager") return "Supervisión";
+  const areas = user.areas ?? (user.area ? [user.area] : []);
+  const labels: Record<string, string> = {
+    structure: "Estructura",
+    en_blanco: "En Blanco",
+    cutting: "Corte",
+    sewing: "Costura",
+    upholstery: "Tapicería",
+    quality: "Calidad",
+    dispatch: "Despacho",
+  };
+  return areas.length ? areas.map((area) => labels[area] ?? area).join(", ") : "Taller";
 }
 
 async function canAccessOrder(

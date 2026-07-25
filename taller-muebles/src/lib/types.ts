@@ -224,6 +224,7 @@ export type OrderComment = {
   id: string;
   orderId: string;
   author: string;
+  authorContext?: string;
   body: string;
   createdAt: string;
 };

@@ -6,8 +6,8 @@ import { requireSession } from "@/lib/auth";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
 import { createLocalOrder, nextLocalOrderCode, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
-import { canProductionStepsRunTogether, isProductionOrder, productionStepPrerequisitesMet, productionStepsResetByReversal } from "@/lib/orders";
-import { getOrderProductionState, listUsers } from "@/lib/repositories/production";
+import { canProductionStepsRunTogether, isProductionOrder, productionStepPrerequisitesMet, productionStepsResetByReversal, structureRequestCompleted } from "@/lib/orders";
+import { getOrderProductionState, listStructureRequests, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -24,6 +24,14 @@ export type WorkshopOrderState = {
   status: "idle" | "success" | "error";
   message: string;
   orderId?: string;
+};
+
+type LooseUpdateQuery = {
+  update: (payload: Record<string, unknown>) => LooseUpdateQuery;
+  eq: (column: string, value: string) => LooseUpdateQuery & Promise<{ error: { message: string } | null }>;
+};
+type LooseUpdateDb = {
+  from: (table: string) => LooseUpdateQuery;
 };
 
 const workshopOrderSchema = z.object({
@@ -187,6 +195,13 @@ export async function updateProductionStep(
   const currentStep = currentOrder?.steps.find((step) => step.key === parsed.data.stepKey);
   if (!currentOrder || !currentStep) return { status: "error", message: "No se encontró la etapa seleccionada." };
   if (!isProductionOrder(currentOrder)) return { status: "error", message: "Las cotizaciones no pertenecen al flujo de producción." };
+  const structureRequest = parsed.data.stepKey === "structure"
+    ? (await listStructureRequests()).find((request) => request.orderId === parsed.data.orderId && request.status !== "cancelled")
+    : undefined;
+  const enteringWork = currentStep.status === "pending" && (parsed.data.status === "active" || parsed.data.status === "blocked");
+  if (enteringWork && !structureRequestCompleted(currentOrder, structureRequest?.status)) {
+    return { status: "error", message: "Marca Pedida antes de iniciar cualquier proceso." };
+  }
   if (!isAllowedTransition(currentStep.status, parsed.data.status)) {
     return { status: "error", message: "La etapa cambió de estado. Actualiza la vista e intenta nuevamente." };
   }
@@ -338,6 +353,28 @@ export async function updateProductionStep(
       return {
         status: "error",
         message: `La etapa cambió, pero no se pudieron corregir las etapas posteriores: ${downstreamError.message}`,
+      };
+    }
+  }
+
+  if (parsed.data.stepKey === "structure" && structureRequest && parsed.data.status !== "blocked") {
+    const structureStatus = parsed.data.status === "done"
+      ? "done"
+      : parsed.data.status === "active"
+        ? "in_progress"
+        : "requested";
+    const { error: structureError } = await (mutationClient as unknown as LooseUpdateDb)
+      .from("structure_requests")
+      .update({
+        status: structureStatus,
+        completed_at: structureStatus === "done" ? now : null,
+        updated_by: profileId,
+      })
+      .eq("id", structureRequest.id);
+    if (structureError) {
+      return {
+        status: "error",
+        message: `La etapa cambió, pero no se pudo sincronizar la solicitud de estructura: ${structureError.message}`,
       };
     }
   }

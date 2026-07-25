@@ -81,8 +81,13 @@ Modulo operativo independiente para solicitar estructuras manualmente.
 - Se vincula a pedidos activos.
 - Guarda especificaciones libres para el encargado de estructura.
 - Permite adjuntar imagenes o PDF como bosquejos, planos o fotos con medidas.
-- Estados base: borrador, solicitada, en fabricacion, lista, cancelada.
-- Una estructura solicitada debe verse en el Home como señal azul; una estructura terminada debe verse como check verde.
+- Secuencia operativa visible: En blanco, Pedida, En estructura y Lista.
+- En blanco significa que todavía no se ha enviado la solicitud al taller externo.
+- Pedida significa que el taller externo recibió la solicitud, pero aún no inicia la fabricación.
+- En estructura significa que la fabricación ya comenzó; Lista significa que la estructura está terminada.
+- El Home debe mostrar `PED` como proceso propio antes de `EST`, distinguir los cuatro estados y no permitir saltar directamente de En blanco a En estructura.
+- `PED` es un hito obligatorio y completado: se representa con check verde y bloquea todas las demás etapas hasta marcarse.
+- Al activar esta regla, las órdenes activas heredadas que ya tengan al menos una etapa terminada se consideran Pedidas para conservar su continuidad operacional.
 
 ### 2. Produccion
 

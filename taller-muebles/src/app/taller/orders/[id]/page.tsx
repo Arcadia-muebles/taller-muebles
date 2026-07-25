@@ -15,11 +15,14 @@ import { StatusBadge } from "@/components/status-badge";
 import { WorkshopOrderActionPanel } from "@/components/workshop-order-action-panel";
 import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
+import { structureRequestCompleted } from "@/lib/orders";
 import {
   getOrder,
   listOrders,
   listOrderAttachments,
   listOrderAudit,
+  listOrderComments,
+  listStructureRequests,
 } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import type { ProductionStep, StepStatus } from "@/lib/types";
@@ -29,12 +32,14 @@ import { canWorkerSeeOrder, filterWorkerFutureOrders, nextWorkStep, workerAction
 export default async function WorkshopOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession(["operator"]);
   const { id } = await params;
-  const [order, audit, attachments, settings, orders] = await Promise.all([
+  const [order, audit, comments, attachments, settings, orders, structureRequests] = await Promise.all([
     getOrder(id),
     listOrderAudit(id),
+    listOrderComments(id),
     listOrderAttachments(id),
     getSystemSettings(),
     listOrders(),
+    listStructureRequests(),
   ]);
   if (!order || order.status === "cancelled") notFound();
   if (!canWorkerSeeOrder(user, order) && !filterWorkerFutureOrders(user, [order]).length) notFound();
@@ -42,6 +47,8 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
   const progress = completionPercent(order);
   const groupOrders = orders.filter((item) => item.status !== "cancelled" && item.groupCode === order.groupCode);
   const actionStep = workerActionStep(user, order);
+  const structureRequest = structureRequests.find((request) => request.orderId === order.id && request.status !== "cancelled");
+  if (actionStep && !structureRequestCompleted(order, structureRequest?.status)) notFound();
   const currentStep = nextWorkStep(order);
   const visibleAudit = audit.slice(0, 5);
 
@@ -149,8 +156,8 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
             </div>
           </Disclosure>
 
-          <Disclosure title="Adjuntos" description={`${attachments.length} archivos y comentarios.`}>
-            <OrderCollaboration orderId={order.id} attachments={attachments} canUpload />
+          <Disclosure title="Comunicación" description={`${comments.length} notas y ${attachments.length} archivos.`}>
+            <OrderCollaboration orderId={order.id} comments={comments} attachments={attachments} canComment canUpload />
           </Disclosure>
         </aside>
       </main>

@@ -7,9 +7,9 @@ import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, deleteLocalOrderGroup, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder, updateLocalOrderObservations, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
-import { isIndependentStartStep, isProductionOrder, orderGroupKey } from "@/lib/orders";
+import { isIndependentStartStep, isProductionOrder, orderGroupKey, structureRequestCompleted } from "@/lib/orders";
 import { createClient } from "@/lib/supabase/server";
-import { listOrders, listUsers } from "@/lib/repositories/production";
+import { listOrders, listStructureRequests, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import type { CommercialDocumentType } from "@/lib/types";
 import { orderPaymentsSchema, orderProductsSchema, orderSchema, parseBooleanFormValue } from "@/lib/validation/order";
@@ -714,6 +714,13 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
   let order = (await listOrders()).find((item) => item.id === parsed.data.orderId);
   if (!order) return { ok: false, message: "No se encontró la orden." };
   if (!isProductionOrder(order)) return { ok: false, message: "Las cotizaciones no pertenecen al flujo de producción." };
+  const orderId = order.id;
+  const structureRequest = (await listStructureRequests()).find(
+    (request) => request.orderId === orderId && request.status !== "cancelled",
+  );
+  if (!structureRequestCompleted(order, structureRequest?.status)) {
+    return { ok: false, message: "Marca Pedida antes de mover la orden a otro proceso." };
+  }
   if (isIndependentStartStep(parsed.data.stepKey)) {
     return { ok: false, message: "Estructura y Corte se actualizan individualmente desde su propio control." };
   }
