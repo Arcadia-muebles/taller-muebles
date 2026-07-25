@@ -125,10 +125,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
     () => new Map(structureRequests.filter((request) => request.status !== "cancelled").map((request) => [request.orderId, request.status])),
     [structureRequests],
   );
-  const dashboardProcessCount = dashboardSteps.length + (dashboardSteps.some((step) => step.key === "structure") ? 1 : 0);
-  const requestedStructureCount = activeOrders.filter((order) => (
-    (optimisticStructureStages[order.id] ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id))) === "requested"
-  )).length;
+  const dashboardProcessCount = dashboardSteps.length;
   const tableWidth = useMemo(() => dashboardColumns.reduce((total, column) => total + columnWidths[column.key], 0), [columnWidths]);
 
   function move(order: Order, stepKey: AreaKey) {
@@ -185,19 +182,14 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
   function moveStructure(order: Order, step: ProductionStep) {
     const currentStage = optimisticStructureStages[order.id]
       ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id));
-    if (currentStage === "unrequested") {
-      setFeedback({ tone: "error", message: "Primero marca la estructura como Pedida." });
-      return;
-    }
-    const nextStage = currentStage === "requested" ? "in_progress" : currentStage === "in_progress" ? "done" : "in_progress";
+    const nextStage = currentStage === "unrequested"
+      ? "requested"
+      : currentStage === "requested"
+        ? "in_progress"
+        : currentStage === "in_progress"
+          ? "done"
+          : "in_progress";
     persistStructureStage(order, step, nextStage);
-  }
-
-  function moveStructureRequest(order: Order, step: ProductionStep) {
-    const currentStage = optimisticStructureStages[order.id]
-      ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id));
-    if (currentStage === "in_progress" || currentStage === "done") return;
-    persistStructureStage(order, step, currentStage === "requested" ? "unrequested" : "requested");
   }
 
   function persistStructureStage(order: Order, step: ProductionStep, nextStage: StructureStage) {
@@ -326,14 +318,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
 
   return (
     <section className="mt-5 space-y-3">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[repeat(7,minmax(0,1fr))]">
-        <MetricCard
-          label="Pedidas"
-          value={String(requestedStructureCount)}
-          helper=""
-          icon={Clock3}
-          tone="green"
-        />
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[repeat(6,minmax(0,1fr))]">
         {counters.byStep.map((item) => (
           <MetricCard
             key={item.key}
@@ -440,20 +425,15 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
                 <th />
                 <th className="px-3 pb-2">
                   <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardProcessCount, 1)}, minmax(30px, 1fr))` }}>
-                    {dashboardSteps.flatMap((step) => {
-                      const columns = step.key === "structure"
-                        ? [{ key: "structure_requested", label: "Pedida", shortLabel: "Ped" }, { key: step.key, label: step.label, shortLabel: processColumnLabel(step.label) }]
-                        : [{ key: step.key, label: step.label, shortLabel: processColumnLabel(step.label) }];
-                      return columns.map((column) => (
-                        <span
-                          key={column.key}
-                          title={column.label}
-                          className="whitespace-nowrap text-center text-[9px] font-semibold uppercase leading-none tracking-[0.04em] text-stone-500"
-                        >
-                          {column.shortLabel}
-                        </span>
-                      ));
-                    })}
+                    {dashboardSteps.map((step) => (
+                      <span
+                        key={step.key}
+                        title={step.label}
+                        className="whitespace-nowrap text-center text-[9px] font-semibold uppercase leading-none tracking-[0.04em] text-stone-500"
+                      >
+                        {processColumnLabel(step.label)}
+                      </span>
+                    ))}
                   </div>
                 </th>
                 <th />
@@ -509,32 +489,20 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
                     </BodyCell>
                     <BodyCell className="text-center">
                       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(dashboardProcessCount, 1)}, minmax(30px, 1fr))` }}>
-                        {dashboardSteps.flatMap((step) => {
+                        {dashboardSteps.map((step) => {
                           const orderStep = order.steps.find((item) => item.key === step.key);
                           const resolvedStep = orderStep ?? { key: step.key, label: step.label, owner: step.label, status: "pending" as const };
-                          const stepDot = (
+                          return (
                             <StepDot
                               key={step.key}
                               order={order}
                               step={resolvedStep}
                               structureStage={step.key === "structure" ? structureStage : undefined}
-                              canMove={canMove && structureStage !== "unrequested"}
+                              canMove={canMove && (step.key === "structure" || structureStage !== "unrequested")}
                               pending={Boolean(pendingStepStatuses[optimisticStepStatusKey(order.id, step.key)])}
                               onMove={() => move(order, step.key)}
                             />
                           );
-                          if (step.key !== "structure") return [stepDot];
-                          return [
-                            <StructureRequestDot
-                              key="structure_requested"
-                              order={order}
-                              stage={structureStage}
-                              canMove={canMove}
-                              pending={Boolean(pendingStepStatuses[optimisticStepStatusKey(order.id, step.key)])}
-                              onMove={() => moveStructureRequest(order, resolvedStep)}
-                            />,
-                            stepDot,
-                          ];
                         })}
                       </div>
                     </BodyCell>
@@ -657,49 +625,6 @@ function FilterChip({
   );
 }
 
-function StructureRequestDot({
-  order,
-  stage,
-  canMove,
-  pending,
-  onMove,
-}: {
-  order: Order;
-  stage: StructureStage;
-  canMove: boolean;
-  pending: boolean;
-  onMove: () => void;
-}) {
-  const completed = stage !== "unrequested";
-  const locked = stage === "in_progress" || stage === "done" || order.steps.some((step) => step.status !== "pending");
-  const disabled = pending || !canMove || locked || order.status === "completed" || order.status === "cancelled";
-  const action = stage === "unrequested"
-    ? "Marcar estructura como Pedida"
-    : stage === "requested"
-      ? "Volver estructura a En blanco"
-      : "Estructura Pedida";
-  return (
-    <button
-      type="button"
-      data-order-id={order.id}
-      data-step-key="structure_requested"
-      data-structure-status={stage}
-      disabled={disabled}
-      onClick={onMove}
-      title={action}
-      aria-label={`${action} para ${order.code}`}
-      className={cn(
-        "production-process-indicator mx-auto grid size-6 place-items-center rounded-md border transition",
-        completed ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-stone-300 bg-white text-stone-400",
-        !disabled && "hover:-translate-y-0.5 hover:border-emerald-400 hover:shadow-sm",
-        disabled && "cursor-default opacity-60",
-      )}
-    >
-      {completed ? <Check className="size-3.5" /> : <Circle className="size-3.5" />}
-    </button>
-  );
-}
-
 function StepDot({
   order,
   step,
@@ -719,7 +644,7 @@ function StepDot({
   const waiting = isWaitingForStep(order, step);
   const directAction = structureStage
     ? structureStage === "unrequested"
-      ? `Primero marca ${step.label} como Pedida`
+      ? `Marcar ${step.label} como Pedida`
       : structureStage === "requested"
         ? `Marcar ${step.label} como En estructura`
         : structureStage === "in_progress"
@@ -732,7 +657,13 @@ function StepDot({
           ? `Reabrir ${step.label}`
           : `Iniciar ${step.label}`
         : undefined;
-  const Icon = step.status === "done" ? Check : step.status === "active" ? Circle : step.status === "blocked" ? X : Circle;
+  const Icon = structureStage === "requested" || step.status === "done"
+    ? Check
+    : step.status === "active"
+      ? Circle
+      : step.status === "blocked"
+        ? X
+        : Circle;
   return (
     <button
       type="button"
@@ -1036,7 +967,7 @@ function structureStageFor(order: Order, requestStatus?: StructureRequest["statu
 function structureProductionStageClass(stage: StructureStage) {
   const classes: Record<StructureStage, string> = {
     unrequested: "border-stone-300 bg-white text-stone-400",
-    requested: "border-stone-300 bg-white text-stone-400",
+    requested: "border-emerald-300 bg-emerald-50 text-emerald-700",
     in_progress: "border-blue-300 bg-blue-50 text-blue-700",
     done: "border-emerald-300 bg-emerald-50 text-emerald-700",
   };

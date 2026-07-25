@@ -85,8 +85,8 @@ Modulo operativo independiente para solicitar estructuras manualmente.
 - En blanco significa que todavía no se ha enviado la solicitud al taller externo.
 - Pedida significa que el taller externo recibió la solicitud, pero aún no inicia la fabricación.
 - En estructura significa que la fabricación ya comenzó; Lista significa que la estructura está terminada.
-- El Home debe mostrar `PED` como proceso propio antes de `EST`, distinguir los cuatro estados y no permitir saltar directamente de En blanco a En estructura.
-- `PED` es un hito obligatorio y completado: se representa con check verde y bloquea todas las demás etapas hasta marcarse.
+- El Home debe representar Pedida dentro del mismo control `EST`: En blanco → Pedida → En estructura → Lista, sin crear una etapa adicional.
+- Pedida es el primer estado obligatorio del control `EST`: el primer clic la deja con check verde y bloquea todas las demás etapas hasta marcarse.
 - Al activar esta regla, las órdenes activas heredadas que ya tengan al menos una etapa terminada se consideran Pedidas para conservar su continuidad operacional.
 
 ### 2. Produccion
