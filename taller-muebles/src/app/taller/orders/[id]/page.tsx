@@ -81,7 +81,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
         </div>
       </header>
 
-      <main className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+      <section className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         <div className="grid gap-4">
           <WorkshopOrderActionPanel
             orderId={order.id}
@@ -160,7 +160,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
             <OrderCollaboration orderId={order.id} comments={comments} attachments={attachments} canComment canUpload />
           </Disclosure>
         </aside>
-      </main>
+      </section>
       </div>
     </AppShell>
   );

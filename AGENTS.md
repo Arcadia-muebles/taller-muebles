@@ -55,7 +55,7 @@ No incluir archivos `.env*`, `.next`, `node_modules`, `.local-data`, logs, captu
 
 ## 3. Stack
 
-- Next.js App Router `16.2.7`.
+- Next.js App Router `16.2.12`.
 - React `19.2.4`.
 - TypeScript 5.
 - Tailwind CSS v4.

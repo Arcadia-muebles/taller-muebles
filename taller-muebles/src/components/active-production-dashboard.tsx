@@ -823,7 +823,7 @@ function isDashboardActiveOrder(order: Order) {
 }
 
 function isDashboardVisibleOrder(order: Order) {
-  return isProductionOrder(order) && order.status !== "cancelled";
+  return isProductionOrder(order) && !isDeliveredOrder(order) && order.status !== "cancelled";
 }
 
 function matchesSearch(order: Order, search: string) {
@@ -882,20 +882,27 @@ function visiblePageNumbers(currentPage: number, totalPages: number) {
 }
 
 function statusPresentation(order: Order, structureStage?: StructureStage): { label: string; tone: Tone; icon: React.ElementType } {
-  if (order.status === "completed") return { label: "Entregado", tone: "green", icon: Truck };
+  if (order.status === "completed") return { label: "Terminado", tone: "green", icon: Truck };
   if (order.status === "blocked" || order.steps.some((step) => step.status === "blocked")) return { label: "Bloqueada", tone: "rose", icon: CircleDashed };
   if (isReadyForDelivery(order)) return { label: "Terminado", tone: "green", icon: CheckCircle2 };
-  const current = currentStep(order);
+  const current = currentDashboardStep(order);
   if (current?.key === "structure" && structureStage === "unrequested") {
-    return { label: "Estructura en blanco", tone: "stone", icon: Clock3 };
+    return { label: "Sin empezar", tone: "stone", icon: Clock3 };
   }
   if (current?.key === "structure" && structureStage === "requested") {
     return { label: "Estructura pedida", tone: "green", icon: CheckCircle2 };
   }
-  if (order.steps.length && order.steps.every((step) => step.status === "pending")) return { label: "Sin empezar", tone: "stone", icon: Clock3 };
+  if (current?.key === "structure" && structureStage === "in_progress") {
+    return { label: "En estructura", tone: "amber", icon: Sofa };
+  }
+  const dashboardSteps = order.steps.filter((step) => !isDashboardHiddenStep(step));
+  if (dashboardSteps.length && dashboardSteps.every((step) => step.status === "pending")) return { label: "Sin empezar", tone: "stone", icon: Clock3 };
   const step = current;
   if (!step) return { label: "Sin empezar", tone: "stone", icon: Clock3 };
-  if (isWaitingForStep(order, step)) return { label: `En espera de ${cleanStepLabel(step.label)}`, tone: "blue", icon: Clock3 };
+  if (step.status === "done") {
+    return { label: completedStepStatusLabel(step), tone: stepTone(step), icon: CheckCircle2 };
+  }
+  if (step.status === "pending") return { label: waitingStepStatusLabel(step), tone: "blue", icon: Clock3 };
   return { label: currentStepStatusLabel(step), tone: stepTone(step), icon: stepIconByKey(step.key, step.label) };
 }
 
@@ -904,6 +911,16 @@ function currentStep(order: Order) {
     order.steps.find((step) => step.status === "active") ??
     order.steps.find((step) => step.status === "blocked") ??
     order.steps.find((step) => step.status === "pending")
+  );
+}
+
+function currentDashboardStep(order: Order) {
+  const steps = order.steps.filter((step) => !isDashboardHiddenStep(step));
+  return (
+    steps.find((step) => step.status === "active") ??
+    steps.find((step) => step.status === "blocked") ??
+    steps.find((step) => step.status === "pending") ??
+    steps.findLast((step) => step.status === "done")
   );
 }
 
@@ -1027,7 +1044,28 @@ function metricStepLabel(label: string) {
 function currentStepStatusLabel(step: Pick<ProductionStep, "key" | "label">) {
   const normalized = `${step.key} ${step.label}`;
   if (/dispatch|despacho|terminado/i.test(normalized)) return "Terminado";
+  if (/structure|estructura/i.test(normalized)) return "En estructura";
+  if (/cutting|corte/i.test(normalized)) return "En corte";
+  if (/sewing|costura/i.test(normalized)) return "En costura";
+  if (/upholstery|tapicer/i.test(normalized)) return "En tapicería";
   return `En ${cleanStepLabel(step.label)}`;
+}
+
+function waitingStepStatusLabel(step: Pick<ProductionStep, "key" | "label">) {
+  const normalized = `${step.key} ${step.label}`;
+  if (/cutting|corte/i.test(normalized)) return "En espera de Corte";
+  if (/sewing|costura/i.test(normalized)) return "En espera de costura";
+  if (/upholstery|tapicer/i.test(normalized)) return "En espera de tapicería";
+  if (/dispatch|despacho|terminado/i.test(normalized)) return "Terminado";
+  return "Sin empezar";
+}
+
+function completedStepStatusLabel(step: Pick<ProductionStep, "key" | "label">) {
+  const normalized = `${step.key} ${step.label}`;
+  if (/structure|estructura/i.test(normalized)) return "Estructura lista";
+  if (/cutting|corte/i.test(normalized)) return "Corte Listo";
+  if (/sewing|costura/i.test(normalized)) return "Costura lista";
+  return "Terminado";
 }
 
 function isWaitingForStep(order: Order, step: ProductionStep) {
