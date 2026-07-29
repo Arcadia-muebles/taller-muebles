@@ -222,104 +222,32 @@ export function OrderForm({
     setValue("deliveryDate", addDays(baseDate, days), { shouldDirty: true, shouldValidate: true });
   }
 
-  async function saveSalesNotePdf() {
-    const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
-    if (!printArea || pdfSaving) return;
-
+  function saveSalesNotePdf() {
+    if (pdfSaving) return;
     setPdfSaving(true);
     setPdfError(null);
-    setPdfSuccess(null);
-    try {
-      const fileName = pdfFileName(documentLabel, getValues("salesNoteNumber"));
-      const saveFilePicker = getSaveFilePicker();
-      let fileHandle: SaveFileHandle | undefined;
-
-      if (saveFilePicker) {
-        try {
-          fileHandle = await saveFilePicker({
-            suggestedName: fileName,
-            types: [
-              {
-                description: "Documento PDF",
-                accept: { "application/pdf": [".pdf"] },
-              },
-            ],
-          });
-        } catch (error) {
-          if (isFilePickerCancellation(error)) return;
-          throw error;
-        }
-      }
-
-      const [canvas, { jsPDF }] = await Promise.all([renderSalesNoteCanvas(printArea), import("jspdf")]);
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: [salesNotePage.widthMm, salesNotePage.heightMm],
-        compress: true,
-      });
-      const margin = salesNotePage.marginMm;
-      const availableWidth = salesNotePage.widthMm - margin * 2;
-      const availableHeight = salesNotePage.heightMm - margin * 2;
-      const scale = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
-      const width = canvas.width * scale;
-      const height = canvas.height * scale;
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.96), "JPEG", margin, margin, width, height, undefined, "FAST");
-
-      if (fileHandle) {
-        const writable = await fileHandle.createWritable();
-        await writable.write(pdf.output("blob"));
-        await writable.close();
-        setPdfSuccess("PDF guardado correctamente.");
-      } else {
-        pdf.save(fileName);
-        setPdfSuccess("PDF descargado. Tu navegador no permite elegir la ubicación.");
-      }
-    } catch (error) {
-      console.error("No se pudo generar el PDF", error);
-      setPdfError("No se pudo generar el PDF. Intenta nuevamente.");
-    } finally {
-      setPdfSaving(false);
-    }
+    setPdfSuccess("En la ventana que se abrió, elige “Guardar como PDF” y después la carpeta.");
+    openSalesNotePrintDialog({
+      documentLabel,
+      documentCode: getValues("salesNoteNumber"),
+      onError: () => {
+        setPdfSuccess(null);
+        setPdfError("No se pudo abrir la ventana para guardar el PDF. Intenta nuevamente.");
+      },
+      onReady: () => setPdfSaving(false),
+    });
   }
 
-  async function printSalesNote() {
-    const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
-    if (!printArea || printPreparing) return;
-
+  function printSalesNote() {
+    if (printPreparing) return;
     setPrintPreparing(true);
     setPdfError(null);
-    try {
-      const canvas = await renderSalesNoteCanvas(printArea);
-      const frame = document.createElement("iframe");
-      frame.title = "Impresión de nota de venta";
-      Object.assign(frame.style, { position: "fixed", width: "1px", height: "1px", right: "0", bottom: "0", border: "0", opacity: "0" });
-      document.body.appendChild(frame);
-      const frameDocument = frame.contentDocument;
-      if (!frameDocument) throw new Error("No se pudo preparar la hoja de impresión.");
-      frameDocument.open();
-      frameDocument.write(
-        `<!doctype html><html><head><title>Nota de venta</title><style>@page{size:${salesNotePage.widthMm}mm ${salesNotePage.heightMm}mm;margin:${salesNotePage.marginMm}mm}html,body{width:${salesNotePage.widthMm - salesNotePage.marginMm * 2}mm;height:${salesNotePage.heightMm - salesNotePage.marginMm * 2}mm;margin:0;overflow:hidden;background:#fff}img{display:block;width:100%;height:100%;object-fit:contain;object-position:top left}</style></head><body><img alt="Nota de venta"></body></html>`,
-      );
-      frameDocument.close();
-      const image = frameDocument.querySelector("img");
-      if (!image) throw new Error("No se pudo preparar la nota para impresión.");
-      await new Promise<void>((resolve, reject) => {
-        image.addEventListener("load", () => resolve(), { once: true });
-        image.addEventListener("error", () => reject(new Error("No se pudo renderizar la nota.")), { once: true });
-        image.src = canvas.toDataURL("image/jpeg", 0.96);
-      });
-      const cleanup = () => frame.remove();
-      frame.contentWindow?.addEventListener("afterprint", cleanup, { once: true });
-      frame.contentWindow?.focus();
-      frame.contentWindow?.print();
-      window.setTimeout(cleanup, 60_000);
-    } catch (error) {
-      console.error("No se pudo imprimir la nota", error);
-      setPdfError("No se pudo preparar la impresión. Intenta nuevamente.");
-    } finally {
-      setPrintPreparing(false);
-    }
+    openSalesNotePrintDialog({
+      documentLabel,
+      documentCode: getValues("salesNoteNumber"),
+      onError: () => setPdfError("No se pudo preparar la impresión. Intenta nuevamente."),
+      onReady: () => setPrintPreparing(false),
+    });
   }
 
   if (!orderId && state.status === "success") {
@@ -523,7 +451,7 @@ export function OrderForm({
             </div>
           </div>
 
-          <div className="grid gap-5 border-b border-stone-300 px-4 py-5 md:grid-cols-[190px_1fr_170px] md:px-6">
+          <div className="sales-note-document-header grid gap-5 border-b border-stone-300 px-4 py-5 md:grid-cols-[190px_1fr_170px] md:px-6">
             <div className="flex min-h-24 items-center justify-center">
               <Image
                 src="/la-reina-logo.jpeg"
@@ -535,16 +463,16 @@ export function OrderForm({
                 unoptimized
               />
             </div>
-            <div className="text-center md:text-left">
+            <div className="sales-note-document-heading text-center md:text-left">
               <h2 className="text-base font-bold uppercase tracking-[0.02em] text-stone-950">Fabricación y venta de muebles</h2>
-              <div className="mt-2 grid gap-x-6 gap-y-1 text-xs leading-5 text-stone-600 lg:grid-cols-2">
+              <div className="sales-note-document-contact mt-2 grid gap-x-6 gap-y-1 text-xs leading-5 text-stone-600 lg:grid-cols-2">
                 <p>Carmen #2001 - Santiago Centro</p>
                 <p>Fono: 22 555 3795 - 22 556 5988</p>
                 <p>www.muebleslareina.cl</p>
                 <p>lareina@mueblesencuero.cl</p>
               </div>
             </div>
-            <div className="md:text-right">
+            <div className="sales-note-document-meta md:text-right">
               <div className="inline-flex rounded-md border border-stone-200 px-3 py-2 text-sm font-bold uppercase text-stone-950">
                 {isLeatherHouse ? "Ingreso taller" : documentLabel}
               </div>
@@ -562,9 +490,9 @@ export function OrderForm({
             </div>
           </div>
 
-          <div className="border-b border-stone-300 bg-stone-50/70 px-4 py-4 md:px-6">
+          <div className="sales-note-customer border-b border-stone-300 bg-stone-50/70 px-4 py-4 md:px-6">
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-stone-700">Datos del cliente</p>
-            <div className="grid gap-x-10 gap-y-3 md:grid-cols-[1.15fr_0.8fr_0.8fr]">
+            <div className="sales-note-customer-grid grid gap-x-10 gap-y-3 md:grid-cols-[1.15fr_0.8fr_0.8fr]">
               <div className="grid content-start gap-3">
                 <DocumentField label="Nombre" error={typedErrors.clientName?.message}>
                   <DocumentInput {...register("clientName")} placeholder="Nombre del cliente" strong />
@@ -688,7 +616,7 @@ export function OrderForm({
               </table>
             </div>
             <div className="sales-note-product-lines min-h-24 flex-1" aria-hidden="true" />
-            <div className="grid items-end gap-5 px-4 pb-4 md:grid-cols-[1fr_260px] md:px-6">
+            <div className="sales-note-product-summary grid items-end gap-5 px-4 pb-4 md:grid-cols-[1fr_260px] md:px-6">
               <div>
               <button
                 type="button"
@@ -729,8 +657,8 @@ export function OrderForm({
             </div>
           </div>
 
-          <div className="grid border-b border-stone-300 bg-stone-50/70 px-4 py-3 md:grid-cols-2 md:divide-x md:divide-stone-300 md:px-6">
-            <div className="flex items-center gap-3 pb-3 md:pb-0 md:pr-6">
+          <div className="sales-note-delivery-grid grid border-b border-stone-300 bg-stone-50/70 px-4 py-3 md:grid-cols-2 md:divide-x md:divide-stone-300 md:px-6">
+            <div className="sales-note-delivery-term flex items-center gap-3 pb-3 md:pb-0 md:pr-6">
               <CalendarDays className="size-4 shrink-0 text-stone-500" />
               <div className="min-w-0 flex-1">
                 <DocumentField label="Plazo de entrega">
@@ -738,7 +666,7 @@ export function OrderForm({
                 </DocumentField>
               </div>
             </div>
-            <div className="flex items-center gap-3 border-t border-stone-200 pt-3 md:border-t-0 md:pl-6 md:pt-0">
+            <div className="sales-note-delivery-date flex items-center gap-3 border-t border-stone-200 pt-3 md:border-t-0 md:pl-6 md:pt-0">
               <CalendarDays className="size-4 shrink-0 text-stone-500" />
               <div className="min-w-0 flex-1">
                 <DocumentField label="Fecha estimada de entrega" error={typedErrors.deliveryDate?.message}>
@@ -747,14 +675,14 @@ export function OrderForm({
               </div>
             </div>
             {pdfError || pdfSuccess ? (
-              <p aria-live="polite" className={`mt-2 text-right text-xs font-medium ${pdfError ? "text-rose-700" : "text-emerald-700"}`}>
+              <p aria-live="polite" className={`sales-note-print-hidden mt-2 text-right text-xs font-medium ${pdfError ? "text-rose-700" : "text-emerald-700"}`}>
                 {pdfError ?? pdfSuccess}
               </p>
             ) : null}
           </div>
 
           {!isQuote ? (
-            <div className="grid gap-4 border-b border-stone-300 px-4 py-4 md:grid-cols-2 md:px-6">
+            <div className="sales-note-payment-grid grid gap-4 border-b border-stone-300 px-4 py-4 md:grid-cols-2 md:px-6">
               <PaymentDocumentBox title="Abono" amount={formatCurrency(computedPaid)}>
                 <PaymentRows
                   control={control}
@@ -1380,13 +1308,13 @@ function PaymentRows({
       {fields.map((field, index) => (
         <div key={field.fieldKey} className="rounded-md border border-stone-200 bg-stone-50/70 p-3">
           <input {...register(`payments.${index}.id` as const)} type="hidden" />
-          <div className={compact ? "grid gap-2 sm:grid-cols-[105px_110px_1fr_1fr_36px]" : "grid gap-2 md:grid-cols-[150px_150px_1fr_1fr_40px]"}>
-            <label>
+          <div className={compact ? "sales-note-payment-row grid gap-2" : "grid gap-2 md:grid-cols-[150px_150px_1fr_1fr_40px]"}>
+            <label className={compact ? "sales-note-payment-date" : undefined}>
               <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Fecha</span>
               <input {...register(`payments.${index}.paidAt` as const)} type="date" className={compact ? documentPaymentInputClass : inputClass} />
               {errors?.[index]?.paidAt?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.paidAt?.message}</p> : null}
             </label>
-            <label>
+            <label className={compact ? "sales-note-payment-amount" : undefined}>
               <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Monto</span>
               <Controller
                 control={control}
@@ -1407,7 +1335,7 @@ function PaymentRows({
               />
               {errors?.[index]?.amount?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.amount?.message}</p> : null}
             </label>
-            <label>
+            <label className={compact ? "sales-note-payment-method" : undefined}>
               <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Medio</span>
               <select {...register(`payments.${index}.method` as const)} className={compact ? documentPaymentInputClass : inputClass}>
                 {paymentMethodOptions.map((method) => (
@@ -1416,7 +1344,7 @@ function PaymentRows({
               </select>
               {errors?.[index]?.method?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.method?.message}</p> : null}
             </label>
-            <label>
+            <label className={compact ? "sales-note-payment-note" : undefined}>
               <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-500">Nota</span>
               <input {...register(`payments.${index}.note` as const)} className={compact ? documentPaymentInputClass : inputClass} placeholder="Operacion, referencia..." />
               {errors?.[index]?.note?.message ? <p className="mt-1 text-xs font-medium text-rose-600">{errors[index]?.note?.message}</p> : null}
@@ -1425,7 +1353,7 @@ function PaymentRows({
               type="button"
               onClick={() => onRemove(index)}
               disabled={fields.length === 1}
-              className="grid size-9 place-items-center self-end rounded-md text-stone-400 transition hover:bg-white hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
+              className={`${compact ? "sales-note-payment-remove" : ""} grid size-9 place-items-center self-end rounded-md text-stone-400 transition hover:bg-white hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30`}
               aria-label="Eliminar abono"
               title="Eliminar abono"
             >
@@ -1524,41 +1452,6 @@ function copyFormValues(source: HTMLElement, target: HTMLElement) {
   });
 }
 
-async function renderSalesNoteCanvas(printArea: HTMLElement) {
-  const exportArea = printArea.cloneNode(true) as HTMLElement;
-  exportArea.classList.add("sales-note-pdf-export");
-  exportArea.setAttribute("aria-hidden", "true");
-  Object.assign(exportArea.style, {
-    position: "fixed",
-    left: "-10000px",
-    top: "0",
-    width: "748px",
-    maxWidth: "none",
-    pointerEvents: "none",
-    zIndex: "-1",
-  });
-  copyFormValues(printArea, exportArea);
-  document.body.appendChild(exportArea);
-
-  try {
-    await document.fonts.ready;
-    await waitForImages(exportArea);
-    const { default: html2canvas } = await import("html2canvas-pro");
-    return await html2canvas(exportArea, {
-      backgroundColor: "#ffffff",
-      logging: false,
-      scale: 2,
-      useCORS: true,
-    });
-  } finally {
-    exportArea.remove();
-  }
-}
-
-async function waitForImages(root: HTMLElement) {
-  await Promise.all(Array.from(root.querySelectorAll("img")).map((image) => image.decode().catch(() => undefined)));
-}
-
 function pdfFileName(documentLabel: string, documentCode?: string) {
   const safeLabel = documentLabel
     .normalize("NFD")
@@ -1570,28 +1463,92 @@ function pdfFileName(documentLabel: string, documentCode?: string) {
   return `${safeLabel || "documento"}-${safeCode}.pdf`;
 }
 
-type SaveFileHandle = {
-  createWritable: () => Promise<{
-    write: (data: Blob) => Promise<void>;
-    close: () => Promise<void>;
-  }>;
-};
+function openSalesNotePrintDialog({
+  documentLabel,
+  documentCode,
+  onError,
+  onReady,
+}: {
+  documentLabel: string;
+  documentCode?: string;
+  onError: () => void;
+  onReady: () => void;
+}) {
+  const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
+  if (!printArea) {
+    onError();
+    onReady();
+    return;
+  }
 
-type SaveFilePicker = (options: {
-  suggestedName: string;
-  types: Array<{
-    description: string;
-    accept: Record<string, string[]>;
-  }>;
-}) => Promise<SaveFileHandle>;
+  const previousTitle = document.title;
+  const pageStyle = document.createElement("style");
+  const scale = salesNotePrintScale(printArea);
+  let cleanedUp = false;
+  let ready = false;
 
-function getSaveFilePicker() {
-  const browserWindow = window as Window & { showSaveFilePicker?: SaveFilePicker };
-  return browserWindow.showSaveFilePicker?.bind(browserWindow);
+  pageStyle.dataset.salesNotePage = "true";
+  pageStyle.textContent = `@page { size: ${salesNotePage.widthMm}mm ${salesNotePage.heightMm}mm; margin: ${salesNotePage.marginMm}mm; }`;
+
+  const markReady = () => {
+    if (ready) return;
+    ready = true;
+    onReady();
+  };
+
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    window.removeEventListener("afterprint", cleanup);
+    document.body.classList.remove("printing-sales-note");
+    printArea.style.removeProperty("--sales-note-print-scale");
+    pageStyle.remove();
+    document.title = previousTitle;
+    markReady();
+  };
+
+  try {
+    document.title = pdfFileName(documentLabel, documentCode).replace(/\.pdf$/i, "");
+    printArea.style.setProperty("--sales-note-print-scale", scale.toFixed(4));
+    document.head.appendChild(pageStyle);
+    document.body.classList.add("printing-sales-note");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+    markReady();
+    window.setTimeout(cleanup, 10_000);
+  } catch (error) {
+    console.error("No se pudo abrir la impresión del documento", error);
+    cleanup();
+    onError();
+  }
 }
 
-function isFilePickerCancellation(error: unknown) {
-  return error instanceof DOMException && error.name === "AbortError";
+function salesNotePrintScale(printArea: HTMLElement) {
+  const exportArea = printArea.cloneNode(true) as HTMLElement;
+  const printableWidthMm = salesNotePage.widthMm - salesNotePage.marginMm * 2;
+  const printableHeightMm = salesNotePage.heightMm - salesNotePage.marginMm * 2;
+  const pixelsPerMillimeter = 96 / 25.4;
+
+  exportArea.classList.add("sales-note-pdf-export");
+  exportArea.setAttribute("aria-hidden", "true");
+  Object.assign(exportArea.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    width: `${printableWidthMm * pixelsPerMillimeter}px`,
+    maxWidth: "none",
+    pointerEvents: "none",
+    zIndex: "-1",
+  });
+  copyFormValues(printArea, exportArea);
+  document.body.appendChild(exportArea);
+
+  const printableHeight = printableHeightMm * pixelsPerMillimeter;
+  const contentHeight = exportArea.getBoundingClientRect().height;
+  exportArea.remove();
+
+  if (!Number.isFinite(contentHeight) || contentHeight <= 0) return 1;
+  return Math.min(1, printableHeight / contentHeight);
 }
 
 function lineTotal(quantity?: number, unitPrice?: number) {
