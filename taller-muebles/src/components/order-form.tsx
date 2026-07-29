@@ -222,20 +222,68 @@ export function OrderForm({
     setValue("deliveryDate", addDays(baseDate, days), { shouldDirty: true, shouldValidate: true });
   }
 
-  function saveSalesNotePdf() {
-    if (pdfSaving) return;
+  async function saveSalesNotePdf() {
+    const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
+    if (!printArea || pdfSaving) return;
+
     setPdfSaving(true);
     setPdfError(null);
-    setPdfSuccess("En la ventana que se abrió, elige “Guardar como PDF” y después la carpeta.");
-    openSalesNotePrintDialog({
-      documentLabel,
-      documentCode: getValues("salesNoteNumber"),
-      onError: () => {
-        setPdfSuccess(null);
-        setPdfError("No se pudo abrir la ventana para guardar el PDF. Intenta nuevamente.");
-      },
-      onReady: () => setPdfSaving(false),
-    });
+    setPdfSuccess(null);
+
+    try {
+      const fileName = pdfFileName(documentLabel, getValues("salesNoteNumber"));
+      const saveFilePicker = getSaveFilePicker();
+      let fileHandle: SaveFileHandle | undefined;
+
+      if (saveFilePicker) {
+        try {
+          fileHandle = await saveFilePicker({
+            suggestedName: fileName,
+            types: [
+              {
+                description: "Documento PDF",
+                accept: { "application/pdf": [".pdf"] },
+              },
+            ],
+          });
+        } catch (error) {
+          if (isFilePickerCancellation(error)) return;
+        }
+      }
+
+      const [canvas, { jsPDF }] = await Promise.all([renderSalesNoteCanvas(printArea), import("jspdf")]);
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [salesNotePage.widthMm, salesNotePage.heightMm],
+        compress: true,
+      });
+      const margin = salesNotePage.marginMm;
+      const availableWidth = salesNotePage.widthMm - margin * 2;
+      const availableHeight = salesNotePage.heightMm - margin * 2;
+      const scale = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
+      const width = canvas.width * scale;
+      const height = canvas.height * scale;
+      const left = (salesNotePage.widthMm - width) / 2;
+
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", left, margin, width, height, undefined, "FAST");
+      const pdfBlob = pdf.output("blob");
+
+      if (fileHandle) {
+        const writable = await fileHandle.createWritable();
+        await writable.write(pdfBlob);
+        await writable.close();
+        setPdfSuccess("PDF guardado correctamente.");
+      } else {
+        downloadBlob(pdfBlob, fileName);
+        setPdfSuccess("PDF descargado directamente.");
+      }
+    } catch (error) {
+      console.error("No se pudo generar el PDF", error);
+      setPdfError("No se pudo generar el PDF. Intenta nuevamente.");
+    } finally {
+      setPdfSaving(false);
+    }
   }
 
   function printSalesNote() {
@@ -1452,6 +1500,40 @@ function copyFormValues(source: HTMLElement, target: HTMLElement) {
   });
 }
 
+async function renderSalesNoteCanvas(printArea: HTMLElement) {
+  const exportArea = createSalesNoteExportArea(printArea);
+
+  try {
+    await document.fonts.ready;
+    await waitForImages(exportArea);
+    const { default: html2canvas } = await import("html2canvas-pro");
+    return await html2canvas(exportArea, {
+      backgroundColor: "#ffffff",
+      imageTimeout: 5_000,
+      logging: false,
+      scale: 1.5,
+      useCORS: true,
+    });
+  } finally {
+    exportArea.remove();
+  }
+}
+
+async function waitForImages(root: HTMLElement) {
+  const images = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    images.map((image) => {
+      if (image.complete) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const finish = () => resolve();
+        image.addEventListener("load", finish, { once: true });
+        image.addEventListener("error", finish, { once: true });
+        window.setTimeout(finish, 5_000);
+      });
+    }),
+  );
+}
+
 function pdfFileName(documentLabel: string, documentCode?: string) {
   const safeLabel = documentLabel
     .normalize("NFD")
@@ -1461,6 +1543,41 @@ function pdfFileName(documentLabel: string, documentCode?: string) {
     .replace(/^-|-$/g, "");
   const safeCode = documentCode?.trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "sin-numero";
   return `${safeLabel || "documento"}-${safeCode}.pdf`;
+}
+
+type SaveFileHandle = {
+  createWritable: () => Promise<{
+    write: (data: Blob) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
+};
+
+type SaveFilePicker = (options: {
+  suggestedName: string;
+  types: Array<{
+    description: string;
+    accept: Record<string, string[]>;
+  }>;
+}) => Promise<SaveFileHandle>;
+
+function getSaveFilePicker() {
+  const browserWindow = window as Window & { showSaveFilePicker?: SaveFilePicker };
+  return browserWindow.showSaveFilePicker?.bind(browserWindow);
+}
+
+function isFilePickerCancellation(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
 }
 
 function openSalesNotePrintDialog({
@@ -1524,9 +1641,21 @@ function openSalesNotePrintDialog({
 }
 
 function salesNotePrintScale(printArea: HTMLElement) {
+  const exportArea = createSalesNoteExportArea(printArea);
+  const printableHeightMm = salesNotePage.heightMm - salesNotePage.marginMm * 2;
+  const pixelsPerMillimeter = 96 / 25.4;
+
+  const printableHeight = printableHeightMm * pixelsPerMillimeter;
+  const contentHeight = exportArea.getBoundingClientRect().height;
+  exportArea.remove();
+
+  if (!Number.isFinite(contentHeight) || contentHeight <= 0) return 1;
+  return Math.min(1, printableHeight / contentHeight);
+}
+
+function createSalesNoteExportArea(printArea: HTMLElement) {
   const exportArea = printArea.cloneNode(true) as HTMLElement;
   const printableWidthMm = salesNotePage.widthMm - salesNotePage.marginMm * 2;
-  const printableHeightMm = salesNotePage.heightMm - salesNotePage.marginMm * 2;
   const pixelsPerMillimeter = 96 / 25.4;
 
   exportArea.classList.add("sales-note-pdf-export");
@@ -1541,14 +1670,37 @@ function salesNotePrintScale(printArea: HTMLElement) {
     zIndex: "-1",
   });
   copyFormValues(printArea, exportArea);
+  materializeSalesNoteExport(exportArea);
   document.body.appendChild(exportArea);
 
-  const printableHeight = printableHeightMm * pixelsPerMillimeter;
-  const contentHeight = exportArea.getBoundingClientRect().height;
-  exportArea.remove();
+  return exportArea;
+}
 
-  if (!Number.isFinite(contentHeight) || contentHeight <= 0) return 1;
-  return Math.min(1, printableHeight / contentHeight);
+function materializeSalesNoteExport(exportArea: HTMLElement) {
+  exportArea.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select").forEach((control) => {
+    if (control instanceof HTMLInputElement && ["hidden", "file", "checkbox"].includes(control.type)) {
+      control.remove();
+      return;
+    }
+
+    const value = control instanceof HTMLSelectElement
+      ? control.selectedOptions[0]?.textContent ?? control.value
+      : control.value;
+    const replacement = document.createElement(control instanceof HTMLTextAreaElement ? "div" : "span");
+    replacement.className = `${control.className} sales-note-pdf-value`;
+    replacement.textContent = value;
+    if (control instanceof HTMLInputElement) replacement.dataset.controlType = control.type;
+    control.replaceWith(replacement);
+  });
+
+  const productLines = exportArea.querySelector<HTMLElement>(".sales-note-product-lines");
+  if (!productLines) return;
+  productLines.replaceChildren();
+  for (let index = 0; index < 3; index += 1) {
+    const line = document.createElement("div");
+    line.className = "sales-note-pdf-product-line";
+    productLines.appendChild(line);
+  }
 }
 
 function lineTotal(quantity?: number, unitPrice?: number) {

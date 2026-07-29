@@ -265,6 +265,24 @@ select {
 
 .sales-note-pdf-export .sales-note-product-lines {
   min-height: 90px !important;
+  background: #ffffff !important;
+}
+
+.sales-note-pdf-export .sales-note-pdf-product-line {
+  height: 36px;
+  border-bottom: 1px solid rgb(231 229 228);
+}
+
+.sales-note-pdf-export .sales-note-pdf-value {
+  display: block;
+  min-height: 1.35em;
+  overflow: visible !important;
+  line-height: 1.35 !important;
+  white-space: pre-wrap;
+}
+
+.sales-note-pdf-export .sales-note-pdf-value[data-control-type="date"] {
+  display: inline-block;
 }
 
 .sales-note-pdf-export .overflow-x-auto {
