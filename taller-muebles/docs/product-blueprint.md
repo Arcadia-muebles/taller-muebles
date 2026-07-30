@@ -86,8 +86,8 @@ Modulo operativo independiente para solicitar estructuras manualmente.
 - Pedida significa que el taller externo recibió la solicitud, pero aún no inicia la fabricación.
 - En estructura significa que la fabricación ya comenzó; Lista significa que la estructura está terminada.
 - El Home debe representar Pedida dentro del mismo control `EST`: En blanco → Pedida → En estructura → Lista, sin crear una etapa adicional.
-- Pedida es el primer estado obligatorio del control `EST`: el primer clic la deja con check verde y bloquea todas las demás etapas hasta marcarse.
-- Al activar esta regla, las órdenes activas heredadas que ya tengan al menos una etapa terminada se consideran Pedidas para conservar su continuidad operacional.
+- Pedida es el primer estado del control `EST`: el primer clic confirma que la solicitud fue enviada antes de comenzar la fabricación de la estructura.
+- El estado Pedida pertenece exclusivamente al flujo de Estructura y no bloquea Corte, Costura ni otros procesos de la orden.
 
 ### 2. Produccion
 
@@ -98,6 +98,8 @@ Etapas iniciales:
 - Costura.
 - Tapiceria.
 - Revision/calidad.
+
+Estructura, Corte y Costura son frentes iniciales independientes y pueden comenzar sin esperar a que los otros terminen. Tapicería y las etapas posteriores mantienen la secuencia y los prerrequisitos configurados.
 
 Cada etapa debe guardar:
 

@@ -23,8 +23,7 @@ import {
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { updateProductionStep } from "@/app/taller/actions";
-import { structureRequestCompleted } from "@/lib/orders";
-import type { AreaKey, Order, ProductionStep, Role, StepStatus, StructureRequestStatus } from "@/lib/types";
+import type { AreaKey, Order, ProductionStep, Role, StepStatus } from "@/lib/types";
 import { cn, deliveryLabel, formatDate, formatDateTime } from "@/lib/utils";
 import {
   filterWorkerFutureOrders,
@@ -51,13 +50,12 @@ type WorkerQueueProps = {
     requireBlockReason: boolean;
   };
   areaLabels?: Record<string, string>;
-  structureRequestStatuses?: Record<string, StructureRequestStatus>;
 };
 
 type WorkFilter = "all" | "pending" | "active" | "done" | "blocked";
 type OptimisticStepStatus = { status: StepStatus; previousStatus: StepStatus };
 
-export function WorkerQueue({ orders, user, permissions, areaLabels = {}, structureRequestStatuses = {} }: WorkerQueueProps) {
+export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: WorkerQueueProps) {
   const [overrides, setOverrides] = useState<Record<string, OptimisticStepStatus>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -100,12 +98,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {}, struct
     [orders, overrides],
   );
 
-  const visible = useMemo(
-    () => filterWorkerOrders(user, workingOrders).filter(
-      (order) => structureRequestCompleted(order, structureRequestStatuses[order.id]),
-    ),
-    [structureRequestStatuses, user, workingOrders],
-  );
+  const visible = useMemo(() => filterWorkerOrders(user, workingOrders), [user, workingOrders]);
   const filteredVisible = useMemo(() => {
     if (filter === "all") return visible;
     return visible.filter((order) => workerActionStep(user, order)?.status === filter);

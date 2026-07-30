@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/auth";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
 import { createLocalOrder, nextLocalOrderCode, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
-import { canProductionStepsRunTogether, isProductionOrder, productionStepPrerequisitesMet, productionStepsResetByReversal, structureRequestCompleted } from "@/lib/orders";
+import { canProductionStepsRunTogether, isProductionOrder, productionStepPrerequisitesMet, productionStepsResetByReversal } from "@/lib/orders";
 import { getOrderProductionState, listStructureRequests, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -198,10 +198,6 @@ export async function updateProductionStep(
   const structureRequest = parsed.data.stepKey === "structure"
     ? (await listStructureRequests()).find((request) => request.orderId === parsed.data.orderId && request.status !== "cancelled")
     : undefined;
-  const enteringWork = currentStep.status === "pending" && (parsed.data.status === "active" || parsed.data.status === "blocked");
-  if (enteringWork && !structureRequestCompleted(currentOrder, structureRequest?.status)) {
-    return { status: "error", message: "Marca Pedida antes de iniciar cualquier proceso." };
-  }
   if (!isAllowedTransition(currentStep.status, parsed.data.status)) {
     return { status: "error", message: "La etapa cambió de estado. Actualiza la vista e intenta nuevamente." };
   }

@@ -1,7 +1,7 @@
-import type { Order, OrderStatus, ProductionStep, StepStatus, StructureRequestStatus } from "./types";
+import type { Order, OrderStatus, ProductionStep, StepStatus } from "./types";
 
 export function isIndependentStartStep(stepKey: string) {
-  return stepKey === "structure" || stepKey === "cutting";
+  return stepKey === "structure" || stepKey === "cutting" || stepKey === "sewing";
 }
 
 export function productionStepPrerequisitesMet(
@@ -10,7 +10,7 @@ export function productionStepPrerequisitesMet(
 ) {
   const step = steps[stepIndex];
   if (!step) return false;
-  if (step.key === "cutting") return true;
+  if (isIndependentStartStep(step.key)) return true;
   return steps.slice(0, stepIndex).every((previousStep) => previousStep.status === "done");
 }
 
@@ -32,18 +32,6 @@ export function productionStepsResetByReversal(
 
 export function isProductionOrder(order: Pick<Order, "documentType">) {
   return order.documentType !== "quote";
-}
-
-export function structureRequestCompleted(
-  order: Pick<Order, "steps"> & Partial<Pick<Order, "status">>,
-  requestStatus?: StructureRequestStatus,
-) {
-  if (requestStatus === "requested" || requestStatus === "in_progress" || requestStatus === "done") return true;
-  return (
-    order.status !== "completed" &&
-    order.status !== "cancelled" &&
-    order.steps.some((step) => step.status === "done")
-  );
 }
 
 export function orderGroupKey(order: Pick<Order, "store" | "groupCode" | "code">) {

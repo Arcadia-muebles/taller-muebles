@@ -24,7 +24,7 @@ import { updateProductionStep } from "@/app/taller/actions";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { OrderNotesDialog } from "@/components/order-notes-dialog";
 import { completionPercent, isReadyForDelivery } from "@/lib/metrics";
-import { compareOrderGroupMembers, isIndependentStartStep, isProductionOrder, orderGroupPositions, productionOrderGroup, productionStepPrerequisitesMet, structureRequestCompleted } from "@/lib/orders";
+import { compareOrderGroupMembers, isIndependentStartStep, isProductionOrder, orderGroupPositions, productionOrderGroup, productionStepPrerequisitesMet } from "@/lib/orders";
 import type { AreaKey, Order, OrderComment, ProductionStep, StepStatus, StructureRequest, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, formatDate } from "@/lib/utils";
 
@@ -134,13 +134,6 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
     const statusKey = optimisticStepStatusKey(order.id, stepKey);
     if (!canMove || order.status === "completed" || order.status === "cancelled") return;
     if (pendingStepStatuses[statusKey]) return;
-    const structureStage = optimisticStructureStages[order.id]
-      ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id));
-    if (structureStage === "unrequested" && stepKey !== "structure") {
-      setFeedback({ tone: "error", message: "Marca Pedida antes de continuar con cualquier proceso." });
-      return;
-    }
-
     if (stepKey === "structure" && target) {
       moveStructure(order, target);
       return;
@@ -498,7 +491,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
                               order={order}
                               step={resolvedStep}
                               structureStage={step.key === "structure" ? structureStage : undefined}
-                              canMove={canMove && (step.key === "structure" || structureStage !== "unrequested")}
+                              canMove={canMove}
                               pending={Boolean(pendingStepStatuses[optimisticStepStatusKey(order.id, step.key)])}
                               onMove={() => move(order, step.key)}
                             />
@@ -977,7 +970,7 @@ function structureStageFor(order: Order, requestStatus?: StructureRequest["statu
   const step = order.steps.find((item) => item.key === "structure");
   if (step?.status === "done" || requestStatus === "done") return "done";
   if (step?.status === "active" || requestStatus === "in_progress") return "in_progress";
-  if (structureRequestCompleted(order, requestStatus)) return "requested";
+  if (requestStatus === "requested") return "requested";
   return "unrequested";
 }
 

@@ -154,8 +154,9 @@ async function changeStructureOrderStatus(input: unknown): Promise<StructureStag
   if (!parsed.success) return { ok: false, message: "El cambio de estructura no es válido." };
   const order = await getOrder(parsed.data.orderId);
   if (!order || !isProductionOrder(order)) return { ok: false, message: "No se encontró una orden de producción válida." };
-  if (parsed.data.status === "draft" && order.steps.some((step) => step.status !== "pending")) {
-    return { ok: false, message: "No puedes quitar Pedida porque la orden ya tiene procesos iniciados." };
+  const structureStep = order.steps.find((step) => step.key === "structure");
+  if (parsed.data.status === "draft" && structureStep?.status !== "pending") {
+    return { ok: false, message: "No puedes volver a En blanco porque la estructura ya comenzó." };
   }
   const currentRequest = (await listStructureRequests()).find(
     (request) => request.orderId === parsed.data.orderId && request.status !== "cancelled",

@@ -5,7 +5,7 @@ import path from "node:path";
 import type { AgendaItem, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, ClientPortalLink, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
 import { defaultSystemSettings } from "@/lib/system-settings";
 import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
-import { productionOrderGroup, productionStepsResetByReversal } from "@/lib/orders";
+import { canProductionStepsRunTogether, productionOrderGroup, productionStepsResetByReversal } from "@/lib/orders";
 
 type LocalData = {
   orders: Order[];
@@ -1378,7 +1378,7 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
     if (ensureConfiguredOrderSteps(order, data, data.settings?.production.steps ?? defaultSystemSettings.production.steps)) {
       changed = true;
     }
-    if (ensureSingleActiveStep(order)) {
+    if (ensureCompatibleActiveSteps(order)) {
       changed = true;
     }
     for (const step of order.steps) {
@@ -1407,7 +1407,7 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
   return { data, changed };
 }
 
-function ensureSingleActiveStep(order: Order) {
+function ensureCompatibleActiveSteps(order: Order) {
   const activeIndexes = order.steps
     .map((step, index) => step.status === "active" ? index : -1)
     .filter((index) => index >= 0);
@@ -1415,10 +1415,17 @@ function ensureSingleActiveStep(order: Order) {
 
   const keepActiveIndex = activeIndexes.at(-1);
   if (keepActiveIndex === undefined) return false;
+  const keepActiveStep = order.steps[keepActiveIndex];
+  const incompatibleIndexes = activeIndexes.filter((index) => (
+    index !== keepActiveIndex &&
+    !canProductionStepsRunTogether(order.steps[index].key, keepActiveStep.key)
+  ));
+  if (!incompatibleIndexes.length) return false;
+
   const now = nowIso();
   order.steps = order.steps.map((step, index) => {
-    if (index === keepActiveIndex) return step;
-    if (index < keepActiveIndex && step.status === "active") {
+    if (!incompatibleIndexes.includes(index)) return step;
+    if (index < keepActiveIndex) {
       return {
         ...step,
         status: "done",
@@ -1426,7 +1433,7 @@ function ensureSingleActiveStep(order: Order) {
         completedAt: step.completedAt ?? now,
       };
     }
-    if (index > keepActiveIndex && step.status === "active") {
+    if (index > keepActiveIndex) {
       return {
         ...step,
         status: "pending",
