@@ -66,6 +66,8 @@ export function OrderForm({
   const [printPreparing, setPrintPreparing] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfSuccess, setPdfSuccess] = useState<string | null>(null);
+  const [pdfReadyToShare, setPdfReadyToShare] = useState(false);
+  const pdfShareRef = useRef<{ file: File; formSnapshot: string } | null>(null);
   const lastAutoCode = useRef<string | null>(initialValues?.salesNoteNumber ?? nextCodes.LR);
   const defaultEntryDate = new Date().toISOString().slice(0, 10);
   const {
@@ -226,6 +228,17 @@ export function OrderForm({
     const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
     if (!printArea || pdfSaving) return;
 
+    const preparedPdf = pdfShareRef.current;
+    if (preparedPdf) {
+      if (preparedPdf.formSnapshot === JSON.stringify(getValues())) {
+        await shareSalesNotePdf(preparedPdf.file);
+        return;
+      }
+
+      pdfShareRef.current = null;
+      setPdfReadyToShare(false);
+    }
+
     setPdfSaving(true);
     setPdfError(null);
     setPdfSuccess(null);
@@ -275,12 +288,59 @@ export function OrderForm({
         await writable.close();
         setPdfSuccess("PDF guardado correctamente.");
       } else {
-        downloadBlob(pdfBlob, fileName);
-        setPdfSuccess("PDF descargado directamente.");
+        const shareablePdf = getShareablePdf(pdfBlob, fileName);
+
+        if (shareablePdf) {
+          pdfShareRef.current = {
+            file: shareablePdf,
+            formSnapshot: JSON.stringify(getValues()),
+          };
+          setPdfReadyToShare(true);
+          await shareSalesNotePdf(shareablePdf);
+        } else {
+          downloadBlob(pdfBlob, fileName);
+          setPdfSuccess("PDF descargado directamente.");
+        }
       }
     } catch (error) {
       console.error("No se pudo generar el PDF", error);
       setPdfError("No se pudo generar el PDF. Intenta nuevamente.");
+    } finally {
+      setPdfSaving(false);
+    }
+  }
+
+  async function shareSalesNotePdf(file: File) {
+    setPdfSaving(true);
+    setPdfError(null);
+    setPdfSuccess(null);
+
+    try {
+      const shareOperation = navigator.share({
+        files: [file],
+        title: file.name,
+      });
+
+      // Safari puede mantener esta promesa abierta mientras se muestra la hoja
+      // nativa. Liberamos el botón para no dejar la interfaz bloqueada.
+      setPdfSaving(false);
+      await shareOperation;
+      pdfShareRef.current = null;
+      setPdfReadyToShare(false);
+      setPdfSuccess("PDF enviado a la opción seleccionada.");
+    } catch (error) {
+      if (isShareCancellation(error)) {
+        setPdfSuccess("PDF listo. Toca “Guardar como…” para elegir Guardar en Archivos.");
+        return;
+      }
+
+      if (isMissingShareActivation(error)) {
+        setPdfSuccess("PDF listo. Toca “Guardar como…” para elegir Guardar en Archivos.");
+        return;
+      }
+
+      console.error("No se pudo abrir el menú para guardar el PDF", error);
+      setPdfError("No se pudo abrir el menú del iPad. Toca “Guardar como…” para intentarlo nuevamente.");
     } finally {
       setPdfSaving(false);
     }
@@ -474,7 +534,7 @@ export function OrderForm({
               <div className="grid gap-2 sm:grid-cols-[auto_auto_180px_180px]">
                 <button type="button" onClick={saveSalesNotePdf} disabled={pdfSaving} className="btn btn-secondary h-10 whitespace-nowrap">
                   <Download className="size-4" />
-                  {pdfSaving ? "Guardando..." : "Guardar PDF"}
+                  {pdfSaving ? "Guardando..." : pdfReadyToShare ? "Guardar como…" : "Guardar PDF"}
                 </button>
                 <button type="button" onClick={printSalesNote} disabled={printPreparing} className="btn btn-secondary h-10 whitespace-nowrap">
                   <Printer className="size-4" />
@@ -1567,6 +1627,29 @@ function getSaveFilePicker() {
 
 function isFilePickerCancellation(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+function getShareablePdf(blob: Blob, fileName: string) {
+  if (typeof navigator.share !== "function" || typeof navigator.canShare !== "function") return undefined;
+
+  const file = new File([blob], fileName, {
+    type: "application/pdf",
+    lastModified: Date.now(),
+  });
+
+  try {
+    return navigator.canShare({ files: [file] }) ? file : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isShareCancellation(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function isMissingShareActivation(error: unknown) {
+  return error instanceof DOMException && error.name === "NotAllowedError";
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
