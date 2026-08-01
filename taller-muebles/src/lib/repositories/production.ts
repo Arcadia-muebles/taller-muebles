@@ -49,7 +49,13 @@ type StructureRequestRecord = {
   assigned_to: string | null;
   requested_at: string;
   completed_at: string | null;
+  updated_at: string;
   orders: { internal_code: string; client_name: string; product_name: string } | null;
+};
+
+export type StructureRequestsSnapshot = {
+  requests: StructureRequest[];
+  loadError: boolean;
 };
 
 type SupplierRecord = {
@@ -505,7 +511,13 @@ function mapOrderRecord(record: OrderRecord): Order {
 }
 
 export async function listStructureRequests(): Promise<StructureRequest[]> {
-  if (!hasSupabaseConfig()) return listLocalStructureRequests();
+  return (await getStructureRequestsSnapshot()).requests;
+}
+
+export async function getStructureRequestsSnapshot(): Promise<StructureRequestsSnapshot> {
+  if (!hasSupabaseConfig()) {
+    return { requests: await listLocalStructureRequests(), loadError: false };
+  }
 
   const supabase = await createClient();
   const { data, error } = await (supabase as unknown as LooseDb<StructureRequestRecord>)
@@ -518,6 +530,7 @@ export async function listStructureRequests(): Promise<StructureRequest[]> {
       assigned_to,
       requested_at,
       completed_at,
+      updated_at,
       orders (
         internal_code,
         client_name,
@@ -527,7 +540,7 @@ export async function listStructureRequests(): Promise<StructureRequest[]> {
     .order("requested_at", { ascending: false });
   if (error || !data) {
     console.error("Supabase structure requests query failed:", error?.message);
-    return [];
+    return { requests: [], loadError: true };
   }
 
   const attachmentsByOrder = await Promise.all(
@@ -538,7 +551,9 @@ export async function listStructureRequests(): Promise<StructureRequest[]> {
   );
   const attachmentMap = new Map(attachmentsByOrder);
 
-  return data.map((request) => ({
+  return {
+    loadError: false,
+    requests: data.map((request) => ({
     id: request.id,
     orderId: request.order_id,
     orderCode: shortOrderCode(request.orders?.internal_code ?? ""),
@@ -549,8 +564,10 @@ export async function listStructureRequests(): Promise<StructureRequest[]> {
     assignedTo: request.assigned_to ?? undefined,
     requestedAt: request.requested_at,
     completedAt: request.completed_at ?? undefined,
+    updatedAt: request.updated_at,
     attachments: attachmentMap.get(request.order_id) ?? [],
-  }));
+    })),
+  };
 }
 
 export async function listSuppliers(): Promise<Supplier[]> {

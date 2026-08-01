@@ -171,6 +171,7 @@ export type StructureRequest = {
   assignedTo?: string;
   requestedAt: string;
   completedAt?: string;
+  updatedAt?: string;
   attachments: OrderAttachment[];
 };
 

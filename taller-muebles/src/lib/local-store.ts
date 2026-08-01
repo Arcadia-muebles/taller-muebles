@@ -1059,12 +1059,18 @@ export async function createLocalStructureRequest(input: {
   status: StructureRequestStatus;
   assignedTo?: string;
   file?: File;
+  requestId?: string;
+  expectedUpdatedAt?: string;
+  expectNoRequest?: boolean;
 }) {
   const data = await readData();
   const order = data.orders.find((item) => item.id === input.orderId);
   if (!order) return false;
 
   const existing = data.structureRequests.find((request) => request.orderId === input.orderId && request.status !== "cancelled");
+  if (existing && input.expectNoRequest) return false;
+  if (existing && input.requestId && existing.id !== input.requestId) return false;
+  if (existing && input.expectedUpdatedAt && existing.updatedAt !== input.expectedUpdatedAt) return false;
   const attachmentIds: string[] = existing?.attachmentIds ?? [];
   if (input.file && input.file.size > 0) {
     const id = crypto.randomUUID();
@@ -1090,7 +1096,9 @@ export async function createLocalStructureRequest(input: {
     existing.status = input.status;
     existing.assignedTo = input.assignedTo?.trim() || undefined;
     existing.attachmentIds = attachmentIds;
+    existing.updatedAt = nowIso();
   } else {
+    const now = nowIso();
     data.structureRequests.unshift({
       id: crypto.randomUUID(),
       orderId: order.id,
@@ -1100,7 +1108,8 @@ export async function createLocalStructureRequest(input: {
       specifications: input.specifications,
       status: input.status,
       assignedTo: input.assignedTo?.trim() || undefined,
-      requestedAt: nowIso(),
+      requestedAt: now,
+      updatedAt: now,
       attachmentIds,
     });
   }
@@ -1136,6 +1145,7 @@ export async function updateLocalStructureRequestStatus(id: string, status: Stru
   request.status = status;
   if (status === "requested" && previousStatus === "draft") request.requestedAt = nowIso();
   request.completedAt = status === "done" ? nowIso() : undefined;
+  request.updatedAt = nowIso();
 
   const step = order.steps.find((item) => item.key === "structure");
   if (step) {
