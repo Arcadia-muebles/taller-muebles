@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useDeferredValue, useMemo, useState } from "react";
+import { useActionState, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -359,13 +359,37 @@ function StructureActions({
   canEdit: boolean;
   onEdit: () => void;
 }) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
   const [removeState, removeAction, removePending] = useActionState(
     removeStructureFromList,
     initialActionState,
   );
 
+  useEffect(() => {
+    function closeOnOutsidePress(event: PointerEvent) {
+      const details = detailsRef.current;
+      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
+        details.open = false;
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      const details = detailsRef.current;
+      if (event.key !== "Escape" || !details?.open) return;
+      details.open = false;
+      details.querySelector("summary")?.focus();
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+
   return (
-    <details className="group relative z-10">
+    <details ref={detailsRef} name="structure-actions" className="group relative z-10">
       <summary className="grid size-10 list-none place-items-center rounded-md border border-stone-200 bg-white text-stone-700 transition hover:bg-stone-100 [&::-webkit-details-marker]:hidden" aria-label={`Acciones de ${row.order.code}`}>
         <MoreVertical className="size-5" />
       </summary>
