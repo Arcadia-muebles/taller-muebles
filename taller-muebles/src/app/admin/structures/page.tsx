@@ -39,9 +39,15 @@ function buildRows(orders: Order[], requests: StructureRequest[]): StructureList
       .filter((request) => request.status !== "cancelled")
       .map((request) => [request.orderId, request]),
   );
+  const cancelledOrderIds = new Set(
+    requests
+      .filter((request) => request.status === "cancelled")
+      .map((request) => request.orderId),
+  );
 
   return activeOrders(orders)
     .filter((order) => order.steps.some((step) => step.key === "structure"))
+    .filter((order) => requestByOrderId.has(order.id) || !cancelledOrderIds.has(order.id))
     .map((order) => {
       const request = requestByOrderId.get(order.id);
       return {

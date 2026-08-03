@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useDeferredValue, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -17,16 +17,21 @@ import {
   Printer,
   Search,
   Settings2,
+  Trash2,
   X,
   XCircle,
 } from "lucide-react";
 import {
+  removeStructureFromList,
   saveStructureSpecification,
   type StructureActionResult,
 } from "@/app/admin/structures/actions";
 import type { StructureListRow } from "@/app/admin/structures/page";
 
 type Filter = "all" | StructureListRow["structureStatus"];
+type Sort = "workflow" | "delivery" | "newest" | "code";
+
+const structuresPerPage = 20;
 
 const statusCopy = {
   unrequested: {
@@ -64,7 +69,10 @@ export function StructuresWorkspace({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const normalizedQuery = query.trim().toLocaleLowerCase("es");
+  const [sort, setSort] = useState<Sort>("workflow");
+  const [page, setPage] = useState(1);
+  const deferredQuery = useDeferredValue(query);
+  const normalizedQuery = deferredQuery.trim().toLocaleLowerCase("es");
   const counts = useMemo(
     () => ({
       unrequested: rows.filter((row) => row.structureStatus === "unrequested").length,
@@ -74,9 +82,9 @@ export function StructuresWorkspace({
     }),
     [rows],
   );
-  const visibleRows = useMemo(
-    () =>
-      rows.filter((row) => {
+  const filteredRows = useMemo(
+    () => {
+      const matches = rows.filter((row) => {
         if (filter !== "all" && row.structureStatus !== filter) return false;
         if (!normalizedQuery) return true;
         return [
@@ -90,9 +98,32 @@ export function StructuresWorkspace({
           .join(" ")
           .toLocaleLowerCase("es")
           .includes(normalizedQuery);
-      }),
-    [filter, normalizedQuery, rows],
+      });
+      return sort === "workflow"
+        ? matches
+        : matches.toSorted((a, b) => sortStructureRows(a, b, sort));
+    },
+    [filter, normalizedQuery, rows, sort],
   );
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / structuresPerPage));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRows = useMemo(
+    () => filteredRows.slice((currentPage - 1) * structuresPerPage, currentPage * structuresPerPage),
+    [currentPage, filteredRows],
+  );
+  const pageNumbers = useMemo(() => visiblePageNumbers(currentPage, totalPages), [currentPage, totalPages]);
+
+  function chooseFilter(nextFilter: Filter) {
+    setFilter(nextFilter);
+    setPage(1);
+  }
+
+  function clearFilters() {
+    setQuery("");
+    setFilter("all");
+    setSort("workflow");
+    setPage(1);
+  }
 
   return (
     <>
@@ -101,17 +132,17 @@ export function StructuresWorkspace({
           <p className="page-kicker">Taller de estructuras</p>
           <h1 className="page-title">Lista de estructuras</h1>
           <p className="page-description">
-            Consulta, edita e imprime las especificaciones vinculadas a cada pedido.
+            Busca, prioriza y administra las especificaciones vinculadas a cada pedido.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => printStructures(visibleRows)}
-          disabled={!visibleRows.length || loadError}
+          onClick={() => printStructures(filteredRows)}
+          disabled={!filteredRows.length || loadError}
           className="btn btn-secondary print:hidden"
         >
           <Printer className="size-4" />
-          Imprimir lista
+          Imprimir resultados
         </button>
       </header>
 
@@ -135,40 +166,73 @@ export function StructuresWorkspace({
       </section>
 
       <section className="panel mt-4 overflow-visible">
-        <div className="flex flex-col gap-3 border-b border-stone-200 p-3 lg:flex-row lg:items-center lg:justify-between">
-          <label className="relative block w-full lg:max-w-md">
-            <span className="sr-only">Buscar estructuras</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="control pl-9"
-              placeholder="Buscar por código, cliente o descripción…"
-            />
-          </label>
-          <div className="flex gap-1 overflow-x-auto" aria-label="Filtrar estructuras por estado">
-            <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>Todas <b>{rows.length}</b></FilterButton>
-            <FilterButton active={filter === "unrequested"} onClick={() => setFilter("unrequested")}>En blanco <b>{counts.unrequested}</b></FilterButton>
-            <FilterButton active={filter === "requested"} onClick={() => setFilter("requested")}>Pedidas <b>{counts.requested}</b></FilterButton>
-            <FilterButton active={filter === "in_progress"} onClick={() => setFilter("in_progress")}>En estructura <b>{counts.in_progress}</b></FilterButton>
-            <FilterButton active={filter === "done"} onClick={() => setFilter("done")}>Listas <b>{counts.done}</b></FilterButton>
+        <div className="sticky top-[69px] z-20 space-y-3 border-b border-stone-200 bg-white/95 p-3 backdrop-blur lg:top-0">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px]">
+            <label className="relative block min-w-0">
+              <span className="sr-only">Buscar estructuras</span>
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+              <input
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(1);
+                }}
+                className="control pl-9"
+                placeholder="Código, cliente, producto o descripción…"
+                autoComplete="off"
+              />
+            </label>
+            <label className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
+              <span className="text-xs font-semibold text-stone-500">Ordenar</span>
+              <select
+                value={sort}
+                onChange={(event) => {
+                  setSort(event.target.value as Sort);
+                  setPage(1);
+                }}
+                className="control"
+                aria-label="Ordenar estructuras"
+              >
+                <option value="workflow">Prioridad de trabajo</option>
+                <option value="delivery">Entrega más próxima</option>
+                <option value="newest">Ingreso más reciente</option>
+                <option value="code">Código</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="flex gap-1 overflow-x-auto pb-1 md:pb-0" aria-label="Filtrar estructuras por estado">
+              <FilterButton active={filter === "all"} onClick={() => chooseFilter("all")}>Todas <b>{rows.length}</b></FilterButton>
+              <FilterButton active={filter === "unrequested"} onClick={() => chooseFilter("unrequested")}>En blanco <b>{counts.unrequested}</b></FilterButton>
+              <FilterButton active={filter === "requested"} onClick={() => chooseFilter("requested")}>Pedidas <b>{counts.requested}</b></FilterButton>
+              <FilterButton active={filter === "in_progress"} onClick={() => chooseFilter("in_progress")}>En estructura <b>{counts.in_progress}</b></FilterButton>
+              <FilterButton active={filter === "done"} onClick={() => chooseFilter("done")}>Listas <b>{counts.done}</b></FilterButton>
+            </div>
+            <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-stone-500 md:justify-end">
+              <span aria-live="polite">{filteredRows.length} {filteredRows.length === 1 ? "resultado" : "resultados"}</span>
+              {query || filter !== "all" || sort !== "workflow" ? (
+                <button type="button" onClick={clearFilters} className="font-semibold text-stone-700 underline-offset-4 hover:underline">
+                  Limpiar
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
 
-        <div className="hidden grid-cols-[120px_130px_minmax(180px,1fr)_minmax(300px,1.6fr)_175px_90px] rounded-t-sm bg-stone-950 text-xs font-bold uppercase tracking-[0.08em] text-white lg:grid">
-          <div className="px-4 py-4">Código</div>
-          <div className="border-l border-white/15 px-4 py-4">Fecha</div>
-          <div className="border-l border-white/15 px-4 py-4">Cliente</div>
-          <div className="border-l border-white/15 px-4 py-4">Descripción</div>
-          <div className="border-l border-white/15 px-4 py-4">Estado</div>
-          <div className="border-l border-white/15 px-4 py-4 text-center">Acciones</div>
+        <div className="hidden grid-cols-[120px_110px_minmax(170px,0.9fr)_minmax(260px,1.5fr)_160px_72px] rounded-t-sm bg-stone-950 text-xs font-bold uppercase tracking-[0.08em] text-white xl:grid">
+          <div className="px-3 py-3">Código</div>
+          <div className="border-l border-white/15 px-3 py-3">Ingreso</div>
+          <div className="border-l border-white/15 px-3 py-3">Cliente</div>
+          <div className="border-l border-white/15 px-3 py-3">Descripción</div>
+          <div className="border-l border-white/15 px-3 py-3">Estado</div>
+          <div className="border-l border-white/15 px-3 py-3 text-center">Acciones</div>
         </div>
 
         <div className="divide-y divide-stone-200">
-          {visibleRows.map((row) => (
+          {paginatedRows.map((row) => (
             <StructureRow key={row.order.id} row={row} canEdit={canEdit} />
           ))}
-          {!visibleRows.length ? (
+          {!filteredRows.length ? (
             <div className="px-4 py-14 text-center">
               {loadError ? <AlertTriangle className="mx-auto size-8 text-rose-300" /> : <Hammer className="mx-auto size-8 text-stone-300" />}
               <p className="mt-3 text-sm font-semibold text-stone-800">
@@ -178,6 +242,31 @@ export function StructuresWorkspace({
                 {loadError ? "No interpretaremos un error de conexión como una lista vacía." : "Prueba con otro texto o cambia el filtro de estado."}
               </p>
             </div>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-stone-200 px-3 py-3 text-xs text-stone-500 sm:flex-row sm:items-center sm:justify-between">
+          <span>{paginationLabel(filteredRows.length, currentPage)}</span>
+          {totalPages > 1 ? (
+            <nav className="flex max-w-full items-center gap-1 overflow-x-auto pb-1 sm:pb-0" aria-label="Paginación de estructuras">
+              <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1} className="pagination-button">
+                Anterior
+              </button>
+              {pageNumbers.map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  onClick={() => setPage(pageNumber)}
+                  aria-current={pageNumber === currentPage ? "page" : undefined}
+                  className={`pagination-button min-w-8 ${pageNumber === currentPage ? "border-stone-950 bg-stone-950 text-white" : ""}`}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages} className="pagination-button">
+                Siguiente
+              </button>
+            </nav>
           ) : null}
         </div>
       </section>
@@ -204,35 +293,37 @@ function StructureRow({ row, canEdit }: { row: StructureListRow; canEdit: boolea
 
   return (
     <article className={row.syncWarning ? "bg-amber-50/40" : "bg-white"}>
-      <div className="grid gap-4 p-4 transition hover:bg-stone-50/70 lg:grid-cols-[120px_130px_minmax(180px,1fr)_minmax(300px,1.6fr)_175px_90px] lg:gap-0 lg:p-0">
-        <div className="min-w-0 lg:px-4 lg:py-5">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 lg:hidden">Código</p>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 p-4 transition hover:bg-stone-50/70 md:grid-cols-[minmax(0,1fr)_170px_52px] md:gap-x-4 min-[900px]:grid-cols-[220px_minmax(0,1fr)_160px_52px] min-[900px]:py-3.5 xl:grid-cols-[120px_110px_minmax(170px,0.9fr)_minmax(260px,1.5fr)_160px_72px] xl:gap-0 xl:p-0">
+        <div className="min-w-0 md:col-start-1 md:row-start-1 min-[900px]:col-start-1 min-[900px]:row-start-1 xl:col-auto xl:row-auto xl:px-3 xl:py-3.5">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 xl:hidden">Nota de venta</p>
           <Link href={`/admin/orders/${row.order.id}`} className="font-mono text-base font-bold text-stone-950 hover:underline">
             {row.order.code}
           </Link>
-          <span className="ml-2 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-bold text-stone-600 lg:hidden">{row.order.store}</span>
+          <span className="ml-2 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-bold text-stone-600 xl:hidden">{row.order.store}</span>
+          <p className="mt-1 truncate text-sm font-semibold text-stone-900 xl:hidden">{row.order.client}</p>
+          <p className="mt-1 text-xs text-stone-500 xl:hidden">
+            Ingreso {formatDate(row.order.entryDate)} · Entrega {formatDate(row.order.deliveryDate)}
+          </p>
         </div>
 
-        <div className="min-w-0 lg:border-l lg:border-stone-200 lg:px-4 lg:py-5">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 lg:hidden">Fecha</p>
+        <div className="hidden min-w-0 xl:block xl:border-l xl:border-stone-200 xl:px-3 xl:py-3.5">
           <time className="text-sm font-medium text-stone-700" dateTime={row.order.entryDate}>{formatDate(row.order.entryDate)}</time>
         </div>
 
-        <div className="min-w-0 lg:border-l lg:border-stone-200 lg:px-4 lg:py-5">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 lg:hidden">Cliente</p>
+        <div className="hidden min-w-0 xl:block xl:border-l xl:border-stone-200 xl:px-3 xl:py-3.5">
           <p className="text-sm font-semibold leading-5 text-stone-900">{row.order.client}</p>
           <p className="mt-1 text-xs text-stone-500">{row.order.store} · Entrega {formatDate(row.order.deliveryDate)}</p>
         </div>
 
-        <div className="min-w-0 lg:border-l lg:border-stone-200 lg:px-4 lg:py-5">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 lg:hidden">Descripción</p>
-          <p className="whitespace-pre-wrap break-words text-sm font-medium leading-5 text-stone-900">{specification}</p>
+        <div className="col-span-2 min-w-0 md:col-span-1 md:col-start-1 md:row-start-2 min-[900px]:col-start-2 min-[900px]:row-start-1 xl:col-auto xl:row-auto xl:border-l xl:border-stone-200 xl:px-3 xl:py-3.5">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 xl:hidden">Descripción</p>
+          <p title={specification} className="line-clamp-3 whitespace-pre-wrap break-words text-sm font-medium leading-5 text-stone-900 xl:line-clamp-2">{specification}</p>
           {row.request?.assignedTo ? <p className="mt-1.5 text-xs text-stone-500">Responsable: {row.request.assignedTo}</p> : null}
         </div>
 
-        <div className="min-w-0 lg:border-l lg:border-stone-200 lg:px-4 lg:py-5">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 lg:hidden">Estado</p>
-          <span className={`inline-flex min-w-32 items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-bold uppercase tracking-[0.03em] ${status.className}`}>
+        <div className="col-span-2 min-w-0 md:col-span-1 md:col-start-2 md:row-span-2 md:row-start-1 min-[900px]:col-start-3 min-[900px]:row-span-1 min-[900px]:row-start-1 xl:col-auto xl:row-auto xl:border-l xl:border-stone-200 xl:px-3 xl:py-3.5">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-400 xl:hidden">Estado</p>
+          <span className={`inline-flex min-w-32 items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-bold uppercase tracking-[0.03em] md:w-full ${status.className}`}>
             <StatusIcon className={`size-4 ${row.structureStatus === "in_progress" ? "animate-[spin_4s_linear_infinite]" : ""}`} />
             {status.label}
           </span>
@@ -247,7 +338,7 @@ function StructureRow({ row, canEdit }: { row: StructureListRow; canEdit: boolea
           )}
         </div>
 
-        <div className="flex items-start lg:justify-center lg:border-l lg:border-stone-200 lg:px-3 lg:py-5">
+        <div className="col-start-2 row-start-1 flex items-start justify-end md:col-start-3 md:row-start-1 min-[900px]:col-start-4 min-[900px]:row-start-1 xl:col-auto xl:row-auto xl:justify-center xl:border-l xl:border-stone-200 xl:px-2 xl:py-3.5">
           <StructureActions row={row} canEdit={canEdit} onEdit={() => setEditing(true)} />
         </div>
       </div>
@@ -268,12 +359,17 @@ function StructureActions({
   canEdit: boolean;
   onEdit: () => void;
 }) {
+  const [removeState, removeAction, removePending] = useActionState(
+    removeStructureFromList,
+    initialActionState,
+  );
+
   return (
     <details className="group relative z-10">
       <summary className="grid size-10 list-none place-items-center rounded-md border border-stone-200 bg-white text-stone-700 transition hover:bg-stone-100 [&::-webkit-details-marker]:hidden" aria-label={`Acciones de ${row.order.code}`}>
         <MoreVertical className="size-5" />
       </summary>
-      <div className="absolute left-0 top-12 z-30 w-52 rounded-lg border border-stone-200 bg-white p-1.5 shadow-xl shadow-stone-950/10 lg:left-auto lg:right-0">
+      <div className="absolute right-0 top-12 z-30 w-64 rounded-lg border border-stone-200 bg-white p-1.5 shadow-xl shadow-stone-950/10">
         <Link href={`/admin/orders/${row.order.id}`} className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50">
           <ExternalLink className="size-4" /> Ver pedido
         </Link>
@@ -300,6 +396,34 @@ function StructureActions({
           <a href={row.request.attachments[0].url} target="_blank" rel="noreferrer" className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-stone-700 hover:bg-stone-50">
             <FileText className="size-4" /> Abrir adjunto
           </a>
+        ) : null}
+        {canEdit ? (
+          <form
+            action={removeAction}
+            onSubmit={(event) => {
+              const confirmed = window.confirm(
+                `¿Quitar la nota ${row.order.code} de la lista de estructuras?\n\nÚsalo sólo si este producto no necesita estructura. La orden y el historial se conservarán.`,
+              );
+              if (!confirmed) event.preventDefault();
+            }}
+            className="mt-1 border-t border-stone-200 pt-1"
+          >
+            <input type="hidden" name="orderId" value={row.order.id} />
+            {row.request ? <input type="hidden" name="requestId" value={row.request.id} /> : null}
+            {!row.request ? <input type="hidden" name="expectNoRequest" value="1" /> : null}
+            {row.request?.updatedAt ? <input type="hidden" name="expectedUpdatedAt" value={row.request.updatedAt} /> : null}
+            <button
+              type="submit"
+              disabled={removePending}
+              className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+            >
+              {removePending ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              {removePending ? "Eliminando…" : "Eliminar de la lista"}
+            </button>
+            {removeState.message && !removeState.ok ? (
+              <p role="alert" className="px-3 pb-2 text-xs leading-4 text-rose-700">{removeState.message}</p>
+            ) : null}
+          </form>
         ) : null}
       </div>
     </details>
@@ -329,12 +453,12 @@ function StructureEditor({
         </button>
       </div>
 
-      <form action={action} className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_220px]">
+      <form action={action} className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_220px_220px]">
         <input type="hidden" name="orderId" value={row.order.id} />
         {row.request ? <input type="hidden" name="requestId" value={row.request.id} /> : null}
         {!row.request ? <input type="hidden" name="expectNoRequest" value="1" /> : null}
         {row.request?.updatedAt ? <input type="hidden" name="expectedUpdatedAt" value={row.request.updatedAt} /> : null}
-        <label className="block xl:row-span-3">
+        <label className="block md:col-span-2 xl:col-span-1 xl:row-span-3">
           <span className="field-label">Descripción de la estructura</span>
           <textarea
             name="specifications"
@@ -370,7 +494,7 @@ function StructureEditor({
           <input name="file" type="file" accept="image/*,application/pdf" className="sr-only" />
         </label>
 
-        <div className="flex flex-col gap-2 xl:col-span-2 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-2 md:col-span-2 xl:flex-row xl:items-center xl:justify-between">
           <ActionFeedback state={state} />
           <div className="flex gap-2">
             <button type="button" onClick={onClose} disabled={pending} className="btn btn-secondary">Cancelar</button>
@@ -418,6 +542,29 @@ function formatDate(value: string) {
   const date = new Date(value.includes("T") ? value : `${value}T12:00:00`);
   if (Number.isNaN(date.getTime())) return "Sin fecha";
   return new Intl.DateTimeFormat("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+}
+
+function sortStructureRows(a: StructureListRow, b: StructureListRow, sort: Exclude<Sort, "workflow">) {
+  if (sort === "delivery") {
+    return a.order.deliveryDate.localeCompare(b.order.deliveryDate) || a.order.code.localeCompare(b.order.code);
+  }
+  if (sort === "newest") {
+    return b.order.entryDate.localeCompare(a.order.entryDate) || a.order.code.localeCompare(b.order.code);
+  }
+  return a.order.code.localeCompare(b.order.code, "es", { numeric: true });
+}
+
+function paginationLabel(total: number, currentPage: number) {
+  if (!total) return "Mostrando 0 estructuras";
+  const from = (currentPage - 1) * structuresPerPage + 1;
+  const to = Math.min(currentPage * structuresPerPage, total);
+  return `Mostrando ${from}-${to} de ${total} estructuras`;
+}
+
+function visiblePageNumbers(currentPage: number, totalPages: number) {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+  const start = Math.min(Math.max(currentPage - 2, 1), totalPages - 4);
+  return Array.from({ length: 5 }, (_, index) => start + index);
 }
 
 function printStructures(rows: StructureListRow[]) {

@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
-import { createLocalStructureRequest, updateLocalStructureRequestStatus } from "@/lib/local-store";
+import {
+  cancelLocalStructureRequest,
+  createLocalStructureRequest,
+  updateLocalStructureRequestStatus,
+} from "@/lib/local-store";
 import { isProductionOrder } from "@/lib/orders";
 import { getOrder, listStructureRequests } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -56,6 +60,13 @@ const structureSchema = z.object({
 const structureOrderStatusSchema = z.object({
   orderId: z.string().min(1),
   status: z.enum(editableStructureStatuses),
+});
+
+const removeStructureSchema = z.object({
+  orderId: z.string().min(1),
+  requestId: z.string().optional(),
+  expectedUpdatedAt: z.string().optional(),
+  expectNoRequest: z.literal("1").optional(),
 });
 
 export type StructureActionResult = { ok: boolean; message: string };
@@ -226,6 +237,111 @@ export async function saveStructureSpecification(
   formData: FormData,
 ): Promise<StructureActionResult> {
   return createStructureRequest(formData);
+}
+
+export async function removeStructureFromList(
+  _previousState: StructureActionResult,
+  formData: FormData,
+): Promise<StructureActionResult> {
+  const user = await requireSession(["admin", "manager"]);
+  const settings = await getSystemSettings();
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
+    return { ok: false, message: "Tu perfil no tiene permiso para quitar estructuras." };
+  }
+
+  const parsed = removeStructureSchema.safeParse({
+    orderId: formData.get("orderId"),
+    requestId: formData.get("requestId")?.toString() || undefined,
+    expectedUpdatedAt: formData.get("expectedUpdatedAt")?.toString() || undefined,
+    expectNoRequest: formData.get("expectNoRequest")?.toString() || undefined,
+  });
+  if (!parsed.success) return { ok: false, message: "No se pudo identificar la nota de venta." };
+
+  const order = await getOrder(parsed.data.orderId);
+  if (!order || !isProductionOrder(order)) {
+    return { ok: false, message: "No se encontró una orden de producción válida." };
+  }
+  const specifications = `01 · ${order.product}`;
+
+  if (!hasSupabaseConfig()) {
+    const cancelled = await cancelLocalStructureRequest({
+      ...parsed.data,
+      expectNoRequest: parsed.data.expectNoRequest === "1",
+      specifications,
+    });
+    if (!cancelled) return conflictResult();
+    revalidateStructurePaths(parsed.data.orderId);
+    return { ok: true, message: "La nota de venta se quitó de la lista de estructuras." };
+  }
+
+  const supabase = await createClient();
+  const structureDb = supabase as unknown as LooseDb<StructureRow>;
+  const { data: existing, error: lookupError } = await structureDb
+    .from("structure_requests")
+    .select("id, order_id, specifications, status, assigned_to, updated_at")
+    .eq("order_id", parsed.data.orderId)
+    .neq("status", "cancelled")
+    .maybeSingle();
+  if (lookupError) {
+    console.error("Supabase structure removal lookup failed:", lookupError.message);
+    return { ok: false, message: "No fue posible comprobar la ficha actual. No se guardaron cambios." };
+  }
+  if (existing && parsed.data.expectNoRequest === "1") return conflictResult();
+  if (parsed.data.requestId && existing?.id !== parsed.data.requestId) return conflictResult();
+  if (existing && parsed.data.expectedUpdatedAt && existing.updated_at !== parsed.data.expectedUpdatedAt) {
+    return conflictResult();
+  }
+
+  let cancelledRequest: StructureRow | null = null;
+  if (existing) {
+    let updateQuery = structureDb
+      .from("structure_requests")
+      .update({ status: "cancelled", completed_at: null, updated_by: user.id })
+      .eq("id", existing.id);
+    if (parsed.data.expectedUpdatedAt) {
+      updateQuery = updateQuery.eq("updated_at", parsed.data.expectedUpdatedAt);
+    }
+    const { data, error } = await updateQuery
+      .select("id, order_id, specifications, status, assigned_to, updated_at")
+      .maybeSingle();
+    if (error) {
+      console.error("Supabase structure removal failed:", error.message);
+      return { ok: false, message: "No fue posible quitar la nota de la lista." };
+    }
+    if (!data) return conflictResult();
+    cancelledRequest = data;
+  } else {
+    const { data, error } = await structureDb
+      .from("structure_requests")
+      .insert({
+        order_id: parsed.data.orderId,
+        specifications,
+        status: "cancelled",
+        requested_by: user.id,
+        updated_by: user.id,
+      })
+      .select("id, order_id, specifications, status, assigned_to, updated_at")
+      .maybeSingle();
+    if (error || !data) {
+      if (error) console.error("Supabase structure cancellation insert failed:", error.message);
+      return { ok: false, message: "No fue posible quitar la nota de la lista." };
+    }
+    cancelledRequest = data;
+  }
+
+  const auditError = await auditStructureChanges({
+    supabase,
+    orderId: parsed.data.orderId,
+    profileId: user.id,
+    requestId: cancelledRequest.id,
+    previous: existing,
+    current: cancelledRequest,
+  });
+  revalidateStructurePaths(parsed.data.orderId);
+  if (auditError) {
+    return { ok: false, message: "La nota se quitó, pero no pudo registrarse en auditoría." };
+  }
+  return { ok: true, message: "La nota de venta se quitó de la lista de estructuras." };
 }
 
 export async function setStructureOrderStatus(formData: FormData): Promise<StructureStageResult> {

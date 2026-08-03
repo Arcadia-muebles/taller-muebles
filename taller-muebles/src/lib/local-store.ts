@@ -1165,6 +1165,49 @@ export async function updateLocalStructureRequestStatus(id: string, status: Stru
   return true;
 }
 
+export async function cancelLocalStructureRequest(input: {
+  orderId: string;
+  requestId?: string;
+  expectedUpdatedAt?: string;
+  expectNoRequest?: boolean;
+  specifications: string;
+}) {
+  const data = await readData();
+  const order = data.orders.find((item) => item.id === input.orderId);
+  if (!order) return false;
+
+  const existing = data.structureRequests.find(
+    (request) => request.orderId === input.orderId && request.status !== "cancelled",
+  );
+  if (existing && input.expectNoRequest) return false;
+  if (input.requestId && existing?.id !== input.requestId) return false;
+  if (existing && input.expectedUpdatedAt && existing.updatedAt !== input.expectedUpdatedAt) return false;
+
+  const now = nowIso();
+  if (existing) {
+    existing.status = "cancelled";
+    existing.completedAt = undefined;
+    existing.updatedAt = now;
+  } else {
+    data.structureRequests.unshift({
+      id: crypto.randomUUID(),
+      orderId: order.id,
+      orderCode: order.code,
+      client: order.client,
+      product: order.product,
+      specifications: input.specifications,
+      status: "cancelled",
+      requestedAt: now,
+      updatedAt: now,
+      attachmentIds: [],
+    });
+  }
+
+  addAudit(data, order.id, "structure_cancelled", "Nota retirada de la lista: el producto no requiere estructura");
+  await writeData(data);
+  return true;
+}
+
 export async function listLocalSuppliers() {
   return (await readData()).suppliers;
 }

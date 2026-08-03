@@ -15,7 +15,7 @@ export function DesktopShell({ sidebar, children }: DesktopShellProps) {
   const sidebarExpanded = sidebarPinned || sidebarPeeking;
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-stone-100 text-stone-950">
+    <div className="min-h-screen overflow-x-clip bg-stone-100 text-stone-950">
       <aside
         onMouseEnter={() => setSidebarPeeking(true)}
         onMouseLeave={() => setSidebarPeeking(false)}

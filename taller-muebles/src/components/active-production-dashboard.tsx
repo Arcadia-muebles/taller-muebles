@@ -56,7 +56,7 @@ const dashboardColumns: Array<{
   align?: "left" | "center";
 }> = [
   { key: "code", label: "Codigo / cliente", width: 145, min: 120, max: 280 },
-  { key: "product", label: "Producto", width: 190, min: 150, max: 420 },
+  { key: "product", label: "Producto / cantidad", width: 190, min: 150, max: 420 },
   { key: "color", label: "Color", width: 75, min: 65, max: 170 },
   { key: "process", label: "Procesos", width: 250, min: 220, max: 500, align: "center" },
   { key: "status", label: "Estado actual", width: 120, min: 110, max: 260 },
@@ -474,6 +474,9 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
                     </BodyCell>
                     <BodyCell>
                       <p className="whitespace-normal break-words text-xs font-semibold uppercase leading-5 text-stone-950">{order.product}</p>
+                      <p className="mt-1 text-[11px] font-semibold text-stone-500">
+                        Cantidad: {formatOrderQuantity(order.quantity)}
+                      </p>
                     </BodyCell>
                     <BodyCell>
                       <p title={order.color || "Sin color"} className="line-clamp-2 break-words text-xs font-semibold leading-4 text-stone-900">
@@ -855,6 +858,10 @@ function dateTime(value?: string | null) {
   if (!value) return 0;
   const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function formatOrderQuantity(quantity?: number) {
+  return new Intl.NumberFormat("es-CL", { maximumFractionDigits: 2 }).format(quantity ?? 1);
 }
 
 function clamp(value: number, min: number, max: number) {
