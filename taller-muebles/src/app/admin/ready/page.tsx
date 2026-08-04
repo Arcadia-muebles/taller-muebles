@@ -48,7 +48,7 @@ export default async function ReadyForDeliveryPage() {
             <thead>
               <tr>
                 <HeaderCell>Codigo / cliente</HeaderCell>
-                <HeaderCell>Producto</HeaderCell>
+                <HeaderCell>Unidades / productos</HeaderCell>
                 <HeaderCell>Color</HeaderCell>
                 <HeaderCell>Entrega</HeaderCell>
                 <HeaderCell>Avance</HeaderCell>
@@ -59,7 +59,7 @@ export default async function ReadyForDeliveryPage() {
               {ready.map((order) => {
                 const progress = 100;
                 const groupOrders = productionOrderGroup(orders, order);
-                const productSummary = groupOrders.map((item) => item.product).join(" · ");
+                const totalUnits = groupOrders.reduce((sum, item) => sum + orderQuantity(item.quantity), 0);
                 const colors = [...new Set(groupOrders.map((item) => item.color).filter(Boolean))];
                 return (
                   <tr key={order.id} className="group">
@@ -76,11 +76,20 @@ export default async function ReadyForDeliveryPage() {
                       </Link>
                     </BodyCell>
                     <BodyCell>
-                      <p className="whitespace-normal break-words text-xs font-semibold uppercase leading-5 text-stone-950">
-                        {groupOrders.length > 1 ? `${groupOrders.length} productos` : order.product}
-                      </p>
-                      {groupOrders.length > 1 ? <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-stone-600">{productSummary}</p> : null}
-                      <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-[0.04em] text-stone-500">Pedido {order.groupCode}</p>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-xs font-semibold text-stone-950">
+                          {formatQuantity(totalUnits)} {totalUnits === 1 ? "unidad" : "unidades"}
+                        </p>
+                        <p className="truncate text-[10px] font-medium uppercase tracking-[0.04em] text-stone-500">Pedido {order.groupCode}</p>
+                      </div>
+                      <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] uppercase leading-4 text-stone-600">
+                        {groupOrders.map((item) => (
+                          <li key={item.id} className="max-w-full break-words">
+                            <span className="mr-1 font-mono font-semibold tabular-nums text-stone-900">{formatQuantity(orderQuantity(item.quantity))}×</span>
+                            {item.product}
+                          </li>
+                        ))}
+                      </ul>
                     </BodyCell>
                     <BodyCell>
                       <p className="truncate text-xs font-semibold text-stone-900">{colors.length > 1 ? "Varios" : colors[0] || "Sin color"}</p>
@@ -150,4 +159,12 @@ function BodyCell({ children, className }: { children: React.ReactNode; classNam
       {children}
     </td>
   );
+}
+
+function orderQuantity(quantity?: number) {
+  return typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 1;
+}
+
+function formatQuantity(quantity: number) {
+  return new Intl.NumberFormat("es-CL", { maximumFractionDigits: 2 }).format(quantity);
 }

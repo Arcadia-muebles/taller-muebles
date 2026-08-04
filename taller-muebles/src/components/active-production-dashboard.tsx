@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { moveOrderStage } from "@/app/admin/orders/actions";
 import { updateStructureStage } from "@/app/admin/structures/actions";
 import { updateProductionStep } from "@/app/taller/actions";
@@ -56,7 +56,7 @@ const dashboardColumns: Array<{
   align?: "left" | "center";
 }> = [
   { key: "code", label: "Codigo / cliente", width: 145, min: 120, max: 280 },
-  { key: "product", label: "Producto / cantidad", width: 190, min: 150, max: 420 },
+  { key: "product", label: "Cantidad / producto", width: 190, min: 150, max: 420 },
   { key: "color", label: "Color", width: 75, min: 65, max: 170 },
   { key: "process", label: "Procesos", width: 250, min: 220, max: 500, align: "center" },
   { key: "status", label: "Estado actual", width: 120, min: 110, max: 260 },
@@ -82,6 +82,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
   const [filter, setFilter] = useState<DashboardFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("delivery");
   const [page, setPage] = useState(1);
+  const [isPrintingAllOrders, setIsPrintingAllOrders] = useState(false);
   const [optimisticStage, setOptimisticStage] = useState<Record<string, AreaKey>>({});
   const [optimisticStepStatuses, setOptimisticStepStatuses] = useState<Record<string, OptimisticStepStatus>>({});
   const [optimisticStructureStages, setOptimisticStructureStages] = useState<Record<string, StructureStage>>({});
@@ -118,7 +119,27 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
     () => displayedOrders.slice((currentPage - 1) * ORDERS_PER_PAGE, currentPage * ORDERS_PER_PAGE),
     [currentPage, displayedOrders],
   );
+  const renderedOrders = isPrintingAllOrders ? displayedOrders : paginatedOrders;
   const pageNumbers = useMemo(() => visiblePageNumbers(currentPage, totalPages), [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (!isPrintingAllOrders) return;
+
+    document.body.classList.add("printing-production-list");
+    const printFrame = window.requestAnimationFrame(() => {
+      try {
+        window.print();
+      } finally {
+        document.body.classList.remove("printing-production-list");
+        setIsPrintingAllOrders(false);
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(printFrame);
+      document.body.classList.remove("printing-production-list");
+    };
+  }, [isPrintingAllOrders]);
 
   const counters = useMemo(() => buildCounters(activeOrders, enabledSteps.filter((step) => !isDashboardMetricHiddenStep(step)), finishedCount), [activeOrders, enabledSteps, finishedCount]);
   const structureRequestStatusByOrder = useMemo(
@@ -310,7 +331,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
   }
 
   return (
-    <section className="mt-5 space-y-3">
+    <section className="production-list-print-root mt-5 space-y-3">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[repeat(6,minmax(0,1fr))]">
         {counters.byStep.map((item) => (
           <MetricCard
@@ -331,19 +352,20 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
         />
       </div>
 
-      <section className="panel overflow-hidden">
-        <div className="border-b border-stone-200 p-3">
+      <section className="production-list-print-area panel overflow-hidden print:overflow-visible">
+        <div className="production-list-print-controls border-b border-stone-200 p-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="-mx-1 flex min-w-0 flex-nowrap gap-1.5 overflow-x-auto px-1 pb-1">
               <FilterChip active={filter === "all"} label="Todos" count={dashboardOrders.length} onClick={() => updateFilter("all")} />
               <FilterChip active={filter === "active"} label="Activos" count={activeOrders.length} onClick={() => updateFilter("active")} />
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => setIsPrintingAllOrders(true)}
+                disabled={isPrintingAllOrders}
                 className="inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-stone-50 hover:text-stone-950"
               >
                 <Printer className="size-3.5" />
-                Imprimir lista
+                {isPrintingAllOrders ? "Preparando..." : "Imprimir lista"}
               </button>
             </div>
 
@@ -392,8 +414,8 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
           ) : null}
         </div>
 
-        <div className="overflow-x-auto bg-stone-50/70 p-1.5">
-          <table className="w-full table-fixed border-separate border-spacing-y-1" style={{ minWidth: tableWidth }}>
+        <div className="production-list-table-scroll overflow-x-auto bg-stone-50/70 p-1.5">
+          <table className="production-list-table w-full table-fixed border-separate border-spacing-y-1" style={{ minWidth: tableWidth }}>
             <colgroup>
               {dashboardColumns.map((column) => (
                 <col key={column.key} style={{ width: columnWidths[column.key] }} />
@@ -435,7 +457,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
               </tr>
             </thead>
             <tbody>
-              {paginatedOrders.map((order) => {
+              {renderedOrders.map((order) => {
                 const structureStage = optimisticStructureStages[order.id]
                   ?? structureStageFor(order, structureRequestStatusByOrder.get(order.id));
                 const presentation = statusPresentation(order, structureStage);
@@ -473,9 +495,9 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
                       </div>
                     </BodyCell>
                     <BodyCell>
-                      <p className="whitespace-normal break-words text-xs font-semibold uppercase leading-5 text-stone-950">{order.product}</p>
-                      <p className="mt-1 text-[11px] font-semibold text-stone-500">
-                        Cantidad: {formatOrderQuantity(order.quantity)}
+                      <p className="whitespace-normal break-words text-xs font-semibold uppercase leading-5 text-stone-950">
+                        <span className="mr-1.5 font-mono text-stone-500">{formatOrderQuantity(order.quantity)}</span>
+                        {order.product}
                       </p>
                     </BodyCell>
                     <BodyCell>
@@ -533,7 +555,7 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
           </table>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-stone-200 px-4 py-3 text-xs text-stone-500 sm:flex-row sm:items-center sm:justify-between">
+        <div className="production-list-print-controls flex flex-col gap-3 border-t border-stone-200 px-4 py-3 text-xs text-stone-500 sm:flex-row sm:items-center sm:justify-between">
           <span>{paginationLabel(displayedOrders.length, currentPage)}</span>
           {totalPages > 1 ? (
             <nav className="flex items-center gap-1" aria-label="Paginación de notas">
@@ -861,7 +883,9 @@ function dateTime(value?: string | null) {
 }
 
 function formatOrderQuantity(quantity?: number) {
-  return new Intl.NumberFormat("es-CL", { maximumFractionDigits: 2 }).format(quantity ?? 1);
+  const value = quantity ?? 1;
+  if (Number.isInteger(value)) return String(value).padStart(2, "0");
+  return new Intl.NumberFormat("es-CL", { minimumIntegerDigits: 2, maximumFractionDigits: 2 }).format(value);
 }
 
 function clamp(value: number, min: number, max: number) {

@@ -399,6 +399,78 @@ select {
     margin: 6mm;
   }
 
+  @page production-list {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  body.printing-production-list * {
+    visibility: hidden;
+  }
+
+  body.printing-production-list .production-list-print-area,
+  body.printing-production-list .production-list-print-area * {
+    visibility: visible;
+  }
+
+  body.printing-production-list .production-list-print-area {
+    page: production-list;
+    width: 100%;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.printing-production-list main > div > :not(.production-list-print-root),
+  body.printing-production-list .production-list-print-root > :not(.production-list-print-area) {
+    display: none !important;
+  }
+
+  body.printing-production-list .production-list-print-root,
+  body.printing-production-list .production-list-print-area {
+    margin: 0 !important;
+  }
+
+  body.printing-production-list .production-list-print-controls {
+    display: none !important;
+  }
+
+  body.printing-production-list .production-list-table-scroll {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  body.printing-production-list .production-list-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  body.printing-production-list .production-list-table col:nth-child(1) { width: 15% !important; }
+  body.printing-production-list .production-list-table col:nth-child(2) { width: 20% !important; }
+  body.printing-production-list .production-list-table col:nth-child(3) { width: 9% !important; }
+  body.printing-production-list .production-list-table col:nth-child(4) { width: 26% !important; }
+  body.printing-production-list .production-list-table col:nth-child(5) { width: 13% !important; }
+  body.printing-production-list .production-list-table col:nth-child(6) { width: 10% !important; }
+  body.printing-production-list .production-list-table col:nth-child(7) { width: 7% !important; }
+
+  body.printing-production-list .production-list-table thead {
+    display: table-header-group;
+  }
+
+  body.printing-production-list .production-list-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.printing-production-list main,
+  body.printing-production-list main > div {
+    padding: 0 !important;
+  }
+
   body.printing-sales-note * {
     visibility: hidden;
   }
