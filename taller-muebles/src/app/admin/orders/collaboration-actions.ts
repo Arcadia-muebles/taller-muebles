@@ -124,6 +124,7 @@ export async function uploadOrderAttachment(formData: FormData) {
   }
 
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath("/admin");
   revalidatePath(`/taller/orders/${orderId}`);
   revalidatePath("/taller");
   return { ok: true, message: "Archivo adjuntado." };

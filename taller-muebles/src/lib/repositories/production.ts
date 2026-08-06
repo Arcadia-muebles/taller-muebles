@@ -19,7 +19,7 @@ import type {
   CommercialDocumentType,
 } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { getLocalOrder, listLocalAgendaItems, listLocalAuditLogs, listLocalOrderAttachments, listLocalOrderCommentsForOrders, listLocalOrders, listLocalStockItems, listLocalStockMovements, listLocalStructureRequests, listLocalSuppliers } from "@/lib/local-store";
+import { getLocalOrder, listLocalAgendaItems, listLocalAuditLogs, listLocalOrderAttachmentsForOrders, listLocalOrderCommentsForOrders, listLocalOrders, listLocalStockItems, listLocalStockMovements, listLocalStructureRequests, listLocalSuppliers } from "@/lib/local-store";
 import { shortOrderCode } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -437,30 +437,53 @@ function areaLabel(area: string) {
 }
 
 export async function listOrderAttachments(orderId: string): Promise<OrderAttachment[]> {
-  if (!hasSupabaseConfig()) return listLocalOrderAttachments(orderId);
+  const attachmentsByOrder = await listAttachmentsForOrders([orderId]);
+  return attachmentsByOrder[orderId] ?? [];
+}
+
+export async function listAttachmentsForOrders(orderIds: string[]): Promise<Record<string, OrderAttachment[]>> {
+  const uniqueOrderIds = [...new Set(orderIds.filter(Boolean))];
+  if (!uniqueOrderIds.length) return {};
+
+  if (!hasSupabaseConfig()) {
+    return groupAttachmentsByOrder(await listLocalOrderAttachmentsForOrders(uniqueOrderIds));
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_attachments")
     .select("*")
-    .eq("order_id", orderId)
+    .in("order_id", uniqueOrderIds)
     .order("created_at", { ascending: false });
-  if (error || !data) return [];
+  if (error || !data) return {};
 
-  return Promise.all(data.map(async (attachment) => {
-    const { data: signed } = await supabase.storage
-      .from("order-attachments")
-      .createSignedUrl(attachment.storage_path, 60 * 15);
+  const { data: signedUrls } = await supabase.storage
+    .from("order-attachments")
+    .createSignedUrls(data.map((attachment) => attachment.storage_path), 60 * 15);
+  const signedUrlByPath = new Map<string, string>();
+  for (const signed of signedUrls ?? []) {
+    if (signed.path && signed.signedUrl) signedUrlByPath.set(signed.path, signed.signedUrl);
+  }
+
+  const attachments = data.map((attachment) => {
     return {
       id: attachment.id,
       orderId: attachment.order_id,
       fileName: attachment.file_name,
       fileType: attachment.file_type,
       fileSize: Number(attachment.file_size_bytes ?? 0),
-      url: signed?.signedUrl ?? "#",
+      url: signedUrlByPath.get(attachment.storage_path) ?? "#",
       createdAt: attachment.created_at,
     };
-  }));
+  });
+  return groupAttachmentsByOrder(attachments);
+}
+
+function groupAttachmentsByOrder(attachments: OrderAttachment[]) {
+  return attachments.reduce<Record<string, OrderAttachment[]>>((grouped, attachment) => {
+    (grouped[attachment.orderId] ??= []).push(attachment);
+    return grouped;
+  }, {});
 }
 
 function mapOrderRecord(record: OrderRecord): Order {

@@ -20,6 +20,7 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { forwardRef, useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { Controller, useFieldArray, useForm, useWatch, type Control, type Resolver, type UseFormRegister } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
 import { TouchDatePicker } from "@/components/touch-date-picker";
@@ -66,8 +67,9 @@ export function OrderForm({
   const [printPreparing, setPrintPreparing] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfSuccess, setPdfSuccess] = useState<string | null>(null);
-  const [pdfReadyToShare, setPdfReadyToShare] = useState(false);
-  const pdfShareRef = useRef<{ file: File; formSnapshot: string } | null>(null);
+  const [pdfNameDialogOpen, setPdfNameDialogOpen] = useState(false);
+  const [pdfName, setPdfName] = useState("");
+  const preparedPdfRef = useRef<{ blob: Blob; formSnapshot: string } | null>(null);
   const lastAutoCode = useRef<string | null>(initialValues?.salesNoteNumber ?? nextCodes.LR);
   const defaultEntryDate = new Date().toISOString().slice(0, 10);
   const {
@@ -201,6 +203,23 @@ export function OrderForm({
     setValue("paymentMethod", "", { shouldDirty: true, shouldValidate: false });
   }, [isQuote, orderId, payments.length, replacePayments, setValue]);
 
+  useEffect(() => {
+    if (!pdfNameDialogOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !pdfSaving) setPdfNameDialogOpen(false);
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [pdfNameDialogOpen, pdfSaving]);
+
   const submit = handleSubmit((_values, event) => {
     if (readOnly) return;
     if (!(event?.target instanceof HTMLFormElement)) return;
@@ -228,15 +247,12 @@ export function OrderForm({
     const printArea = document.querySelector<HTMLElement>(".sales-note-print-area");
     if (!printArea || pdfSaving) return;
 
-    const preparedPdf = pdfShareRef.current;
-    if (preparedPdf) {
-      if (preparedPdf.formSnapshot === JSON.stringify(getValues())) {
-        await shareSalesNotePdf(preparedPdf.file);
-        return;
-      }
-
-      pdfShareRef.current = null;
-      setPdfReadyToShare(false);
+    const formSnapshot = JSON.stringify(getValues());
+    const preparedPdf = preparedPdfRef.current;
+    if (preparedPdf?.formSnapshot === formSnapshot) {
+      setPdfName((current) => current.trim() || pdfFileName(documentLabel, getValues("salesNoteNumber")));
+      setPdfNameDialogOpen(true);
+      return;
     }
 
     setPdfSaving(true);
@@ -244,26 +260,6 @@ export function OrderForm({
     setPdfSuccess(null);
 
     try {
-      const fileName = pdfFileName(documentLabel, getValues("salesNoteNumber"));
-      const saveFilePicker = getSaveFilePicker();
-      let fileHandle: SaveFileHandle | undefined;
-
-      if (saveFilePicker) {
-        try {
-          fileHandle = await saveFilePicker({
-            suggestedName: fileName,
-            types: [
-              {
-                description: "Documento PDF",
-                accept: { "application/pdf": [".pdf"] },
-              },
-            ],
-          });
-        } catch (error) {
-          if (isFilePickerCancellation(error)) return;
-        }
-      }
-
       const [canvas, { jsPDF }] = await Promise.all([renderSalesNoteCanvas(printArea), import("jspdf")]);
       const pdf = new jsPDF({
         orientation: "portrait",
@@ -281,27 +277,9 @@ export function OrderForm({
 
       pdf.addImage(canvas.toDataURL("image/png"), "PNG", left, margin, width, height, undefined, "FAST");
       const pdfBlob = pdf.output("blob");
-
-      if (fileHandle) {
-        const writable = await fileHandle.createWritable();
-        await writable.write(pdfBlob);
-        await writable.close();
-        setPdfSuccess("PDF guardado correctamente.");
-      } else {
-        const shareablePdf = getShareablePdf(pdfBlob, fileName);
-
-        if (shareablePdf) {
-          pdfShareRef.current = {
-            file: shareablePdf,
-            formSnapshot: JSON.stringify(getValues()),
-          };
-          setPdfReadyToShare(true);
-          await shareSalesNotePdf(shareablePdf);
-        } else {
-          downloadBlob(pdfBlob, fileName);
-          setPdfSuccess("PDF descargado directamente.");
-        }
-      }
+      preparedPdfRef.current = { blob: pdfBlob, formSnapshot };
+      setPdfName(pdfFileName(documentLabel, getValues("salesNoteNumber")));
+      setPdfNameDialogOpen(true);
     } catch (error) {
       console.error("No se pudo generar el PDF", error);
       setPdfError("No se pudo generar el PDF. Intenta nuevamente.");
@@ -310,37 +288,78 @@ export function OrderForm({
     }
   }
 
-  async function shareSalesNotePdf(file: File) {
+  async function savePreparedSalesNotePdf() {
+    const preparedPdf = preparedPdfRef.current;
+    if (!preparedPdf || pdfSaving) return;
+
+    const fileName = normalizePdfFileName(pdfName, pdfFileName(documentLabel, getValues("salesNoteNumber")));
     setPdfSaving(true);
     setPdfError(null);
     setPdfSuccess(null);
 
     try {
-      const shareOperation = navigator.share({
-        files: [file],
-        title: file.name,
-      });
+      const saveFilePicker = getSaveFilePicker();
+
+      if (saveFilePicker) {
+        let fileHandle: SaveFileHandle;
+
+        try {
+          fileHandle = await saveFilePicker({
+            suggestedName: fileName,
+            types: [
+              {
+                description: "Documento PDF",
+                accept: { "application/pdf": [".pdf"] },
+              },
+            ],
+          });
+        } catch (error) {
+          if (isFilePickerCancellation(error)) return;
+          throw error;
+        }
+
+        const writable = await fileHandle.createWritable();
+        await writable.write(preparedPdf.blob);
+        await writable.close();
+        preparedPdfRef.current = null;
+        setPdfNameDialogOpen(false);
+        setPdfSuccess(`PDF guardado como “${fileName}”.`);
+        return;
+      }
+
+      const shareablePdf = getShareablePdf(preparedPdf.blob, fileName);
+      if (!shareablePdf) {
+        downloadBlob(preparedPdf.blob, fileName);
+        preparedPdfRef.current = null;
+        setPdfNameDialogOpen(false);
+        setPdfSuccess(`PDF descargado como “${fileName}”.`);
+        return;
+      }
+
+      const shareOperation = navigator.share({ files: [shareablePdf], title: fileName });
 
       // Safari puede mantener esta promesa abierta mientras se muestra la hoja
       // nativa. Liberamos el botón para no dejar la interfaz bloqueada.
+      setPdfNameDialogOpen(false);
       setPdfSaving(false);
       await shareOperation;
-      pdfShareRef.current = null;
-      setPdfReadyToShare(false);
-      setPdfSuccess("PDF enviado a la opción seleccionada.");
+      preparedPdfRef.current = null;
+      setPdfSuccess(`PDF enviado como “${fileName}”.`);
     } catch (error) {
       if (isShareCancellation(error)) {
-        setPdfSuccess("PDF listo. Toca “Guardar como…” para elegir Guardar en Archivos.");
+        setPdfSuccess("Guardado cancelado. Puedes tocar “Guardar PDF” para intentarlo nuevamente.");
         return;
       }
 
       if (isMissingShareActivation(error)) {
-        setPdfSuccess("PDF listo. Toca “Guardar como…” para elegir Guardar en Archivos.");
+        setPdfNameDialogOpen(true);
+        setPdfSuccess("PDF listo. Toca “Continuar” nuevamente para abrir Archivos.");
         return;
       }
 
       console.error("No se pudo abrir el menú para guardar el PDF", error);
-      setPdfError("No se pudo abrir el menú del iPad. Toca “Guardar como…” para intentarlo nuevamente.");
+      setPdfNameDialogOpen(true);
+      setPdfError("No se pudo abrir el menú del iPad. Intenta nuevamente.");
     } finally {
       setPdfSaving(false);
     }
@@ -534,7 +553,7 @@ export function OrderForm({
               <div className="grid gap-2 sm:grid-cols-[auto_auto_180px_180px]">
                 <button type="button" onClick={saveSalesNotePdf} disabled={pdfSaving} className="btn btn-secondary h-10 whitespace-nowrap">
                   <Download className="size-4" />
-                  {pdfSaving ? "Guardando..." : pdfReadyToShare ? "Guardar como…" : "Guardar PDF"}
+                  {pdfSaving ? "Preparando..." : "Guardar PDF"}
                 </button>
                 <button type="button" onClick={printSalesNote} disabled={printPreparing} className="btn btn-secondary h-10 whitespace-nowrap">
                   <Printer className="size-4" />
@@ -901,6 +920,59 @@ export function OrderForm({
             </div>
           </div>
         ) : null}
+        {pdfNameDialogOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-[100] flex items-end justify-center bg-stone-950/35 p-0 backdrop-blur-[1px] sm:items-center sm:p-5"
+                onMouseDown={() => {
+                  if (!pdfSaving) setPdfNameDialogOpen(false);
+                }}
+              >
+                <section
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="pdf-file-name-title"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  className="w-full rounded-t-2xl border border-stone-200 bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-xl"
+                >
+                  <h2 id="pdf-file-name-title" className="text-base font-semibold text-stone-950">Nombre del archivo</h2>
+                  <p className="mt-1 text-sm leading-5 text-stone-500">
+                    Este nombre aparecerá cuando elijas “Guardar en Archivos” en el iPad.
+                  </p>
+                  <label className="mt-5 block">
+                    <span className="field-label">Nombre del PDF</span>
+                    <input
+                      autoFocus
+                      value={pdfName}
+                      onChange={(event) => setPdfName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        void savePreparedSalesNotePdf();
+                      }}
+                      maxLength={120}
+                      className="control-lg mt-2 w-full bg-white"
+                      placeholder="nota-de-venta.pdf"
+                      aria-describedby="pdf-file-name-help"
+                    />
+                    <span id="pdf-file-name-help" className="mt-2 block text-xs text-stone-500">
+                      Si no escribes “.pdf”, se agregará automáticamente.
+                    </span>
+                  </label>
+                  <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" onClick={() => setPdfNameDialogOpen(false)} disabled={pdfSaving} className="btn-lg btn-secondary">
+                      Cancelar
+                    </button>
+                    <button type="button" onClick={() => void savePreparedSalesNotePdf()} disabled={pdfSaving || !pdfName.trim()} className="btn-lg btn-primary">
+                      <Download className="size-4" />
+                      {pdfSaving ? "Abriendo..." : "Continuar"}
+                    </button>
+                  </div>
+                </section>
+              </div>,
+              document.body,
+            )
+          : null}
       </form>
     );
   }
@@ -1603,6 +1675,17 @@ function pdfFileName(documentLabel: string, documentCode?: string) {
     .replace(/^-|-$/g, "");
   const safeCode = documentCode?.trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "sin-numero";
   return `${safeLabel || "documento"}-${safeCode}.pdf`;
+}
+
+function normalizePdfFileName(fileName: string, fallback: string) {
+  const withoutExtension = fileName.trim().replace(/\.pdf$/i, "");
+  const safeName = withoutExtension
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/g, "")
+    .trim();
+  const fallbackName = fallback.replace(/\.pdf$/i, "");
+  return `${safeName || fallbackName}.pdf`;
 }
 
 type SaveFileHandle = {

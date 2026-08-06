@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Download, FileUp, MessageSquareText, Paperclip, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useActionState, useRef } from "react";
 import { type CollaborationActionResult, uploadOrderAttachment } from "@/app/admin/orders/collaboration-actions";
 import type { OrderAttachment, OrderComment } from "@/lib/types";
@@ -15,33 +16,41 @@ export function OrderCollaboration({
   attachments,
   canComment,
   canUpload,
+  compact = false,
 }: {
   orderId: string;
   comments: OrderComment[];
   attachments: OrderAttachment[];
   canComment: boolean;
   canUpload: boolean;
+  compact?: boolean;
 }) {
+  const router = useRouter();
   const uploadFormRef = useRef<HTMLFormElement>(null);
   const [uploadState, uploadAction] = useActionState(
     async (_state: CollaborationActionResult, formData: FormData) => {
       const result = await uploadOrderAttachment(formData);
-      if (result.ok) uploadFormRef.current?.reset();
+      if (result.ok) {
+        uploadFormRef.current?.reset();
+        router.refresh();
+      }
       return result;
     },
     initialActionState,
   );
 
   return (
-    <section className="overflow-hidden rounded-lg border border-stone-200 bg-white">
-      <div className="flex items-center gap-3 border-b border-stone-200 p-4">
-        <MessageSquareText className="size-5 text-stone-500" />
-        <div>
-          <h2 className="text-base font-semibold">Comunicación interna</h2>
-          <p className="text-sm text-stone-500">Notas entre administración y los procesos del taller.</p>
+    <section className={compact ? "min-h-0 flex-1 overflow-y-auto" : "overflow-hidden rounded-lg border border-stone-200 bg-white"}>
+      {!compact ? (
+        <div className="flex items-center gap-3 border-b border-stone-200 p-4">
+          <MessageSquareText className="size-5 text-stone-500" />
+          <div>
+            <h2 className="text-base font-semibold">Comunicación interna</h2>
+            <p className="text-sm text-stone-500">Notas entre administración y los procesos del taller.</p>
+          </div>
         </div>
-      </div>
-      <OrderNotes orderId={orderId} comments={comments} canComment={canComment} />
+      ) : null}
+      <OrderNotes orderId={orderId} comments={comments} canComment={canComment} compact={compact} />
 
       <div className="flex items-center gap-3 border-y border-stone-200 bg-stone-50/70 p-4">
         <Paperclip className="size-5 text-stone-500" />

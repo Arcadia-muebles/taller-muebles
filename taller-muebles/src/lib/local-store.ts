@@ -995,8 +995,13 @@ export async function updateLocalProductionStepComment(
 }
 
 export async function listLocalOrderAttachments(orderId: string): Promise<OrderAttachment[]> {
+  return listLocalOrderAttachmentsForOrders([orderId]);
+}
+
+export async function listLocalOrderAttachmentsForOrders(orderIds: string[]): Promise<OrderAttachment[]> {
+  const allowedOrderIds = new Set(orderIds);
   return (await readData()).attachments
-    .filter((attachment) => attachment.orderId === orderId)
+    .filter((attachment) => allowedOrderIds.has(attachment.orderId))
     .map((attachment) => ({
       id: attachment.id,
       orderId: attachment.orderId,

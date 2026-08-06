@@ -25,7 +25,7 @@ import { OrderLabelPrintButton } from "@/components/order-label-print-button";
 import { OrderNotesDialog } from "@/components/order-notes-dialog";
 import { completionPercent, isReadyForDelivery } from "@/lib/metrics";
 import { compareOrderGroupMembers, isIndependentStartStep, isProductionOrder, orderGroupPositions, productionOrderGroup, productionStepPrerequisitesMet } from "@/lib/orders";
-import type { AreaKey, Order, OrderComment, ProductionStep, StepStatus, StructureRequest, SystemSettings } from "@/lib/types";
+import type { AreaKey, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StructureRequest, SystemSettings } from "@/lib/types";
 import { cn, daysUntil, deliveryLabel, formatDate } from "@/lib/utils";
 
 type ActiveProductionDashboardProps = {
@@ -34,6 +34,7 @@ type ActiveProductionDashboardProps = {
   canMove: boolean;
   canComment: boolean;
   commentsByOrder?: Record<string, OrderComment[]>;
+  attachmentsByOrder?: Record<string, OrderAttachment[]>;
   structureRequests?: StructureRequest[];
   finishedCount?: number;
 };
@@ -66,7 +67,7 @@ const dashboardColumns: Array<{
 
 const defaultColumnWidths = Object.fromEntries(dashboardColumns.map((column) => [column.key, column.width])) as Record<DashboardColumnKey, number>;
 
-export function ActiveProductionDashboard({ orders, steps, canMove, canComment, commentsByOrder = {}, structureRequests = [], finishedCount = 0 }: ActiveProductionDashboardProps) {
+export function ActiveProductionDashboard({ orders, steps, canMove, canComment, commentsByOrder = {}, attachmentsByOrder = {}, structureRequests = [], finishedCount = 0 }: ActiveProductionDashboardProps) {
   const enabledSteps = useMemo(() => steps.filter((step) => step.enabled), [steps]);
   const dashboardSteps = useMemo(() => enabledSteps.filter((step) => !isDashboardHiddenStep(step)), [enabledSteps]);
   const normalizedOrders = useMemo(
@@ -478,7 +479,12 @@ export function ActiveProductionDashboard({ orders, steps, canMove, canComment, 
                               <p className="truncate text-lg font-semibold text-stone-950 group-hover:underline">{order.code}</p>
                             </Link>
                             <OrderLabelPrintButton order={order} groupOrders={groupOrders} compact />
-                            <OrderNotesDialog order={order} comments={commentsByOrder[order.id] ?? []} canComment={canComment} />
+                            <OrderNotesDialog
+                              order={order}
+                              comments={commentsByOrder[order.id] ?? []}
+                              attachments={attachmentsByOrder[order.id] ?? []}
+                              canComment={canComment}
+                            />
                           </div>
                           <Link href={`/admin/orders/${order.id}`} className="block min-w-0">
                             <p className="mt-1 truncate text-xs font-medium text-stone-600">{order.store === "LH" ? "Leather House" : "La Reina"}</p>
