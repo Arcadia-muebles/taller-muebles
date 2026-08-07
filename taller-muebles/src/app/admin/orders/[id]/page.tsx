@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
@@ -46,10 +46,6 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   if (!order) {
     notFound();
   }
-  if (order.documentType === "quote") {
-    redirect(`/admin/documents/${encodeURIComponent(order.groupCode || order.code)}`);
-  }
-
   const progress = completionPercent(order);
   const canEditOrder = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
   const canCommentOnSteps = user.role === "admin" || user.role === "manager";
@@ -60,22 +56,23 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
     .filter((item) => (item.groupCode || item.code) === documentCode)
     .sort((a, b) => a.product.localeCompare(b.product));
   const showProductionView = query.view === "production";
+  const isQuote = order.documentType === "quote";
 
   if (!showProductionView) {
     return (
       <AppShell active="admin" user={user}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <Link
-            href="/admin"
+            href={isQuote ? "/admin/documents" : "/admin"}
             className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-950"
           >
             <ArrowLeft className="size-4" />
-            Volver al panel
+            {isQuote ? "Volver a comercial" : "Volver al panel"}
           </Link>
           <div className="flex flex-wrap gap-2">
             {canEditOrder ? (
               <Link href={`/admin/orders/${order.id}/edit`} className="btn btn-primary">
-                Editar orden
+                {isQuote ? "Editar cotización" : "Editar orden"}
               </Link>
             ) : null}
             {user.role === "admin" ? <DeleteOrderAction orderId={order.id} orderCode={documentCode} /> : null}

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, CalendarDays, FileText, Pencil, Wrench } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
@@ -26,6 +26,11 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
 
   const document = documentOrders[0];
   const isQuote = document.documentType === "quote";
+
+  if (isQuote) {
+    redirect(`/admin/orders/${document.id}`);
+  }
+
   const financials = documentFinancials(document, documentOrders);
   const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
 

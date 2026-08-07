@@ -383,7 +383,7 @@ export function OrderForm({
 
   if (isLeatherHouse) {
     return (
-      <form key="leather-house-intake" action={formAction} onSubmit={submit} className="space-y-4">
+      <form key="leather-house-intake" action={formAction} onSubmit={submit} onKeyDown={moveToNextFormFieldOnEnter} className="space-y-4">
         <input type="hidden" name="productItems" value={JSON.stringify(products)} readOnly />
         <input type="hidden" {...register("documentType")} value="production_intake" />
         <input type="hidden" {...register("documentStatus")} value="issued" />
@@ -536,7 +536,7 @@ export function OrderForm({
 
   if (isCommercialDocument) {
     return (
-      <form key="la-reina-document" action={formAction} onSubmit={submit} className="space-y-4">
+      <form key="la-reina-document" action={formAction} onSubmit={submit} onKeyDown={moveToNextFormFieldOnEnter} className="space-y-4">
         <input type="hidden" name="productItems" value={JSON.stringify(products)} readOnly />
         <input type="hidden" {...register("subtotal")} value={computedSubtotal} readOnly />
         <input type="hidden" {...register("discount")} value={computedDiscount} readOnly />
@@ -978,7 +978,7 @@ export function OrderForm({
   }
 
   return (
-    <form action={formAction} onSubmit={submit} className="space-y-5">
+    <form action={formAction} onSubmit={submit} onKeyDown={moveToNextFormFieldOnEnter} className="space-y-5">
       <section className="panel">
         <div className="panel-header flex items-center gap-3">
           {isLeatherHouse ? <Factory className="size-5 text-stone-500" /> : <FileText className="size-5 text-stone-500" />}
@@ -1871,6 +1871,35 @@ function materializeSalesNoteExport(exportArea: HTMLElement) {
 
 function lineTotal(quantity?: number, unitPrice?: number) {
   return (Number(quantity ?? 1) || 1) * (Number(unitPrice ?? 0) || 0);
+}
+
+function moveToNextFormFieldOnEnter(event: React.KeyboardEvent<HTMLFormElement>) {
+  if (event.key !== "Enter" || event.defaultPrevented || event.nativeEvent.isComposing) return;
+
+  const currentField = event.target;
+  if (
+    !(currentField instanceof HTMLInputElement) &&
+    !(currentField instanceof HTMLSelectElement) &&
+    !(currentField instanceof HTMLTextAreaElement)
+  ) {
+    return;
+  }
+
+  if (currentField instanceof HTMLTextAreaElement && event.shiftKey) return;
+
+  event.preventDefault();
+
+  const fields = Array.from(
+    event.currentTarget.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+      'input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]), select, textarea',
+    ),
+  ).filter((field) => {
+    if (field.disabled || field.tabIndex === -1 || field.closest("[inert]")) return false;
+    return !(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) || !field.readOnly || field.getAttribute("role") === "combobox";
+  });
+
+  const nextField = fields[fields.indexOf(currentField) + 1];
+  nextField?.focus();
 }
 
 function unitNetValue(unitPrice?: number) {

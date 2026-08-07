@@ -119,7 +119,9 @@ export default async function DocumentsPage() {
                   </thead>
                   <tbody>
                     {rows.map((document) => {
-                      const documentHref = `/admin/documents/${encodeURIComponent(document.code)}`;
+                      const documentHref = isQuote
+                        ? `/admin/orders/${document.orders[0].id}`
+                        : `/admin/documents/${encodeURIComponent(document.code)}`;
                       return (
                       <tr
                         key={document.key}
