@@ -1791,6 +1791,7 @@ function openSalesNotePrintDialog({
   }
 
   const printSheet = createSalesNoteExportArea(printArea);
+  const printPage = document.createElement("div");
   const previousTitle = document.title;
   const pageStyle = document.createElement("style");
   const scale = salesNotePrintScale(printSheet);
@@ -1799,7 +1800,20 @@ function openSalesNotePrintDialog({
 
   pageStyle.dataset.salesNotePage = "true";
   pageStyle.textContent = `@page { size: letter portrait; margin: ${salesNotePage.marginMm}mm; }`;
+  printPage.className = "sales-note-print-page";
+  printPage.setAttribute("aria-hidden", "true");
+  Object.assign(printPage.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    width: `${(salesNotePage.widthMm - salesNotePage.marginMm * 2) * (96 / 25.4)}px`,
+    height: `${(salesNotePage.heightMm - salesNotePage.marginMm * 2) * (96 / 25.4)}px`,
+    overflow: "hidden",
+    pointerEvents: "none",
+  });
   printSheet.classList.add("sales-note-print-sheet");
+  printPage.appendChild(printSheet);
+  document.body.appendChild(printPage);
 
   const markReady = () => {
     if (ready) return;
@@ -1812,7 +1826,7 @@ function openSalesNotePrintDialog({
     cleanedUp = true;
     window.removeEventListener("afterprint", cleanup);
     document.body.classList.remove("printing-sales-note");
-    printSheet.remove();
+    printPage.remove();
     pageStyle.remove();
     document.title = previousTitle;
     markReady();
@@ -1844,7 +1858,8 @@ function openSalesNotePrintDialog({
 
 function salesNotePrintScale(exportArea: HTMLElement) {
   const printableWidthMm = salesNotePage.widthMm - salesNotePage.marginMm * 2;
-  const printableHeightMm = salesNotePage.heightMm - salesNotePage.marginMm * 2;
+  // Leave one physical millimeter of safety for browser/printer rounding.
+  const printableHeightMm = salesNotePage.heightMm - salesNotePage.marginMm * 2 - 1;
   const pixelsPerMillimeter = 96 / 25.4;
 
   const printableWidth = printableWidthMm * pixelsPerMillimeter;

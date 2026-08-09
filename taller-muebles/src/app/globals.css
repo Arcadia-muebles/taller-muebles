@@ -545,18 +545,36 @@ select {
     display: none !important;
   }
 
-  body.printing-sales-note .sales-note-print-sheet,
-  body.printing-sales-note .sales-note-print-sheet * {
+  body.printing-sales-note .sales-note-print-page,
+  body.printing-sales-note .sales-note-print-page * {
     visibility: visible;
   }
 
-  body.printing-sales-note .sales-note-print-sheet {
+  body.printing-sales-note .sales-note-print-page {
     page: sales-note;
     position: absolute !important;
     top: 0 !important;
     right: auto !important;
     bottom: auto !important;
-    left: 50% !important;
+    left: 0 !important;
+    display: flex !important;
+    width: 201.8mm !important;
+    height: 264.8mm !important;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: hidden !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    contain: layout paint;
+    pointer-events: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.printing-sales-note .sales-note-print-sheet {
+    position: static !important;
+    inset: auto !important;
+    flex: none;
     width: 201.9mm !important;
     max-width: none !important;
     min-height: 0;
@@ -564,11 +582,9 @@ select {
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-    transform: translateX(-50%);
+    transform: scale(var(--sales-note-print-scale, 1));
     transform-origin: top center;
-    zoom: var(--sales-note-print-scale, 1);
+    zoom: 1 !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
