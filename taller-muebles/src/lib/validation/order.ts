@@ -32,6 +32,11 @@ const requiredText = (message: string, min = 1) =>
     z.string().trim().min(min, message),
   );
 
+const includesVatSchema = z.preprocess(
+  (value) => value === undefined || value === null || value === "" ? true : value === true || value === "true" || value === "on",
+  z.boolean(),
+);
+
 const baseOrderSchema = z.object({
   store: z.enum(["LH", "LR"]),
   documentType: documentTypeSchema,
@@ -53,6 +58,7 @@ const baseOrderSchema = z.object({
   subtotal: optionalMoney,
   discount: optionalMoney,
   total: optionalMoney,
+  includesVat: includesVatSchema,
   paidAmount: optionalMoney,
   sellerName: z.string().trim().max(80, "El vendedor es demasiado largo.").optional(),
   paymentMethod: z.string().trim().max(80, "El medio de pago es demasiado largo.").optional(),

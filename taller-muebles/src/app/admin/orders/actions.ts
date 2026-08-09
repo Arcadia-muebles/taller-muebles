@@ -73,6 +73,7 @@ export async function createOrder(
     subtotal: formData.get("subtotal"),
     discount: formData.get("discount"),
     total: formData.get("total"),
+    includesVat: formData.get("includesVat"),
     paidAmount: formData.get("paidAmount"),
     sellerName: formData.get("sellerName")?.toString() || undefined,
     paymentMethod: formData.get("paymentMethod")?.toString() || undefined,
@@ -186,6 +187,7 @@ export async function createOrder(
       subtotal_amount: parsed.data.subtotal ?? null,
       discount_amount: parsed.data.discount ?? 0,
       total_amount: parsed.data.total ?? null,
+      includes_vat: parsed.data.includesVat,
       paid_amount: parsed.data.paidAmount ?? 0,
       balance_amount: parsed.data.total !== undefined ? Math.max(parsed.data.total - (parsed.data.paidAmount ?? 0), 0) : null,
       seller_name: parsed.data.sellerName || null,
@@ -290,8 +292,12 @@ export async function updateOrder(
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
     return { status: "error", message: "Tu perfil no tiene permiso para editar órdenes." };
   }
-  const previousOrder = (await listOrders()).find((order) => order.id === orderId);
+  const allOrders = await listOrders();
+  const previousOrder = allOrders.find((order) => order.id === orderId);
   if (!previousOrder) return { status: "error", message: "No se encontró la orden." };
+  const documentOrderIds = allOrders
+    .filter((order) => order.store === previousOrder.store && order.groupCode === previousOrder.groupCode)
+    .map((order) => order.id);
   const paymentItems = parsePaymentItems(formData);
   if (!paymentItems.success) return { status: "error", message: formatZodError(paymentItems.error) };
   const recordedPayments = paymentItems.data.filter((payment) => (payment.amount ?? 0) > 0);
@@ -327,6 +333,7 @@ export async function updateOrder(
     subtotal: formData.get("subtotal"),
     discount: formData.get("discount"),
     total: formData.get("total"),
+    includesVat: formData.get("includesVat"),
     paidAmount: shouldSyncPayments ? recordedPaidAmount : formData.get("paidAmount"),
     sellerName: formData.get("sellerName")?.toString() || undefined,
     paymentMethod: shouldSyncPayments ? recordedPayments.at(-1)?.method : formData.get("paymentMethod")?.toString() || undefined,
@@ -390,6 +397,7 @@ export async function updateOrder(
       subtotal_amount: parsed.data.subtotal ?? null,
       discount_amount: parsed.data.discount ?? 0,
       total_amount: parsed.data.total ?? null,
+      includes_vat: parsed.data.includesVat,
       paid_amount: parsed.data.paidAmount ?? 0,
       balance_amount: parsed.data.total !== undefined ? Math.max(parsed.data.total - (parsed.data.paidAmount ?? 0), 0) : null,
       seller_name: parsed.data.sellerName || null,
@@ -405,6 +413,13 @@ export async function updateOrder(
       status: isQuote ? "draft" : wasQuote ? "scheduled" : previousOrder.status,
     } as never).eq("id", orderId);
     if (error) return { status: "error", message: error.message };
+    if (documentOrderIds.length > 1) {
+      const { error: vatSyncError } = await supabase
+        .from("orders")
+        .update({ includes_vat: parsed.data.includesVat })
+        .in("id", documentOrderIds);
+      if (vatSyncError) return { status: "error", message: vatSyncError.message };
+    }
     if (shouldSyncPayments) {
       const paymentError = await syncSupabaseOrderPayments({
         supabase,
@@ -458,6 +473,18 @@ export async function updateOrder(
       profile_id: profileId,
       new_value: parsed.data.groupCode?.trim() || undefined,
     });
+    if (previousOrder.includesVat !== parsed.data.includesVat) {
+      await supabase.from("audit_logs").insert({
+        order_id: orderId,
+        action: "update_order_vat",
+        entity: "orders",
+        entity_id: orderId,
+        profile_id: profileId,
+        field_name: "includes_vat",
+        old_value: String(previousOrder.includesVat),
+        new_value: String(parsed.data.includesVat),
+      });
+    }
   }
 
   revalidatePath("/admin");

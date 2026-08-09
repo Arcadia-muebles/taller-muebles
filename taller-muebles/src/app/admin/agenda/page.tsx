@@ -139,9 +139,16 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
         </div>
       ) : null}
 
-      <div className="mt-5 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="agenda-print-area agenda-print-content mt-5 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <header className="agenda-print-heading hidden">
+          <div>
+            <h1>Agenda diaria</h1>
+            <p>Entregas y tareas programadas</p>
+          </div>
+          <p>{formatDate(selectedDate)}</p>
+        </header>
         <section className="min-w-0">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="agenda-screen-controls mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <DateNavButton href={`/admin/agenda?date=${addDays(selectedDate, -1)}`} icon={ChevronLeft} label="Dia anterior" />
               <DatePickerDetails selectedDate={selectedDate} />
@@ -149,17 +156,17 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
             </div>
             <div className="flex gap-2">
               <Link href={`/admin/agenda?date=${todayLocalDate()}`} className="btn btn-secondary">Hoy</Link>
-              <PrintPageButton />
+              <PrintPageButton bodyClassName="printing-agenda" />
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="agenda-print-sections space-y-4">
             {filters.slot !== "PM" ? <AgendaSection slot="AM" items={visibleItems} ordersById={ordersById} canEdit={canEdit} /> : null}
             {filters.slot !== "AM" ? <AgendaSection slot="PM" items={visibleItems} ordersById={ordersById} canEdit={canEdit} /> : null}
           </div>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="agenda-print-sidebar space-y-4">
           <MiniCalendar selectedDate={selectedDate} />
           <SidebarList
             title="Listos para entregar"

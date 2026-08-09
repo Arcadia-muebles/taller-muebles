@@ -356,6 +356,7 @@ export type Database = {
           entry_date: string
           id: string
           group_code: string
+          includes_vat: boolean
           internal_code: string
           is_warranty: boolean
           material: string | null
@@ -394,6 +395,7 @@ export type Database = {
           entry_date?: string
           id?: string
           group_code?: string
+          includes_vat?: boolean
           internal_code: string
           is_warranty?: boolean
           material?: string | null
@@ -432,6 +434,7 @@ export type Database = {
           entry_date?: string
           id?: string
           group_code?: string
+          includes_vat?: boolean
           internal_code?: string
           is_warranty?: boolean
           material?: string | null

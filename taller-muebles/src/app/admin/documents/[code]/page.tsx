@@ -181,6 +181,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
             <div className="mt-4 grid gap-3">
               <Info label="Subtotal" value={formatCurrency(financials.subtotal)} />
               <Info label="Descuento" value={formatCurrency(financials.discount)} />
+              <Info label="IVA" value={document.includesVat ? "Incluido (19%)" : "No aplicado"} />
               <Info label="Total" value={formatCurrency(financials.total)} strong />
               <Info label="Abono" value={formatCurrency(financials.paidAmount)} />
               <Info label="Saldo" value={formatCurrency(financials.balance)} strong />

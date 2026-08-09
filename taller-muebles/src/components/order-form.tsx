@@ -11,6 +11,7 @@ import {
   FileText,
   PackagePlus,
   Paperclip,
+  Percent,
   Plus,
   Printer,
   Save,
@@ -31,9 +32,11 @@ const inputClass = "control-lg bg-white";
 const labelClass = "field-label";
 const deliveryDayOptions = [10, 20, 30, 40, 50];
 const salesNotePage = {
-  widthMm: 216,
-  heightMm: 330,
-  marginMm: 6,
+  // Use Carta as the canonical output so browser print and generated PDFs match.
+  // Keep these values aligned with the named @page rule in globals.css.
+  widthMm: 215.9,
+  heightMm: 279.4,
+  marginMm: 7,
 } as const;
 const paymentMethodOptions = ["Transferencia", "Efectivo", "Débito", "Crédito", "Webpay", "Cheque", "Otro"];
 const initialState: CreateOrderState = {
@@ -90,6 +93,7 @@ export function OrderForm({
       entryDate: defaultEntryDate,
       deliveryDate: addDays(defaultEntryDate, 30),
       discount: 0,
+      includesVat: true,
       paidAmount: 0,
       customerPhone: "+56 ",
       sellerName: "Rodrigo Bravo G.",
@@ -116,6 +120,7 @@ export function OrderForm({
   const quantity = useWatch({ control, name: "quantity" });
   const unitPrice = useWatch({ control, name: "unitPrice" });
   const discountValue = useWatch({ control, name: "discount" });
+  const includesVat = useWatch({ control, name: "includesVat" }) ?? true;
   const paidAmountValue = useWatch({ control, name: "paidAmount" });
   const entryDateValue = useWatch({ control, name: "entryDate" });
   const deliveryDateValue = useWatch({ control, name: "deliveryDate" });
@@ -173,7 +178,7 @@ export function OrderForm({
   const computedPaymentsPaid = payments.reduce((sum, payment) => sum + (Number(payment?.amount ?? 0) || 0), 0);
   const computedPaid = isCommercialDocument && payments.length ? computedPaymentsPaid : Number(paidAmountValue ?? 0) || 0;
   const computedBalance = Math.max(computedTotal - computedPaid, 0);
-  const computedNet = Math.round(computedTotal / 1.19);
+  const computedNet = includesVat ? Math.round(computedTotal / 1.19) : computedTotal;
   const computedVat = Math.max(computedTotal - computedNet, 0);
   const deliveryDays = deliveryDaysBetween(entryDateValue, deliveryDateValue);
   const customerRutField = register("customerRut", {
@@ -541,6 +546,7 @@ export function OrderForm({
         <input type="hidden" {...register("subtotal")} value={computedSubtotal} readOnly />
         <input type="hidden" {...register("discount")} value={computedDiscount} readOnly />
         <input type="hidden" {...register("total")} value={computedTotal} readOnly />
+        <input type="hidden" {...register("includesVat")} value={String(includesVat)} readOnly />
         <input type="hidden" {...register("customerContact")} />
 
         <section inert={readOnly ? true : undefined} className="sales-note-print-area overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
@@ -701,7 +707,7 @@ export function OrderForm({
                         ) : null}
                       </td>
                       <td className="px-4 py-4 text-right align-top text-sm font-semibold text-stone-700">
-                        {isCommercialDocument ? formatCurrency(unitNetValue(product.unitPrice)) : "-"}
+                        {isCommercialDocument ? formatCurrency(unitNetValue(product.unitPrice, includesVat)) : "-"}
                       </td>
                       <td className="px-4 py-4 align-top text-right">
                         {isCommercialDocument ? (
@@ -745,14 +751,34 @@ export function OrderForm({
             <div className="sales-note-product-lines min-h-24 flex-1" aria-hidden="true" />
             <div className="sales-note-product-summary grid items-end gap-5 px-4 pb-4 md:grid-cols-[1fr_260px] md:px-6">
               <div>
-              <button
-                type="button"
-                onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
-                className="btn btn-secondary border-dashed"
-              >
-                <PackagePlus className="size-4" />
-                Agregar producto
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
+                  className="btn btn-secondary border-dashed"
+                >
+                  <PackagePlus className="size-4" />
+                  Agregar producto
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!includesVat}
+                  onClick={() => setValue("includesVat", !includesVat, { shouldDirty: true, shouldValidate: true })}
+                  className={`sales-note-print-hidden inline-flex h-10 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${
+                    includesVat
+                      ? "border-stone-200 bg-white text-stone-700 hover:border-stone-400"
+                      : "border-stone-950 bg-stone-950 text-white"
+                  }`}
+                >
+                  <Percent className="size-4" />
+                  {includesVat ? "IVA 19% incluido" : "Sin IVA"}
+                </button>
+              </div>
+              {!includesVat ? (
+                <p className="sales-note-print-hidden mt-2 text-xs font-medium text-stone-600">
+                  El valor neto será el total final y no se sumará IVA.
+                </p>
+              ) : null}
               <input type="hidden" {...register("groupCode")} />
             </div>
             {isCommercialDocument ? (
@@ -776,7 +802,7 @@ export function OrderForm({
                     </label>
                   </div>
                   <SummaryRow label="Neto" value={formatCurrency(computedNet)} />
-                  <SummaryRow label="IVA 19%" value={formatCurrency(computedVat)} />
+                  <SummaryRow label={includesVat ? "IVA 19%" : "IVA no aplicado"} value={formatCurrency(computedVat)} />
                   <SummaryRow label="Total" value={formatCurrency(computedTotal)} strong />
                 </div>
               </div>
@@ -1210,8 +1236,8 @@ export function OrderForm({
           </div>
           <div className="grid gap-3 border-t border-stone-200 p-4 md:grid-cols-3">
             <PaymentMetric label="Neto documento" value={formatCurrency(computedTotal)} />
-            <PaymentMetric label="Neto sin IVA" value={formatCurrency(computedNet)} />
-            <PaymentMetric label="IVA 19%" value={formatCurrency(computedVat)} />
+            <PaymentMetric label={includesVat ? "Neto sin IVA" : "Neto final"} value={formatCurrency(computedNet)} />
+            <PaymentMetric label={includesVat ? "IVA 19%" : "IVA no aplicado"} value={formatCurrency(computedVat)} />
             <PaymentMetric label="Total documento" value={formatCurrency(computedTotal)} emphasis />
             <PaymentMetric label="Abonado" value={formatCurrency(computedPaid)} />
             <PaymentMetric label="Saldo pendiente" value={formatCurrency(computedBalance)} emphasis />
@@ -1486,7 +1512,7 @@ function PaymentRows({
   return (
     <div className={compact ? "space-y-3" : "mt-2 space-y-3"}>
       {fields.map((field, index) => (
-        <div key={field.fieldKey} className="rounded-md border border-stone-200 bg-stone-50/70 p-3">
+        <div key={field.fieldKey} className={`${compact ? "sales-note-payment-entry" : ""} rounded-md border border-stone-200 bg-stone-50/70 p-3`}>
           <input {...register(`payments.${index}.id` as const)} type="hidden" />
           <div className={compact ? "sales-note-payment-row grid gap-2" : "grid gap-2 md:grid-cols-[150px_150px_1fr_1fr_40px]"}>
             <label className={compact ? "sales-note-payment-date" : undefined}>
@@ -1764,14 +1790,16 @@ function openSalesNotePrintDialog({
     return;
   }
 
+  const printSheet = createSalesNoteExportArea(printArea);
   const previousTitle = document.title;
   const pageStyle = document.createElement("style");
-  const scale = salesNotePrintScale(printArea);
+  const scale = salesNotePrintScale(printSheet);
   let cleanedUp = false;
   let ready = false;
 
   pageStyle.dataset.salesNotePage = "true";
-  pageStyle.textContent = `@page { size: ${salesNotePage.widthMm}mm ${salesNotePage.heightMm}mm; margin: ${salesNotePage.marginMm}mm; }`;
+  pageStyle.textContent = `@page { size: letter portrait; margin: ${salesNotePage.marginMm}mm; }`;
+  printSheet.classList.add("sales-note-print-sheet");
 
   const markReady = () => {
     if (ready) return;
@@ -1784,7 +1812,7 @@ function openSalesNotePrintDialog({
     cleanedUp = true;
     window.removeEventListener("afterprint", cleanup);
     document.body.classList.remove("printing-sales-note");
-    printArea.style.removeProperty("--sales-note-print-scale");
+    printSheet.remove();
     pageStyle.remove();
     document.title = previousTitle;
     markReady();
@@ -1792,13 +1820,21 @@ function openSalesNotePrintDialog({
 
   try {
     document.title = pdfFileName(documentLabel, documentCode).replace(/\.pdf$/i, "");
-    printArea.style.setProperty("--sales-note-print-scale", scale.toFixed(4));
+    printSheet.style.setProperty("--sales-note-print-scale", scale.toFixed(4));
     document.head.appendChild(pageStyle);
     document.body.classList.add("printing-sales-note");
     window.addEventListener("afterprint", cleanup, { once: true });
-    window.print();
-    markReady();
-    window.setTimeout(cleanup, 10_000);
+    window.setTimeout(() => {
+      try {
+        window.print();
+        markReady();
+      } catch (error) {
+        console.error("No se pudo abrir la impresión del documento", error);
+        cleanup();
+        onError();
+      }
+    }, 200);
+    window.setTimeout(cleanup, 60_000);
   } catch (error) {
     console.error("No se pudo abrir la impresión del documento", error);
     cleanup();
@@ -1806,17 +1842,19 @@ function openSalesNotePrintDialog({
   }
 }
 
-function salesNotePrintScale(printArea: HTMLElement) {
-  const exportArea = createSalesNoteExportArea(printArea);
+function salesNotePrintScale(exportArea: HTMLElement) {
+  const printableWidthMm = salesNotePage.widthMm - salesNotePage.marginMm * 2;
   const printableHeightMm = salesNotePage.heightMm - salesNotePage.marginMm * 2;
   const pixelsPerMillimeter = 96 / 25.4;
 
+  const printableWidth = printableWidthMm * pixelsPerMillimeter;
   const printableHeight = printableHeightMm * pixelsPerMillimeter;
-  const contentHeight = exportArea.getBoundingClientRect().height;
-  exportArea.remove();
+  const bounds = exportArea.getBoundingClientRect();
+  const contentWidth = bounds.width;
+  const contentHeight = bounds.height;
 
-  if (!Number.isFinite(contentHeight) || contentHeight <= 0) return 1;
-  return Math.min(1, printableHeight / contentHeight);
+  if (!Number.isFinite(contentWidth) || contentWidth <= 0 || !Number.isFinite(contentHeight) || contentHeight <= 0) return 1;
+  return Math.min(1, printableWidth / contentWidth, printableHeight / contentHeight);
 }
 
 function createSalesNoteExportArea(printArea: HTMLElement) {
@@ -1902,8 +1940,9 @@ function moveToNextFormFieldOnEnter(event: React.KeyboardEvent<HTMLFormElement>)
   nextField?.focus();
 }
 
-function unitNetValue(unitPrice?: number) {
-  return Math.round((Number(unitPrice ?? 0) || 0) / 1.19);
+function unitNetValue(unitPrice: number | undefined, includesVat: boolean) {
+  const price = Number(unitPrice ?? 0) || 0;
+  return includesVat ? Math.round(price / 1.19) : price;
 }
 
 function formatCurrency(value: number) {

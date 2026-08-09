@@ -638,7 +638,7 @@ function structuresPrintDocument(rows: StructureListRow[]) {
       <meta charset="utf-8" />
       <title>${escapeHtml(title)}</title>
       <style>
-        @page { size: landscape; margin: 12mm; }
+        @page { size: letter landscape; margin: 10mm; }
         * { box-sizing: border-box; }
         body { margin: 0; color: #1c1917; font: 11px Arial, Helvetica, sans-serif; }
         header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; border-bottom: 2px solid #1c1917; padding-bottom: 12px; }
@@ -646,6 +646,8 @@ function structuresPrintDocument(rows: StructureListRow[]) {
         header p { margin: 4px 0 0; color: #57534e; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
         header strong { font: 22px Georgia, serif; letter-spacing: .12em; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        thead { display: table-header-group; }
+        tr { break-inside: avoid; page-break-inside: avoid; }
         th { background: #1c1917; color: white; padding: 10px 9px; text-align: left; text-transform: uppercase; }
         td { border: 1px solid #d6d3d1; padding: 10px 9px; vertical-align: top; }
         th:nth-child(1) { width: 12%; } th:nth-child(2) { width: 12%; } th:nth-child(3) { width: 22%; } th:nth-child(4) { width: 38%; } th:nth-child(5) { width: 16%; }

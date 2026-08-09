@@ -261,6 +261,7 @@ export async function createLocalOrder(input: {
   subtotal?: number;
   discount?: number;
   total?: number;
+  includesVat?: boolean;
   paidAmount?: number;
   sellerName?: string;
   paymentMethod?: string;
@@ -315,6 +316,7 @@ export async function createLocalOrder(input: {
     subtotal: input.subtotal,
     discount: input.discount,
     total: input.total,
+    includesVat: input.includesVat ?? true,
     paidAmount: input.paidAmount,
     balance: input.total !== undefined ? Math.max(input.total - (input.paidAmount ?? 0), 0) : undefined,
     sellerName: input.sellerName?.trim() || undefined,
@@ -370,6 +372,7 @@ export async function updateLocalOrder(id: string, input: {
   subtotal?: number;
   discount?: number;
   total?: number;
+  includesVat?: boolean;
   paidAmount?: number;
   sellerName?: string;
   paymentMethod?: string;
@@ -389,6 +392,7 @@ export async function updateLocalOrder(id: string, input: {
 
   const wasQuote = order.documentType === "quote";
   const isQuote = input.documentType === "quote";
+  const previouslyIncludedVat = order.includesVat;
   order.store = input.store;
   order.documentType = input.documentType ?? order.documentType ?? (input.store === "LH" ? "production_intake" : "sales_note");
   order.documentStatus = input.documentStatus ?? order.documentStatus ?? "issued";
@@ -409,6 +413,7 @@ export async function updateLocalOrder(id: string, input: {
   order.subtotal = input.subtotal;
   order.discount = input.discount;
   order.total = input.total;
+  order.includesVat = input.includesVat ?? true;
   order.paidAmount = input.paidAmount;
   order.balance = input.total !== undefined ? Math.max(input.total - (input.paidAmount ?? 0), 0) : undefined;
   order.sellerName = input.sellerName?.trim() || undefined;
@@ -453,6 +458,17 @@ export async function updateLocalOrder(id: string, input: {
       }));
       order.assignedTo = input.assignedTo?.trim() || order.steps[0]?.owner || "Equipo Taller";
     }
+  }
+  if (previouslyIncludedVat !== order.includesVat) {
+    for (const groupedOrder of data.orders.filter((item) => item.store === order.store && item.groupCode === order.groupCode)) {
+      groupedOrder.includesVat = order.includesVat;
+    }
+    addAudit(
+      data,
+      order.id,
+      "update_order_vat",
+      order.includesVat ? "Se activó el cálculo de IVA 19%" : "Se desactivó el cálculo de IVA; el neto queda como total final",
+    );
   }
   addAudit(data, order.id, "update_order", "Datos comerciales y planificación actualizados");
   await writeData(data);
@@ -1378,6 +1394,12 @@ function addAudit(data: LocalData, orderId: string, action: string, summary: str
 
 function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolean } {
   let changed = false;
+  for (const order of data.orders) {
+    if (typeof order.includesVat !== "boolean") {
+      order.includesVat = true;
+      changed = true;
+    }
+  }
   const usersByEmail = new Set(data.users.map((user) => user.email.toLowerCase()));
   for (const user of defaultLocalUsers) {
     if (data.deletedUserIds?.includes(user.id)) continue;

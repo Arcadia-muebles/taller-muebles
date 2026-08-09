@@ -129,6 +129,7 @@ export type Order = {
   subtotal?: number;
   discount?: number;
   total?: number;
+  includesVat: boolean;
   paidAmount?: number;
   balance?: number;
   sellerName?: string;

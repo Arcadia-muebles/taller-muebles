@@ -47,6 +47,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
             subtotal: order.subtotal,
             discount: order.discount,
             total: order.total,
+            includesVat: order.includesVat,
             paidAmount: order.paidAmount,
             sellerName: order.sellerName,
             paymentMethod: order.paymentMethod,

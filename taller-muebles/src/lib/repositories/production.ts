@@ -515,6 +515,7 @@ function mapOrderRecord(record: OrderRecord): Order {
     subtotal: record.subtotal_amount === null ? undefined : Number(record.subtotal_amount),
     discount: record.discount_amount === null ? undefined : Number(record.discount_amount),
     total: record.total_amount === null ? undefined : Number(record.total_amount),
+    includesVat: record.includes_vat ?? true,
     paidAmount: record.paid_amount === null ? undefined : Number(record.paid_amount),
     balance: record.balance_amount === null ? undefined : Number(record.balance_amount),
     sellerName: (record as OrderRow & { seller_name?: string | null }).seller_name ?? undefined,

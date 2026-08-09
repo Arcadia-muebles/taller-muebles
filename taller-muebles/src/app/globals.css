@@ -260,24 +260,25 @@ select {
 }
 
 .sales-note-pdf-export .sales-note-products-section {
-  min-height: 370px !important;
+  min-height: 286px !important;
 }
 
 .sales-note-pdf-export .sales-note-product-lines {
-  min-height: 90px !important;
+  min-height: 54px !important;
   background: #ffffff !important;
 }
 
 .sales-note-pdf-export .sales-note-pdf-product-line {
-  height: 36px;
+  height: 18px;
   border-bottom: 1px solid rgb(231 229 228);
 }
 
 .sales-note-pdf-export .sales-note-pdf-value {
   display: block;
-  min-height: 1.35em;
+  min-height: 1.2em;
+  height: auto !important;
   overflow: visible !important;
-  line-height: 1.35 !important;
+  line-height: 1.2 !important;
   white-space: pre-wrap;
 }
 
@@ -297,7 +298,10 @@ select {
 
 .sales-note-pdf-export .sales-note-document-header {
   grid-template-columns: 190px 1fr 170px !important;
+  gap: 14px !important;
+  padding-top: 12px !important;
   padding-right: 24px !important;
+  padding-bottom: 12px !important;
   padding-left: 24px !important;
 }
 
@@ -323,8 +327,15 @@ select {
   padding-left: 24px !important;
 }
 
+.sales-note-pdf-export .sales-note-customer {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
 .sales-note-pdf-export .sales-note-customer-grid {
   grid-template-columns: 1.15fr 0.8fr 0.8fr !important;
+  column-gap: 22px !important;
+  row-gap: 7px !important;
 }
 
 .sales-note-pdf-export .sales-note-product-summary {
@@ -337,7 +348,57 @@ select {
 }
 
 .sales-note-pdf-export .sales-note-payment-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 0 !important;
+  grid-template-columns: 78px 92px 94px minmax(0, 1fr) 0 !important;
+  align-items: end !important;
+  gap: 6px !important;
+}
+
+.sales-note-pdf-export .sales-note-payment-date,
+.sales-note-pdf-export .sales-note-payment-amount,
+.sales-note-pdf-export .sales-note-payment-method,
+.sales-note-pdf-export .sales-note-payment-note,
+.sales-note-pdf-export .sales-note-payment-remove {
+  grid-row: 1 !important;
+}
+
+.sales-note-pdf-export .sales-note-payment-date { grid-column: 1 !important; }
+.sales-note-pdf-export .sales-note-payment-amount { grid-column: 2 !important; }
+.sales-note-pdf-export .sales-note-payment-method { grid-column: 3 !important; }
+.sales-note-pdf-export .sales-note-payment-note { grid-column: 4 !important; }
+.sales-note-pdf-export .sales-note-payment-remove { grid-column: 5 !important; }
+
+.sales-note-pdf-export .sales-note-payment-entry {
+  padding: 6px !important;
+}
+
+.sales-note-pdf-export .sales-note-payment-grid {
+  gap: 8px !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.sales-note-pdf-export .sales-note-payment-grid > section {
+  padding: 8px !important;
+}
+
+.sales-note-pdf-export .sales-note-products-table th {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+.sales-note-pdf-export .sales-note-products-table td {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.sales-note-pdf-export .sales-note-delivery-grid {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.sales-note-pdf-export .sales-note-print-signature {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
 }
 
 .sales-note-pdf-export .sales-note-delivery-grid {
@@ -385,8 +446,8 @@ select {
 
 @media print {
   @page {
-    size: auto;
-    margin: 12mm;
+    size: letter portrait;
+    margin: 10mm;
   }
 
   @page order-label {
@@ -395,12 +456,12 @@ select {
   }
 
   @page sales-note {
-    size: 216mm 330mm;
-    margin: 6mm;
+    size: letter portrait;
+    margin: 7mm;
   }
 
   @page production-list {
-    size: A4 landscape;
+    size: letter landscape;
     margin: 8mm;
   }
 
@@ -435,6 +496,11 @@ select {
   }
 
   body.printing-production-list .production-list-print-controls {
+    display: none !important;
+  }
+
+  body.printing-production-list .production-list-table thead button,
+  body.printing-production-list .production-list-table td:first-child button {
     display: none !important;
   }
 
@@ -475,16 +541,24 @@ select {
     visibility: hidden;
   }
 
-  body.printing-sales-note .sales-note-print-area,
-  body.printing-sales-note .sales-note-print-area * {
+  body.printing-sales-note main {
+    display: none !important;
+  }
+
+  body.printing-sales-note .sales-note-print-sheet,
+  body.printing-sales-note .sales-note-print-sheet * {
     visibility: visible;
   }
 
-  body.printing-sales-note .sales-note-print-area {
+  body.printing-sales-note .sales-note-print-sheet {
     page: sales-note;
-    position: absolute;
-    inset: 0 auto auto 0;
-    width: 204mm;
+    position: absolute !important;
+    top: 0 !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: 50% !important;
+    width: 201.9mm !important;
+    max-width: none !important;
     min-height: 0;
     overflow: visible !important;
     border: 0 !important;
@@ -492,18 +566,19 @@ select {
     box-shadow: none !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-    transform-origin: top left;
+    transform: translateX(-50%);
+    transform-origin: top center;
     zoom: var(--sales-note-print-scale, 1);
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
   body.printing-sales-note .sales-note-products-section {
-    min-height: 98mm !important;
+    min-height: 76mm !important;
   }
 
   body.printing-sales-note .sales-note-product-lines {
-    min-height: 24mm !important;
+    min-height: 18mm !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
@@ -565,7 +640,7 @@ select {
   }
 
   body.printing-sales-note .sales-note-payment-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 0 !important;
+    grid-template-columns: 78px 92px 94px minmax(0, 1fr) 0 !important;
   }
 
   body.printing-sales-note .sales-note-delivery-term {
@@ -622,8 +697,76 @@ select {
     display: none !important;
   }
 
-  body.printing-sales-note main {
-    padding: 0 !important;
+  body.printing-agenda * {
+    visibility: hidden;
+  }
+
+  body.printing-agenda .agenda-print-area,
+  body.printing-agenda .agenda-print-area * {
+    visibility: visible;
+  }
+
+  body.printing-agenda .agenda-print-area {
+    page: agenda;
+    position: absolute;
+    inset: 0 auto auto 0;
+    display: block !important;
+    width: 100%;
+    margin: 0 !important;
+    color: #000000;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.printing-agenda .agenda-print-heading {
+    display: flex !important;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 6mm;
+    border-bottom: 0.5mm solid #1c1917;
+    padding-bottom: 3mm;
+  }
+
+  body.printing-agenda .agenda-print-heading h1 {
+    margin: 0;
+    font-size: 22pt;
+  }
+
+  body.printing-agenda .agenda-print-heading p {
+    margin: 0;
+    font-size: 10pt;
+    font-weight: 600;
+  }
+
+  body.printing-agenda .agenda-screen-controls,
+  body.printing-agenda .agenda-print-sidebar,
+  body.printing-agenda .agenda-print-area article details {
+    display: none !important;
+  }
+
+  body.printing-agenda .agenda-print-content {
+    display: block !important;
+  }
+
+  body.printing-agenda .agenda-print-sections {
+    display: grid;
+    gap: 5mm;
+  }
+
+  body.printing-agenda .agenda-print-area section,
+  body.printing-agenda .agenda-print-area article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.printing-agenda .agenda-print-area a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  @page agenda {
+    size: letter portrait;
+    margin: 10mm;
   }
 
   body.printing-label * {

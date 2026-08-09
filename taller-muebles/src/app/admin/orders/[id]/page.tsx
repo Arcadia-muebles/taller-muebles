@@ -103,6 +103,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             subtotal: order.subtotal,
             discount: order.discount,
             total: order.total,
+            includesVat: order.includesVat,
             paidAmount: order.paidAmount,
             sellerName: order.sellerName,
             paymentMethod: order.paymentMethod,
@@ -309,6 +310,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
               <div className="mt-4 grid gap-3">
                 <Info label="Subtotal" value={formatCurrency(order.subtotal)} />
                 <Info label="Descuento" value={formatCurrency(order.discount)} />
+                <Info label="IVA" value={order.includesVat ? "Incluido (19%)" : "No aplicado"} />
                 <Info label="Total" value={formatCurrency(order.total)} strong />
                 <Info label="Abono" value={formatCurrency(order.paidAmount)} />
                 <Info label="Saldo" value={formatCurrency(order.balance)} strong />
