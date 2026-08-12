@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { AppUser, Order } from "@/lib/types";
+import type { ReportOrder, ReportUser } from "@/lib/types";
 import { cn, workshopHoursBetween } from "@/lib/utils";
 
 type Period = "today" | "week" | "month" | "custom";
@@ -65,7 +65,7 @@ const areaAccents = [
   { icon: PackageCheck, color: "text-cyan-700", soft: "bg-cyan-50", bar: "bg-cyan-600" },
 ];
 
-export function ReportsDashboard({ orders, users, today }: { orders: Order[]; users: AppUser[]; today: string }) {
+export function ReportsDashboard({ orders, users, today }: { orders: ReportOrder[]; users: ReportUser[]; today: string }) {
   const [period, setPeriod] = useState<Period>("week");
   const [customFrom, setCustomFrom] = useState(today);
   const [customTo, setCustomTo] = useState(today);
@@ -311,7 +311,7 @@ function EmptyPanel({ message }: { message: string }) {
 
 type Accent = { icon: LucideIcon; color: string; soft: string; bar: string };
 
-function completedWork(orders: Order[], from: Date, to: Date): CompletedWork[] {
+function completedWork(orders: ReportOrder[], from: Date, to: Date): CompletedWork[] {
   return orders.flatMap((order) => order.steps.flatMap((step, index) => {
     if (!step.startedAt || !step.completedAt) return [];
     const completed = new Date(step.completedAt);
@@ -331,7 +331,7 @@ function completedWork(orders: Order[], from: Date, to: Date): CompletedWork[] {
   })).sort((a, b) => b.completedAt.localeCompare(a.completedAt));
 }
 
-function summarizeAreas(orders: Order[], users: AppUser[], work: CompletedWork[]): AreaSummary[] {
+function summarizeAreas(orders: ReportOrder[], users: ReportUser[], work: CompletedWork[]): AreaSummary[] {
   const definitions = new Map<string, string>();
   for (const order of orders) for (const step of order.steps) definitions.set(step.key, step.label);
   for (const user of users) for (const key of user.areas?.length ? user.areas : user.area ? [user.area] : []) if (!definitions.has(key)) definitions.set(key, humanize(key));

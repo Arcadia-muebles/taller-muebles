@@ -8,6 +8,8 @@ import type {
   OrderAttachment,
   OrderComment,
   OrderStatus,
+  ReportOrder,
+  ReportUser,
   ProductionStep,
   StepStatus,
   StockItem,
@@ -76,10 +78,64 @@ type StepRecord = StepRow & {
   assigned_profile: { full_name: string } | null;
 };
 
+type WorkshopStepRecord = Pick<
+  StepRow,
+  | "step"
+  | "step_label"
+  | "sort_order"
+  | "status"
+  | "notes"
+  | "blocked_reason"
+  | "started_at"
+  | "completed_at"
+> & {
+  assigned_profile: { full_name: string } | null;
+};
+
+type ReportStepRecord = Pick<
+  StepRow,
+  "step" | "step_label" | "sort_order" | "status" | "started_at" | "completed_at"
+> & {
+  assigned_profile: { full_name: string } | null;
+};
+
 type OrderRecord = OrderRow & {
   stores: Pick<StoreRow, "code" | "name"> | null;
   assigned_profile: { full_name: string } | null;
   production_steps: StepRecord[] | null;
+};
+
+type WorkshopOrderRecord = Pick<
+  OrderRow,
+  | "id"
+  | "internal_code"
+  | "group_code"
+  | "document_type"
+  | "document_status"
+  | "client_name"
+  | "product_name"
+  | "material"
+  | "color"
+  | "quantity"
+  | "status"
+  | "condition"
+  | "priority"
+  | "is_warranty"
+  | "entry_date"
+  | "delivery_date"
+  | "completed_at"
+  | "observations"
+> & {
+  stores: Pick<StoreRow, "code" | "name"> | null;
+  assigned_profile: { full_name: string } | null;
+  production_steps: WorkshopStepRecord[] | null;
+};
+
+type ReportOrderRecord = Pick<
+  OrderRow,
+  "id" | "internal_code" | "document_type" | "client_name" | "product_name"
+> & {
+  production_steps: ReportStepRecord[] | null;
 };
 
 type OrderPaymentRecord = { id: string; order_id: string; paid_at: string; amount: number | string; method: string; note: string | null };
@@ -99,6 +155,40 @@ const conditionLabels: Record<string, Order["condition"]> = {
   quality_control: "Control de calidad",
   delivered: "Entregado",
 };
+
+const workshopOrderSelect = `
+  id,
+  internal_code,
+  group_code,
+  document_type,
+  document_status,
+  client_name,
+  product_name,
+  material,
+  color,
+  quantity,
+  status,
+  condition,
+  priority,
+  is_warranty,
+  entry_date,
+  delivery_date,
+  completed_at,
+  observations,
+  stores:store_id (code, name),
+  assigned_profile:profiles!orders_assigned_to_fkey (full_name),
+  production_steps (
+    step,
+    step_label,
+    sort_order,
+    status,
+    notes,
+    blocked_reason,
+    started_at,
+    completed_at,
+    assigned_profile:profiles!production_steps_assigned_to_fkey (full_name)
+  )
+`;
 
 export async function listOrders(): Promise<Order[]> {
   if (!hasSupabaseConfig()) {
@@ -128,6 +218,99 @@ export async function listOrders(): Promise<Order[]> {
 
   const orders = (data as OrderRecord[]).map(mapOrderRecord);
   return attachOrderPayments(supabase, orders);
+}
+
+/**
+ * Returns only the operational fields required by workshop screens. Commercial
+ * contact details, prices, balances, payment history and seller data never
+ * cross the Server Component boundary for an operator.
+ */
+export async function listWorkshopOrders(): Promise<Order[]> {
+  if (!hasSupabaseConfig()) return listLocalOrders();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(workshopOrderSelect)
+    .order("delivery_date", { ascending: true })
+    .order("internal_code", { ascending: true })
+    .order("product_name", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error || !data) {
+    console.error("Supabase workshop orders query failed:", error?.message);
+    throw new Error("No fue posible cargar la cola del taller.");
+  }
+
+  return (data as unknown as WorkshopOrderRecord[]).map(mapWorkshopOrderRecord);
+}
+
+export async function getWorkshopOrder(id: string): Promise<Order | undefined> {
+  if (!hasSupabaseConfig()) return getLocalOrder(id);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(workshopOrderSelect)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Supabase workshop order query failed:", error.message);
+    throw new Error("No fue posible consultar la orden del taller.");
+  }
+  return data ? mapWorkshopOrderRecord(data as unknown as WorkshopOrderRecord) : undefined;
+}
+
+/** Minimal projection used by the client-side reports dashboard. */
+export async function listReportOrders(): Promise<ReportOrder[]> {
+  if (!hasSupabaseConfig()) {
+    return (await listLocalOrders()).map(toReportOrder);
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(`
+      id,
+      internal_code,
+      document_type,
+      client_name,
+      product_name,
+      production_steps (
+        step,
+        step_label,
+        sort_order,
+        status,
+        started_at,
+        completed_at,
+        assigned_profile:profiles!production_steps_assigned_to_fkey (full_name)
+      )
+    `)
+    .order("internal_code", { ascending: true });
+
+  if (error || !data) {
+    console.error("Supabase report orders query failed:", error?.message);
+    throw new Error("No fue posible cargar los datos del reporte.");
+  }
+
+  return (data as unknown as ReportOrderRecord[]).map((record) => ({
+    id: record.id,
+    code: shortOrderCode(record.internal_code),
+    documentType: record.document_type as CommercialDocumentType,
+    client: record.client_name,
+    product: record.product_name,
+    steps: (record.production_steps ?? [])
+      .sort((first, second) => first.sort_order - second.sort_order)
+      .map((step) => ({
+        key: step.step,
+        label: normalizeStepLabel(step.step, step.step_label || labelFromStepKey(step.step)),
+        owner: normalizeOwner(step.assigned_profile?.full_name),
+        status: step.status as StepStatus,
+        startedAt: step.started_at ?? undefined,
+        completedAt: step.completed_at ?? undefined,
+      })),
+  }));
 }
 
 export async function getOrder(id: string): Promise<Order | undefined> {
@@ -248,7 +431,7 @@ export async function listAgendaItems(date?: string): Promise<AgendaItem[]> {
   const { data, error } = await query;
   if (error || !data) {
     console.error("Supabase agenda query failed:", error?.message);
-    return listLocalAgendaItems(date);
+    throw new Error("No fue posible cargar la agenda desde Supabase.");
   }
 
   return (data as AgendaItemRow[]).map(mapAgendaItemRecord);
@@ -362,6 +545,37 @@ export async function listUsers(): Promise<AppUser[]> {
   return data.map((profile) => ({
     id: profile.id,
     email: emails.get(profile.user_id) || profile.user_id,
+    name: profile.full_name,
+    role: profile.role,
+    area: parseAreas(profile.area)[0],
+    areas: parseAreas(profile.area),
+    active: profile.active,
+  }));
+}
+
+export async function listReportUsers(): Promise<ReportUser[]> {
+  if (!hasSupabaseConfig()) {
+    const { listLocalUsers } = await import("@/lib/local-store");
+    return (await listLocalUsers()).map(({ name, role, area, areas, active }) => ({
+      name,
+      role,
+      area,
+      areas,
+      active,
+    }));
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("full_name, role, area, active")
+    .order("full_name");
+  if (error || !data) {
+    console.error("Supabase report users query failed:", error?.message);
+    throw new Error("No fue posible cargar los operarios del reporte.");
+  }
+
+  return data.map((profile) => ({
     name: profile.full_name,
     role: profile.role,
     area: parseAreas(profile.area)[0],
@@ -534,6 +748,47 @@ function mapOrderRecord(record: OrderRecord): Order {
   };
 }
 
+function mapWorkshopOrderRecord(record: WorkshopOrderRecord): Order {
+  const store = (record.stores?.code ?? "LH") as StoreCode;
+  return {
+    id: record.id,
+    code: shortOrderCode(record.internal_code),
+    groupCode: shortOrderCode(record.group_code ?? record.internal_code),
+    store,
+    documentType: (record.document_type ?? (store === "LH" ? "production_intake" : "sales_note")) as CommercialDocumentType,
+    documentStatus: (record.document_status ?? "issued") as CommercialDocumentStatus,
+    client: record.client_name,
+    product: record.product_name,
+    material: record.material ?? "Sin material",
+    color: record.color ?? "Sin color",
+    quantity: record.quantity === null ? undefined : Number(record.quantity ?? 1),
+    includesVat: true,
+    status: record.status as OrderStatus,
+    condition: conditionLabels[record.condition] ?? "Sin condicion",
+    priority: record.priority as Order["priority"],
+    isWarranty: record.is_warranty,
+    entryDate: record.entry_date,
+    deliveryDate: record.delivery_date ?? record.entry_date,
+    completedAt: record.completed_at ?? undefined,
+    assignedTo: normalizeOwner(record.assigned_profile?.full_name),
+    observations: record.observations ?? "Sin observaciones.",
+    steps: (record.production_steps ?? [])
+      .sort((first, second) => first.sort_order - second.sort_order)
+      .map(mapStepRecord),
+  };
+}
+
+function toReportOrder(order: Order): ReportOrder {
+  return {
+    id: order.id,
+    code: order.code,
+    documentType: order.documentType,
+    client: order.client,
+    product: order.product,
+    steps: order.steps,
+  };
+}
+
 export async function listStructureRequests(): Promise<StructureRequest[]> {
   return (await getStructureRequestsSnapshot()).requests;
 }
@@ -623,7 +878,7 @@ export async function listSuppliers(): Promise<Supplier[]> {
   }));
 }
 
-function mapStepRecord(record: StepRecord): ProductionStep {
+function mapStepRecord(record: StepRecord | WorkshopStepRecord): ProductionStep {
   return {
     key: record.step,
     label: normalizeStepLabel(record.step, record.step_label || labelFromStepKey(record.step)),

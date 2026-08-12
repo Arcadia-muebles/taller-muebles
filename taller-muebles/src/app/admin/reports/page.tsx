@@ -2,11 +2,11 @@ import { AppShell } from "@/components/app-shell";
 import { ReportsDashboard } from "@/components/reports-dashboard";
 import { requireSession } from "@/lib/auth";
 import { isProductionOrder } from "@/lib/orders";
-import { listOrders, listUsers } from "@/lib/repositories/production";
+import { listReportOrders, listReportUsers } from "@/lib/repositories/production";
 
 export default async function ReportsPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
-  const [orders, users] = await Promise.all([listOrders(), listUsers()]);
+  const [orders, users] = await Promise.all([listReportOrders(), listReportUsers()]);
 
   return (
     <AppShell active="admin" user={user}>

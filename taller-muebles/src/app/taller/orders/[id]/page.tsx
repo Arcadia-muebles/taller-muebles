@@ -16,8 +16,7 @@ import { WorkshopOrderActionPanel } from "@/components/workshop-order-action-pan
 import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
 import {
-  getOrder,
-  listOrders,
+  listWorkshopOrders,
   listOrderAttachments,
   listOrderAudit,
   listOrderComments,
@@ -30,19 +29,23 @@ import { canWorkerSeeOrder, filterWorkerFutureOrders, nextWorkStep, workerAction
 export default async function WorkshopOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireSession(["operator"]);
   const { id } = await params;
-  const [order, audit, comments, attachments, settings, orders] = await Promise.all([
-    getOrder(id),
+  const [audit, comments, attachments, settings, orders] = await Promise.all([
     listOrderAudit(id),
     listOrderComments(id),
     listOrderAttachments(id),
     getSystemSettings(),
-    listOrders(),
+    listWorkshopOrders(),
   ]);
+  const order = orders.find((item) => item.id === id);
   if (!order || order.status === "cancelled") notFound();
   if (!canWorkerSeeOrder(user, order) && !filterWorkerFutureOrders(user, [order]).length) notFound();
 
   const progress = completionPercent(order);
-  const groupOrders = orders.filter((item) => item.status !== "cancelled" && item.groupCode === order.groupCode);
+  const groupOrders = orders.filter((item) => (
+    item.status !== "cancelled" &&
+    item.store === order.store &&
+    item.groupCode === order.groupCode
+  ));
   const actionStep = workerActionStep(user, order);
   const currentStep = nextWorkStep(order);
   const visibleAudit = audit.slice(0, 5);

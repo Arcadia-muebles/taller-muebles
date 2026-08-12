@@ -9,7 +9,7 @@ import {
   createLocalOrderComment,
   updateLocalProductionStepComment,
 } from "@/lib/local-store";
-import { getOrder } from "@/lib/repositories/production";
+import { getOrder, getWorkshopOrder } from "@/lib/repositories/production";
 import { createClient } from "@/lib/supabase/server";
 import { canWorkerSeeOrder } from "@/lib/workshop-access";
 
@@ -215,7 +215,9 @@ async function canAccessOrder(
   user: Awaited<ReturnType<typeof requireSession>>,
   orderId: string,
 ) {
-  const order = await getOrder(orderId);
+  const order = user.role === "operator"
+    ? await getWorkshopOrder(orderId)
+    : await getOrder(orderId);
   if (!order) return false;
   return user.role !== "operator" || canWorkerSeeOrder(user, order);
 }

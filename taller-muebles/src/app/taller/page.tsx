@@ -1,12 +1,12 @@
 import { AppShell } from "@/components/app-shell";
 import { WorkerQueue } from "@/components/worker-queue";
 import { requireSession } from "@/lib/auth";
-import { listOrders } from "@/lib/repositories/production";
+import { listWorkshopOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 
 export default async function WorkshopPage() {
   const user = await requireSession(["operator"]);
-  const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
+  const [orders, settings] = await Promise.all([listWorkshopOrders(), getSystemSettings()]);
 
   return (
     <AppShell active="taller" user={user}>

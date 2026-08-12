@@ -7,7 +7,7 @@ import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { isReadyForDelivery } from "@/lib/metrics";
 import { isProductionOrder, productionOrderGroup } from "@/lib/orders";
-import { cancelLocalAgendaItem, completeLocalAgendaItem, createLocalAgendaTask, listLocalAgendaItems, scheduleLocalExternalOrderDelivery, scheduleLocalOrderDelivery, updateLocalAgendaItem } from "@/lib/local-store";
+import { cancelLocalAgendaItem, completeLocalAgendaItem, createLocalAgendaTask, scheduleLocalOrderDelivery, updateLocalAgendaItem } from "@/lib/local-store";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { createClient } from "@/lib/supabase/server";
@@ -72,9 +72,7 @@ export async function scheduleOrderDelivery(formData: FormData) {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
     if (!profileId) {
-      await scheduleWithLocalFallback(order, groupOrders, scheduledDate, timeSlot, parsed.data.notes);
-      revalidateAgendaPaths(groupOrderIds);
-      redirect(`/admin/agenda?date=${scheduledDate}&scheduled=local`);
+      throw new Error("No fue posible identificar el perfil que agenda la entrega.");
     }
     const times = timeSlotTimes(timeSlot);
     const { data: existing, error: lookupError } = await supabase
@@ -87,10 +85,8 @@ export async function scheduleOrderDelivery(formData: FormData) {
       .maybeSingle();
 
     if (lookupError) {
-      console.error("Agenda lookup failed, using local fallback:", lookupError.message);
-      await scheduleWithLocalFallback(order, groupOrders, scheduledDate, timeSlot, parsed.data.notes);
-      revalidateAgendaPaths(groupOrderIds);
-      redirect(`/admin/agenda?date=${scheduledDate}&scheduled=local`);
+      console.error("Agenda lookup failed:", lookupError.message);
+      throw new Error("No fue posible consultar la agenda en Supabase.");
     }
 
     if (existing) {
@@ -106,10 +102,8 @@ export async function scheduleOrderDelivery(formData: FormData) {
         })
         .eq("id", existing.id);
       if (error) {
-        console.error("Agenda update failed, using local fallback:", error.message);
-        await scheduleWithLocalFallback(order, groupOrders, scheduledDate, timeSlot, parsed.data.notes);
-        revalidateAgendaPaths(groupOrderIds);
-        redirect(`/admin/agenda?date=${scheduledDate}&scheduled=local`);
+        console.error("Agenda update failed:", error.message);
+        throw new Error("No fue posible actualizar la entrega en Supabase.");
       }
     } else {
       const { error } = await supabase.from("agenda_items").insert({
@@ -124,10 +118,8 @@ export async function scheduleOrderDelivery(formData: FormData) {
         created_by: profileId,
       });
       if (error) {
-        console.error("Agenda insert failed, using local fallback:", error.message);
-        await scheduleWithLocalFallback(order, groupOrders, scheduledDate, timeSlot, parsed.data.notes);
-        revalidateAgendaPaths(groupOrderIds);
-        redirect(`/admin/agenda?date=${scheduledDate}&scheduled=local`);
+        console.error("Agenda insert failed:", error.message);
+        throw new Error("No fue posible crear la entrega en Supabase.");
       }
     }
     const { error: auditError } = await supabase.from("audit_logs").insert(groupOrders.map((groupOrder) => ({
@@ -144,25 +136,6 @@ export async function scheduleOrderDelivery(formData: FormData) {
 
   revalidateAgendaPaths(groupOrderIds);
   redirect(`/admin/agenda?date=${scheduledDate}`);
-}
-
-async function scheduleWithLocalFallback(
-  order: Awaited<ReturnType<typeof listOrders>>[number],
-  groupOrders: Awaited<ReturnType<typeof listOrders>>,
-  scheduledDate: string,
-  timeSlot: AgendaTimeSlot,
-  notes?: string,
-) {
-  await scheduleLocalExternalOrderDelivery({
-    orderId: order.id,
-    orderIds: groupOrders.map((item) => item.id),
-    orderCode: order.groupCode || order.code,
-    client: order.client,
-    product: groupOrders.length > 1 ? `${groupOrders.length} productos` : order.product,
-    scheduledDate,
-    timeSlot,
-    notes,
-  });
 }
 
 export async function createAgendaTask(formData: FormData) {
@@ -190,7 +163,7 @@ export async function createAgendaTask(formData: FormData) {
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
-    if (!profileId) return;
+    if (!profileId) throw new Error("No fue posible identificar el perfil que crea la tarea.");
     const times = timeSlotTimes(timeSlot);
     const { error } = await supabase.from("agenda_items").insert({
       kind: "task",
@@ -203,15 +176,8 @@ export async function createAgendaTask(formData: FormData) {
       created_by: profileId,
     });
     if (error) {
-      console.error("Agenda task insert failed, using local fallback:", error.message);
-      await createLocalAgendaTask({
-        title: parsed.data.title,
-        notes: parsed.data.notes,
-        scheduledDate,
-        timeSlot,
-      });
-      revalidateAgendaPaths();
-      redirect(`/admin/agenda?date=${scheduledDate}&scheduled=local`);
+      console.error("Agenda task insert failed:", error.message);
+      throw new Error("No fue posible crear la tarea en Supabase.");
     }
   }
 
@@ -239,7 +205,7 @@ export async function updateAgendaItem(formData: FormData) {
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
-    if (!profileId) return;
+    if (!profileId) throw new Error("No fue posible identificar el perfil que actualiza la agenda.");
     const updatePayload = {
       title: parsed.data.kind === "task" ? parsed.data.title : undefined,
       notes: parsed.data.notes || null,
@@ -250,10 +216,8 @@ export async function updateAgendaItem(formData: FormData) {
     };
     const { error } = await supabase.from("agenda_items").update(updatePayload).eq("id", parsed.data.itemId);
     if (error) {
-      console.error("Agenda item update failed, using local fallback:", error.message);
-      await updateLocalAgendaItem(parsed.data);
-      revalidateAgendaPaths();
-      redirect(`/admin/agenda?date=${parsed.data.scheduledDate}&scheduled=local`);
+      console.error("Agenda item update failed:", error.message);
+      throw new Error("No fue posible actualizar la agenda en Supabase.");
     }
     const { error: auditError } = await supabase.from("audit_logs").insert({
       action: "update_agenda_item",
@@ -287,22 +251,27 @@ export async function completeAgendaItem(formData: FormData) {
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
-    if (!profileId) return;
+    if (!profileId) throw new Error("No fue posible identificar el perfil que completa la tarea.");
     const { data: item, error: lookupError } = await supabase
       .from("agenda_items")
       .select("*")
       .eq("id", parsed.data.itemId)
       .maybeSingle();
     if (lookupError) {
-      console.error("Agenda completion lookup failed, using local fallback:", lookupError.message);
-      await completeLocalFallbackItem(parsed.data.itemId, supabase, profileId);
-      revalidateAgendaPaths();
-      return;
+      console.error("Agenda completion lookup failed:", lookupError.message);
+      throw new Error("No fue posible consultar la tarea en Supabase.");
     }
     if (!item) return;
 
     const now = new Date().toISOString();
-    await supabase.from("agenda_items").update({ status: "done" }).eq("id", item.id);
+    const { error: completionError } = await supabase
+      .from("agenda_items")
+      .update({ status: "done" })
+      .eq("id", item.id);
+    if (completionError) {
+      console.error("Agenda completion failed:", completionError.message);
+      throw new Error("No fue posible completar la tarea en Supabase.");
+    }
     if (item.kind === "delivery" && item.order_id) {
       await closeSupabaseOrderFromAgenda({
         supabase,
@@ -315,25 +284,6 @@ export async function completeAgendaItem(formData: FormData) {
   }
 
   revalidateAgendaPaths();
-}
-
-async function completeLocalFallbackItem(
-  itemId: string,
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  profileId: string,
-) {
-  const item = (await listLocalAgendaItems()).find((agendaItem) => agendaItem.id === itemId);
-  if (!item) return;
-  await completeLocalAgendaItem(itemId);
-  if (item.kind === "delivery" && item.orderId) {
-    await closeSupabaseOrderFromAgenda({
-      supabase,
-      orderId: item.orderId,
-      agendaItemId: item.id,
-      profileId,
-      completedAt: new Date().toISOString(),
-    });
-  }
 }
 
 async function closeSupabaseOrderFromAgenda({
@@ -354,15 +304,25 @@ async function closeSupabaseOrderFromAgenda({
   const groupOrders = seed ? productionOrderGroup(orders, seed) : [];
   const groupOrderIds = groupOrders.length ? groupOrders.map((order) => order.id) : [orderId];
 
-  await supabase
+  const { error: orderError } = await supabase
     .from("orders")
     .update({ status: "completed", condition: "delivered", completed_at: completedAt })
     .in("id", groupOrderIds);
-  await supabase
+  if (orderError) {
+    console.error("Order completion from agenda failed:", orderError.message);
+    throw new Error("No fue posible cerrar las órdenes asociadas a la entrega.");
+  }
+
+  const { error: stepsError } = await supabase
     .from("production_steps")
     .update({ status: "done", completed_at: completedAt, updated_by: profileId })
     .in("order_id", groupOrderIds);
-  await supabase.from("audit_logs").insert(groupOrderIds.map((groupOrderId) => ({
+  if (stepsError) {
+    console.error("Production step completion from agenda failed:", stepsError.message);
+    throw new Error("No fue posible cerrar las etapas asociadas a la entrega.");
+  }
+
+  const { error: auditError } = await supabase.from("audit_logs").insert(groupOrderIds.map((groupOrderId) => ({
     order_id: groupOrderId,
     action: "close_order",
     entity: "agenda_items",
@@ -371,6 +331,10 @@ async function closeSupabaseOrderFromAgenda({
     field_name: "status",
     new_value: "completed",
   })));
+  if (auditError) {
+    console.error("Order completion audit failed:", auditError.message);
+    throw new Error("La entrega se cerró, pero no fue posible registrar su auditoría.");
+  }
 }
 
 export async function cancelAgendaItem(formData: FormData) {
@@ -385,11 +349,11 @@ export async function cancelAgendaItem(formData: FormData) {
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
-    if (!profileId) return;
+    if (!profileId) throw new Error("No fue posible identificar el perfil que cancela la tarea.");
     const { error } = await supabase.from("agenda_items").update({ status: "cancelled" }).eq("id", parsed.data.itemId);
     if (error) {
-      console.error("Agenda cancel failed, using local fallback:", error.message);
-      await cancelLocalAgendaItem(parsed.data.itemId);
+      console.error("Agenda cancel failed:", error.message);
+      throw new Error("No fue posible cancelar la tarea en Supabase.");
     } else {
       const { error: auditError } = await supabase.from("audit_logs").insert({
         action: "cancel_agenda_item",

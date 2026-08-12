@@ -31,7 +31,9 @@ export async function addDocumentPayment(formData: FormData) {
     if (!saved) return { status: "error" as const, message: "No se pudo registrar el abono." };
   } else {
     const supabase = await createClient();
-    const orders = (await listOrders()).filter((item) => item.groupCode === order.groupCode);
+    const orders = (await listOrders()).filter((item) => (
+      item.store === order.store && item.groupCode === order.groupCode
+    ));
     const paidAmount = (order.paidAmount ?? 0) + parsed.data.amount;
     const paymentDb = supabase as unknown as { from: (table: string) => {
       insert: (row: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
@@ -100,7 +102,9 @@ async function syncSupabasePaymentTotals(supabase: Awaited<ReturnType<typeof cre
   if (error || !data) return error?.message ?? "No se pudo recalcular el saldo.";
   const paidAmount = data.reduce((sum, payment) => sum + Number(payment.amount), 0);
   if (paidAmount > (order.total ?? 0)) return "Los abonos superan el total de la nota.";
-  const orders = (await listOrders()).filter((item) => item.groupCode === order.groupCode);
+  const orders = (await listOrders()).filter((item) => (
+    item.store === order.store && item.groupCode === order.groupCode
+  ));
   const ordersTable = supabase.from("orders") as unknown as { update: (patch: Record<string, unknown>) => { in: (column: string, values: string[]) => Promise<{ error: { message: string } | null }> } };
   const result = await ordersTable.update({ paid_amount: paidAmount, balance_amount: Math.max((order.total ?? 0) - paidAmount, 0), payment_method: data.at(-1)?.method ?? null }).in("id", orders.map((item) => item.id));
   return result.error?.message;

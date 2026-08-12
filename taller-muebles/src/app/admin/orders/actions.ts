@@ -430,7 +430,9 @@ export async function updateOrder(
       });
       if (paymentError) return { status: "error", message: paymentError };
       const groupOrderIds = (await listOrders())
-        .filter((item) => item.groupCode === previousOrder.groupCode)
+        .filter((item) => (
+          item.store === previousOrder.store && item.groupCode === previousOrder.groupCode
+        ))
         .map((item) => item.id);
       const ordersTable = supabase.from("orders") as unknown as {
         update: (patch: Record<string, unknown>) => {

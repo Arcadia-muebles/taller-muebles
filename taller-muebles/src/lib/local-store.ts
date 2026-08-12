@@ -430,7 +430,9 @@ export async function updateLocalOrder(id: string, input: {
       }));
     const paidAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
     const balance = input.total !== undefined ? Math.max(input.total - paidAmount, 0) : undefined;
-    for (const groupedOrder of data.orders.filter((item) => item.groupCode === order.groupCode)) {
+    for (const groupedOrder of data.orders.filter((item) => (
+      item.store === order.store && item.groupCode === order.groupCode
+    ))) {
       groupedOrder.payments = payments;
       groupedOrder.paidAmount = paidAmount;
       groupedOrder.balance = balance;
@@ -546,7 +548,9 @@ export async function addLocalDocumentPayment(input: { orderId: string; amount: 
   const data = await readData();
   const seed = data.orders.find((order) => order.id === input.orderId);
   if (!seed) return false;
-  const group = data.orders.filter((order) => order.groupCode === seed.groupCode);
+  const group = data.orders.filter((order) => (
+    order.store === seed.store && order.groupCode === seed.groupCode
+  ));
   const existing = seed.payments ?? (seed.paidAmount ? [{ id: crypto.randomUUID(), paidAt: seed.entryDate, amount: seed.paidAmount, method: seed.paymentMethod || "Abono inicial" }] : []);
   const nextPayments = [...existing, { id: crypto.randomUUID(), paidAt: input.paidAt, amount: input.amount, method: input.method, note: input.note?.trim() || undefined }];
   const paidAmount = nextPayments.reduce((sum, payment) => sum + payment.amount, 0);
@@ -593,7 +597,9 @@ function syncLocalDocumentPaymentTotals(data: LocalData, seed: Order) {
   const paidAmount = (seed.payments ?? []).reduce((sum, payment) => sum + payment.amount, 0);
   const total = seed.total ?? 0;
   if (paidAmount > total) return false;
-  for (const order of data.orders.filter((item) => item.groupCode === seed.groupCode)) {
+  for (const order of data.orders.filter((item) => (
+    item.store === seed.store && item.groupCode === seed.groupCode
+  ))) {
     order.payments = seed.payments;
     order.paidAmount = paidAmount;
     order.balance = Math.max(total - paidAmount, 0);

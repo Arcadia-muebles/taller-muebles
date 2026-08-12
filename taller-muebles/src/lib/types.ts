@@ -153,6 +153,13 @@ export type Order = {
   steps: ProductionStep[];
 };
 
+export type ReportOrder = Pick<
+  Order,
+  "id" | "code" | "documentType" | "client" | "product" | "steps"
+>;
+
+export type ReportUser = Pick<AppUser, "name" | "role" | "area" | "areas" | "active">;
+
 export type OrderPayment = {
   id: string;
   paidAt: string;
