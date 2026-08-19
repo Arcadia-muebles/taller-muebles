@@ -4,6 +4,7 @@ import { ArrowLeft, CalendarDays, FileText, Pencil, Wrench } from "lucide-react"
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
+import { compareOrderGroupMembers } from "@/lib/orders";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import type { Order } from "@/lib/types";
@@ -20,7 +21,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
   const documentOrders = orders
     .filter((order) => order.documentType !== "production_intake")
     .filter((order) => (order.groupCode || order.code) === documentCode)
-    .sort((a, b) => a.product.localeCompare(b.product));
+    .sort(compareOrderGroupMembers);
 
   if (!documentOrders.length) notFound();
 

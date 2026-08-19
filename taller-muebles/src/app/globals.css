@@ -260,11 +260,11 @@ select {
 }
 
 .sales-note-pdf-export .sales-note-products-section {
-  min-height: 286px !important;
+  min-height: 76mm !important;
 }
 
 .sales-note-pdf-export .sales-note-product-lines {
-  min-height: 54px !important;
+  min-height: 18mm !important;
   background: #ffffff !important;
 }
 

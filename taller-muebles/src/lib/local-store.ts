@@ -6,7 +6,7 @@ import type { AgendaItem, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, ClientPo
 import { clientPortalKeyForOrder } from "@/lib/client-portal-identity";
 import { defaultSystemSettings } from "@/lib/system-settings";
 import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
-import { canProductionStepsRunTogether, productionOrderGroup, productionStepsResetByReversal } from "@/lib/orders";
+import { canProductionStepsRunTogether, orderGroupKey, productionOrderGroup, productionStepsResetByReversal } from "@/lib/orders";
 
 type LocalData = {
   orders: Order[];
@@ -306,6 +306,7 @@ export async function createLocalOrder(input: {
   customerEmail?: string;
   customerPhone?: string;
   productName: string;
+  productPosition?: number;
   material: string;
   color: string;
   quantity?: number;
@@ -361,6 +362,7 @@ export async function createLocalOrder(input: {
     customerEmail: input.customerEmail?.trim() || undefined,
     customerPhone: input.customerPhone?.trim() || undefined,
     product: input.productName,
+    productPosition: input.productPosition ?? 1,
     material: input.material,
     color: input.color,
     quantity: input.quantity,
@@ -1452,11 +1454,19 @@ function addAudit(data: LocalData, orderId: string, action: string, summary: str
 
 function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolean } {
   let changed = false;
+  const nextProductPositionByGroup = new Map<string, number>();
   for (const order of data.orders) {
     if (typeof order.includesVat !== "boolean") {
       order.includesVat = true;
       changed = true;
     }
+    const groupKey = orderGroupKey(order);
+    const nextPosition = nextProductPositionByGroup.get(groupKey) ?? 1;
+    if (!order.productPosition) {
+      order.productPosition = nextPosition;
+      changed = true;
+    }
+    nextProductPositionByGroup.set(groupKey, Math.max(nextPosition, order.productPosition) + 1);
   }
   const usersByEmail = new Set(data.users.map((user) => user.email.toLowerCase()));
   for (const user of defaultLocalUsers) {

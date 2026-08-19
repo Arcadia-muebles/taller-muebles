@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { requireSession } from "@/lib/auth";
+import { compareOrderGroupMembers } from "@/lib/orders";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import type { CommercialDocumentType, Order } from "@/lib/types";
@@ -230,7 +231,7 @@ function groupDocuments(orders: Order[]): DocumentSummary[] {
       total,
       paidAmount,
       balance: Math.max(total - paidAmount, 0),
-      orders: group.sort((a, b) => a.product.localeCompare(b.product)),
+      orders: group.sort(compareOrderGroupMembers),
     };
   }).sort((a, b) => {
     const entryDiff = dateTime(b.entryDate) - dateTime(a.entryDate);

@@ -114,6 +114,7 @@ type WorkshopOrderRecord = Pick<
   | "document_status"
   | "client_name"
   | "product_name"
+  | "product_position"
   | "material"
   | "color"
   | "quantity"
@@ -164,6 +165,7 @@ const workshopOrderSelect = `
   document_status,
   client_name,
   product_name,
+  product_position,
   material,
   color,
   quantity,
@@ -208,6 +210,7 @@ export async function listOrders(): Promise<Order[]> {
     )
     .order("delivery_date", { ascending: true })
     .order("internal_code", { ascending: true })
+    .order("product_position", { ascending: true })
     .order("product_name", { ascending: true })
     .order("id", { ascending: true });
 
@@ -234,6 +237,7 @@ export async function listWorkshopOrders(): Promise<Order[]> {
     .select(workshopOrderSelect)
     .order("delivery_date", { ascending: true })
     .order("internal_code", { ascending: true })
+    .order("product_position", { ascending: true })
     .order("product_name", { ascending: true })
     .order("id", { ascending: true });
 
@@ -722,6 +726,7 @@ function mapOrderRecord(record: OrderRecord): Order {
     customerEmail: record.customer_email ?? undefined,
     customerPhone: record.customer_phone ?? undefined,
     product: record.product_name,
+    productPosition: record.product_position,
     material: record.material ?? "Sin material",
     color: record.color ?? "Sin color",
     quantity: record.quantity === null ? undefined : Number(record.quantity ?? 1),
@@ -759,6 +764,7 @@ function mapWorkshopOrderRecord(record: WorkshopOrderRecord): Order {
     documentStatus: (record.document_status ?? "issued") as CommercialDocumentStatus,
     client: record.client_name,
     product: record.product_name,
+    productPosition: record.product_position,
     material: record.material ?? "Sin material",
     color: record.color ?? "Sin color",
     quantity: record.quantity === null ? undefined : Number(record.quantity ?? 1),

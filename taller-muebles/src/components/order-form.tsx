@@ -672,6 +672,7 @@ export function OrderForm({
                 {productFields.map((field, index) => {
                   const product = products[index] ?? {};
                   const productTotal = lineTotal(product.quantity, product.unitPrice);
+                  const colorRegistration = register(`products.${index}.color`);
                   return (
                     <tr key={field.id} className="border-b border-stone-200 last:border-b-0">
                       <td className="px-4 py-4 align-top">
@@ -696,9 +697,15 @@ export function OrderForm({
                         ) : null}
                         <input type="hidden" {...register(`products.${index}.material`)} value="Por definir" />
                         <div className="mt-2">
-                          <input
-                            {...register(`products.${index}.color`)}
-                            className="w-full border-0 border-b border-stone-200 bg-transparent pb-1 text-xs text-stone-600 outline-none placeholder:text-stone-400 focus:border-stone-500"
+                          <textarea
+                            {...colorRegistration}
+                            ref={(element) => {
+                              colorRegistration.ref(element);
+                              if (element) resizeTextareaToContent(element);
+                            }}
+                            rows={1}
+                            onInput={(event) => resizeTextareaToContent(event.currentTarget)}
+                            className="block min-h-5 w-full resize-none overflow-hidden border-0 border-b border-stone-200 bg-transparent pb-1 text-xs leading-5 text-stone-600 outline-none placeholder:text-stone-400 focus:border-stone-500"
                             placeholder="Color"
                           />
                         </div>
@@ -1794,7 +1801,6 @@ function openSalesNotePrintDialog({
   const printPage = document.createElement("div");
   const previousTitle = document.title;
   const pageStyle = document.createElement("style");
-  const scale = salesNotePrintScale(printSheet);
   let cleanedUp = false;
   let ready = false;
 
@@ -1834,9 +1840,12 @@ function openSalesNotePrintDialog({
 
   try {
     document.title = pdfFileName(documentLabel, documentCode).replace(/\.pdf$/i, "");
-    printSheet.style.setProperty("--sales-note-print-scale", scale.toFixed(4));
     document.head.appendChild(pageStyle);
     document.body.classList.add("printing-sales-note");
+    // Measure the mounted print clone so wrapped product details are included
+    // in the scale that keeps the document on one physical sheet.
+    const scale = salesNotePrintScale(printSheet);
+    printSheet.style.setProperty("--sales-note-print-scale", scale.toFixed(4));
     window.addEventListener("afterprint", cleanup, { once: true });
     window.setTimeout(() => {
       try {
@@ -1904,7 +1913,9 @@ function materializeSalesNoteExport(exportArea: HTMLElement) {
 
     const value = control instanceof HTMLSelectElement
       ? control.selectedOptions[0]?.textContent ?? control.value
-      : control.value;
+      : control instanceof HTMLInputElement && control.type === "date"
+        ? formatChileanDocumentDate(control.value)
+        : control.value;
     const replacement = document.createElement(control instanceof HTMLTextAreaElement ? "div" : "span");
     replacement.className = `${control.className} sales-note-pdf-value`;
     replacement.textContent = value;
@@ -1976,6 +1987,16 @@ function formatClpInput(value: unknown) {
 function parseClpInput(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits ? Number(digits) : 0;
+}
+
+function resizeTextareaToContent(textarea: HTMLTextAreaElement) {
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
+function formatChileanDocumentDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : value;
 }
 
 function commercialDocumentLabel(type?: CommercialDocumentType) {

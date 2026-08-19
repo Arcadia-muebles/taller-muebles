@@ -19,7 +19,7 @@ import { StepCommentButton } from "@/components/step-comment-button";
 import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
 import { completionPercent } from "@/lib/metrics";
-import { productionStepPrerequisitesMet } from "@/lib/orders";
+import { compareOrderGroupMembers, productionStepPrerequisitesMet } from "@/lib/orders";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { getOrder, listOrderAttachments, listOrderAudit, listOrderComments, listOrders } from "@/lib/repositories/production";
 import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel } from "@/lib/utils";
@@ -52,7 +52,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   const groupOrders = orders
     .filter((item) => item.store === order.store)
     .filter((item) => (item.groupCode || item.code) === documentCode)
-    .sort((a, b) => a.product.localeCompare(b.product));
+    .sort(compareOrderGroupMembers);
   const showProductionView = query.view === "production";
   const isQuote = order.documentType === "quote";
 

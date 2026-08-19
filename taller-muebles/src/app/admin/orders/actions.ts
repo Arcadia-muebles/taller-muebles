@@ -105,10 +105,11 @@ export async function createOrder(
 
   if (!hasSupabaseConfig()) {
     const createdOrders = [];
-    for (const product of [...productItems.data].reverse()) {
+    for (const [index, product] of [...productItems.data].reverse().entries()) {
       createdOrders.unshift(await createLocalOrder({
         ...parsed.data,
         ...normalizedProductForStore(product, parsed.data.store),
+        productPosition: productItems.data.length - index,
         salesNoteNumber: orderCode,
         groupCode,
         priority: orderPriority,
@@ -165,7 +166,7 @@ export async function createOrder(
 
   const { data: createdOrders, error: orderError } = await supabase
     .from("orders")
-    .insert(productItems.data.map((product) => ({
+    .insert(productItems.data.map((product, index) => ({
       store_id: store.id,
       internal_code: orderCode,
       sales_note_number: orderCode,
@@ -180,6 +181,7 @@ export async function createOrder(
       customer_email: parsed.data.customerEmail || null,
       customer_phone: parsed.data.customerPhone || null,
       product_name: product.productName,
+      product_position: index + 1,
       material: normalizedProductForStore(product, parsed.data.store).material,
       color: normalizedProductForStore(product, parsed.data.store).color,
       quantity: product.quantity ?? 1,

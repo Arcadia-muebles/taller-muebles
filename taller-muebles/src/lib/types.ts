@@ -127,6 +127,7 @@ export type Order = {
   customerEmail?: string;
   customerPhone?: string;
   product: string;
+  productPosition?: number;
   material: string;
   color: string;
   quantity?: number;

@@ -370,6 +370,7 @@ export type Database = {
           paid_amount: number | null
           priority: Database["public"]["Enums"]["priority_level"]
           product_name: string
+          product_position: number
           quantity: number | null
           sales_note_number: string | null
           status: Database["public"]["Enums"]["order_status"]
@@ -409,6 +410,7 @@ export type Database = {
           paid_amount?: number | null
           priority?: Database["public"]["Enums"]["priority_level"]
           product_name: string
+          product_position?: number
           quantity?: number | null
           sales_note_number?: string | null
           status?: Database["public"]["Enums"]["order_status"]
@@ -448,6 +450,7 @@ export type Database = {
           paid_amount?: number | null
           priority?: Database["public"]["Enums"]["priority_level"]
           product_name?: string
+          product_position?: number
           quantity?: number | null
           sales_note_number?: string | null
           status?: Database["public"]["Enums"]["order_status"]

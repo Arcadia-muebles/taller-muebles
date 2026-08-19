@@ -39,10 +39,14 @@ export function orderGroupKey(order: Pick<Order, "store" | "groupCode" | "code">
 }
 
 export function compareOrderGroupMembers(
-  first: Pick<Order, "product" | "id">,
-  second: Pick<Order, "product" | "id">,
+  first: Pick<Order, "product" | "productPosition" | "id">,
+  second: Pick<Order, "product" | "productPosition" | "id">,
 ) {
-  return first.product.localeCompare(second.product, "es", { sensitivity: "base" }) || first.id.localeCompare(second.id);
+  const firstPosition = first.productPosition ?? Number.MAX_SAFE_INTEGER;
+  const secondPosition = second.productPosition ?? Number.MAX_SAFE_INTEGER;
+  return firstPosition - secondPosition
+    || first.product.localeCompare(second.product, "es", { sensitivity: "base" })
+    || first.id.localeCompare(second.id);
 }
 
 export function productionOrderGroup(orders: Order[], seed: Order) {
