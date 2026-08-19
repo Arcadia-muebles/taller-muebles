@@ -81,29 +81,34 @@ export type AppUser = {
 export type ClientPortalLink = {
   id: string;
   orderId: string;
+  clientKey: string;
   tokenHash: string;
   createdAt: string;
+  updatedAt: string;
   expiresAt: string;
   createdBy?: string;
   revokedAt?: string;
 };
 
 export type ClientPortalOrder = {
-  code: string;
   client: string;
-  entryDate: string;
-  deliveryDate: string;
-  status: OrderStatus;
-  progress: number;
-  items: Array<{
-    id: string;
+  orders: Array<{
     code: string;
-    product: string;
-    color: string;
-    quantity: number;
+    store: StoreCode;
+    entryDate: string;
+    deliveryDate: string;
     status: OrderStatus;
     progress: number;
-    steps: Array<Pick<ProductionStep, "key" | "label" | "status">>;
+    items: Array<{
+      id: string;
+      code: string;
+      product: string;
+      color: string;
+      quantity: number;
+      status: OrderStatus;
+      progress: number;
+      steps: Array<Pick<ProductionStep, "key" | "label" | "status">>;
+    }>;
   }>;
 };
 

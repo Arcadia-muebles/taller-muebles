@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, BarChart3, Boxes, Building2, CalendarDays, FileText, Hammer, Home, PackageCheck, Settings, Users } from "lucide-react";
+import { Archive, BarChart3, Boxes, Building2, CalendarDays, FileText, Hammer, Home, Link2, PackageCheck, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -12,6 +12,7 @@ type SidebarNavigationProps = {
 
 const primaryModuleLinks = [
   { href: "/admin/documents", label: "Comercial", icon: FileText },
+  { href: "/admin/client-portals", label: "Portal clientes", icon: Link2, requiresEdit: true },
   { href: "/admin/structures", label: "Estructuras", icon: Hammer },
   { href: "/admin/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/admin/ready", label: "Listos para entrega", icon: PackageCheck },
@@ -59,7 +60,8 @@ export function SidebarNavigation({ active, canUseAdmin, canEditAdmin }: Sidebar
         <div className="mt-5">
           <p className="px-3 text-xs font-medium uppercase tracking-[0.16em] text-stone-400">Trabajo</p>
           <div className="mt-3 space-y-1 text-sm">
-            {primaryModuleLinks.map(({ href, label, icon: Icon }) => {
+            {primaryModuleLinks.map(({ href, label, icon: Icon, requiresEdit }) => {
+              if (requiresEdit && !canEditAdmin) return null;
               const isActive = pathname === href || pathname.startsWith(`${href}/`);
 
               return (

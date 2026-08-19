@@ -3,6 +3,7 @@ import "server-only";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgendaItem, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, ClientPortalLink, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
+import { clientPortalKeyForOrder } from "@/lib/client-portal-identity";
 import { defaultSystemSettings } from "@/lib/system-settings";
 import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
 import { canProductionStepsRunTogether, productionOrderGroup, productionStepsResetByReversal } from "@/lib/orders";
@@ -191,8 +192,12 @@ export async function getLocalOrder(id: string) {
 }
 
 export async function getLocalClientPortalLink(orderId: string) {
-  return (await readData()).clientPortalLinks?.find(
-    (link) => link.orderId === orderId && !link.revokedAt && link.expiresAt > new Date().toISOString(),
+  const data = await readData();
+  const order = data.orders.find((item) => item.id === orderId);
+  if (!order) return undefined;
+  const clientKey = clientPortalKeyForOrder(order);
+  return data.clientPortalLinks?.find(
+    (link) => (link.clientKey === clientKey || link.orderId === orderId) && !link.revokedAt && link.expiresAt > new Date().toISOString(),
   );
 }
 
@@ -202,11 +207,17 @@ export async function findLocalClientPortalLinkByTokenHash(tokenHash: string) {
   );
 }
 
+export async function listLocalClientPortalLinks() {
+  return (await readData()).clientPortalLinks ?? [];
+}
+
 export async function createLocalClientPortalLink(link: ClientPortalLink, actorName: string) {
   const data = await readData();
   const revokedAt = new Date().toISOString();
   data.clientPortalLinks = (data.clientPortalLinks ?? []).map((current) =>
-    current.orderId === link.orderId && !current.revokedAt ? { ...current, revokedAt } : current,
+    (current.clientKey === link.clientKey || current.orderId === link.orderId) && !current.revokedAt
+      ? { ...current, revokedAt }
+      : current,
   );
   data.clientPortalLinks.push(link);
   data.auditLogs.push({
@@ -221,10 +232,13 @@ export async function createLocalClientPortalLink(link: ClientPortalLink, actorN
 
 export async function revokeLocalClientPortalLink(orderId: string, actorName: string) {
   const data = await readData();
+  const order = data.orders.find((item) => item.id === orderId);
+  if (!order) return;
+  const clientKey = clientPortalKeyForOrder(order);
   const revokedAt = new Date().toISOString();
   let changed = false;
   data.clientPortalLinks = (data.clientPortalLinks ?? []).map((link) => {
-    if (link.orderId !== orderId || link.revokedAt) return link;
+    if ((link.clientKey !== clientKey && link.orderId !== orderId) || link.revokedAt) return link;
     changed = true;
     return { ...link, revokedAt };
   });
@@ -238,6 +252,44 @@ export async function revokeLocalClientPortalLink(orderId: string, actorName: st
     });
     await writeData(data);
   }
+}
+
+export async function updateLocalClientPortalLink(linkId: string, expiresAt: string, actorName: string) {
+  const data = await readData();
+  const link = (data.clientPortalLinks ?? []).find((item) => item.id === linkId && !item.revokedAt);
+  if (!link) return undefined;
+
+  const updatedAt = new Date().toISOString();
+  link.expiresAt = expiresAt;
+  link.updatedAt = updatedAt;
+  data.auditLogs.push({
+    id: crypto.randomUUID(),
+    orderId: link.orderId,
+    action: "Vigencia de Portal Cliente actualizada",
+    summary: `Enlace actualizado por ${actorName}; vence el ${expiresAt.slice(0, 10)}.`,
+    createdAt: updatedAt,
+  });
+  await writeData(data);
+  return link.orderId;
+}
+
+export async function revokeLocalClientPortalLinkById(linkId: string, actorName: string) {
+  const data = await readData();
+  const link = (data.clientPortalLinks ?? []).find((item) => item.id === linkId && !item.revokedAt);
+  if (!link) return undefined;
+
+  const revokedAt = new Date().toISOString();
+  link.revokedAt = revokedAt;
+  link.updatedAt = revokedAt;
+  data.auditLogs.push({
+    id: crypto.randomUUID(),
+    orderId: link.orderId,
+    action: "Acceso de Portal Cliente revocado",
+    summary: `Enlace eliminado por ${actorName}.`,
+    createdAt: revokedAt,
+  });
+  await writeData(data);
+  return link.orderId;
 }
 
 export async function createLocalOrder(input: {
@@ -1480,6 +1532,20 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
           changed = true;
         }
       }
+    }
+  }
+
+  for (const link of data.clientPortalLinks ?? []) {
+    if (!link.clientKey) {
+      const order = data.orders.find((item) => item.id === link.orderId);
+      if (order) {
+        link.clientKey = clientPortalKeyForOrder(order);
+        changed = true;
+      }
+    }
+    if (!link.updatedAt) {
+      link.updatedAt = link.revokedAt ?? link.createdAt;
+      changed = true;
     }
   }
 

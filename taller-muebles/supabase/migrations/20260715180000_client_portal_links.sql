@@ -19,8 +19,9 @@ where revoked_at is null;
 
 alter table public.client_portal_links enable row level security;
 
-revoke all on public.client_portal_links from anon;
+revoke all on public.client_portal_links from anon, authenticated;
 grant select, insert, update on public.client_portal_links to authenticated;
+grant select, insert, update on public.client_portal_links to service_role;
 
 create policy "client portal links readable by admins"
 on public.client_portal_links for select

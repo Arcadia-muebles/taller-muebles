@@ -1,22 +1,32 @@
 import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import type { ClientPortalLink, ClientPortalOrder, Order, OrderStatus, StepStatus } from "@/lib/types";
+import { clientPortalKey, clientPortalKeyForOrder, hasSharedClientIdentity } from "@/lib/client-portal-identity";
+import type { ClientPortalLink, ClientPortalOrder, Order, OrderStatus, StepStatus, StoreCode } from "@/lib/types";
 import { completionPercent } from "@/lib/metrics";
 import {
   createLocalClientPortalLink,
   findLocalClientPortalLinkByTokenHash,
-  getLocalClientPortalLink,
   getLocalOrder,
   listLocalOrders,
-  revokeLocalClientPortalLink,
+  revokeLocalClientPortalLinkById,
+  updateLocalClientPortalLink,
 } from "@/lib/local-store";
-import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { hasSupabaseConfig } from "@/lib/env";
+import { createPublicClient } from "@/lib/supabase/public";
+import { createClient } from "@/lib/supabase/server";
 
-const linkLifetimeDays = 90;
+const defaultLinkLifetimeDays = 90;
 
-export type ClientPortalLinkSummary = Pick<ClientPortalLink, "id" | "createdAt" | "expiresAt">;
+type IdentityOrderRow = {
+  id: string;
+  internal_code: string;
+  group_code: string | null;
+  store_id: string;
+  customer_rut: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+};
 
 type SafeOrderRow = {
   id: string;
@@ -24,12 +34,14 @@ type SafeOrderRow = {
   group_code: string | null;
   store_id: string;
   client_name: string;
+  document_type: string;
   product_name: string;
   color: string | null;
   quantity: number | null;
   status: OrderStatus;
   entry_date: string;
   delivery_date: string;
+  stores: { code: string } | null;
   production_steps: Array<{
     step: string;
     step_label: string;
@@ -38,106 +50,151 @@ type SafeOrderRow = {
   }> | null;
 };
 
-export async function getClientPortalLinkSummary(orderId: string): Promise<ClientPortalLinkSummary | undefined> {
-  if (!hasSupabaseConfig()) {
-    const link = await getLocalClientPortalLink(orderId);
-    return link ? summarizeLink(link) : undefined;
-  }
-  if (!hasSupabaseAdminConfig()) return undefined;
-
-  const { data, error } = await getSupabaseAdmin()
-    .from("client_portal_links")
-    .select("id, created_at, expires_at")
-    .eq("order_id", orderId)
-    .is("revoked_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .maybeSingle();
-  if (error || !data) return undefined;
-  return { id: data.id, createdAt: data.created_at, expiresAt: data.expires_at };
-}
+const identityOrderSelect = "id, internal_code, group_code, store_id, customer_rut, customer_email, customer_phone";
 
 export async function createClientPortalAccess({
   orderId,
   profileId,
   actorName,
+  lifetimeDays = defaultLinkLifetimeDays,
 }: {
   orderId: string;
   profileId?: string;
   actorName: string;
+  lifetimeDays?: number;
 }) {
+  if (!Number.isInteger(lifetimeDays) || lifetimeDays < 1 || lifetimeDays > 365) {
+    throw new Error("La vigencia del enlace no es válida.");
+  }
   const token = randomBytes(32).toString("base64url");
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + linkLifetimeDays * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(now.getTime() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString();
+
+  if (!hasSupabaseConfig()) {
+    const order = await getLocalOrder(orderId);
+    if (!order) throw new Error("La orden no existe.");
+    const clientKey = clientPortalKeyForOrder(order);
+    const link: ClientPortalLink = {
+      id: randomUUID(),
+      orderId,
+      clientKey,
+      tokenHash: hashToken(token),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      expiresAt,
+      createdBy: profileId,
+    };
+    await createLocalClientPortalLink(link, actorName);
+    return { token, expiresAt, scope: hasSharedClientIdentity(clientKey) ? "customer" as const : "order" as const };
+  }
+
+  const supabase = await createClient();
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select(identityOrderSelect)
+    .eq("id", orderId)
+    .maybeSingle();
+  if (orderError || !order) throw new Error(orderError?.message ?? "La orden no existe.");
+
+  const clientKey = keyForRow(order as IdentityOrderRow);
   const link: ClientPortalLink = {
     id: randomUUID(),
     orderId,
+    clientKey,
     tokenHash: hashToken(token),
     createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
     expiresAt,
     createdBy: profileId,
   };
 
-  if (!hasSupabaseConfig()) {
-    await createLocalClientPortalLink(link, actorName);
-  } else {
-    if (!hasSupabaseAdminConfig()) throw new Error("Falta configurar SUPABASE_SERVICE_ROLE_KEY.");
-    const admin = getSupabaseAdmin();
-    await admin
-      .from("client_portal_links")
-      .update({ revoked_at: link.createdAt })
-      .eq("order_id", orderId)
-      .is("revoked_at", null);
-    const { error } = await admin.from("client_portal_links").insert({
-      id: link.id,
-      order_id: orderId,
-      token_hash: link.tokenHash,
-      created_by: profileId ?? null,
-      created_at: link.createdAt,
-      expires_at: link.expiresAt,
-    });
-    if (error) throw new Error(error.message);
-    await admin.from("audit_logs").insert({
-      order_id: orderId,
-      profile_id: profileId ?? null,
-      entity: "client_portal_link",
-      entity_id: link.id,
-      action: "create_client_portal_link",
-      new_value: expiresAt,
-    });
-  }
+  const { error: revokeError } = await supabase
+    .from("client_portal_links")
+    .update({ revoked_at: link.createdAt, updated_at: link.updatedAt })
+    .eq("client_key", clientKey)
+    .is("revoked_at", null);
+  if (revokeError) throw new Error(revokeError.message);
+  const { error: anchorRevokeError } = await supabase
+    .from("client_portal_links")
+    .update({ revoked_at: link.createdAt, updated_at: link.updatedAt })
+    .eq("order_id", orderId)
+    .is("revoked_at", null);
+  if (anchorRevokeError) throw new Error(anchorRevokeError.message);
 
-  return { token, expiresAt };
+  const { error } = await supabase.from("client_portal_links").insert({
+    id: link.id,
+    order_id: orderId,
+    client_key: clientKey,
+    token_hash: link.tokenHash,
+    created_by: profileId ?? null,
+    created_at: link.createdAt,
+    updated_at: link.updatedAt,
+    expires_at: link.expiresAt,
+  });
+  if (error) throw new Error(error.message);
+
+  return { token, expiresAt, scope: hasSharedClientIdentity(clientKey) ? "customer" as const : "order" as const };
 }
 
-export async function revokeClientPortalAccess({
-  orderId,
-  profileId,
+export async function updateClientPortalAccess({
+  linkId,
+  lifetimeDays,
   actorName,
 }: {
-  orderId: string;
-  profileId?: string;
+  linkId: string;
+  lifetimeDays: number;
+  actorName: string;
+}) {
+  if (!Number.isInteger(lifetimeDays) || lifetimeDays < 1 || lifetimeDays > 365) {
+    throw new Error("La vigencia del enlace no es válida.");
+  }
+  const updatedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + lifetimeDays * 24 * 60 * 60 * 1000).toISOString();
+
+  if (!hasSupabaseConfig()) {
+    const orderId = await updateLocalClientPortalLink(linkId, expiresAt, actorName);
+    if (!orderId) throw new Error("El enlace ya no está disponible.");
+    return { orderId, expiresAt };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("client_portal_links")
+    .update({ expires_at: expiresAt, updated_at: updatedAt })
+    .eq("id", linkId)
+    .is("revoked_at", null)
+    .select("order_id")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("El enlace ya no está disponible.");
+
+  return { orderId: data.order_id, expiresAt };
+}
+
+export async function revokeClientPortalAccessById({
+  linkId,
+  actorName,
+}: {
+  linkId: string;
   actorName: string;
 }) {
   if (!hasSupabaseConfig()) {
-    await revokeLocalClientPortalLink(orderId, actorName);
-    return;
+    const orderId = await revokeLocalClientPortalLinkById(linkId, actorName);
+    if (!orderId) throw new Error("El enlace ya no está disponible.");
+    return orderId;
   }
-  if (!hasSupabaseAdminConfig()) throw new Error("Falta configurar SUPABASE_SERVICE_ROLE_KEY.");
-  const admin = getSupabaseAdmin();
+  const supabase = await createClient();
   const revokedAt = new Date().toISOString();
-  const { error } = await admin
+  const { data, error } = await supabase
     .from("client_portal_links")
-    .update({ revoked_at: revokedAt })
-    .eq("order_id", orderId)
-    .is("revoked_at", null);
+    .update({ revoked_at: revokedAt, updated_at: revokedAt })
+    .eq("id", linkId)
+    .is("revoked_at", null)
+    .select("order_id")
+    .maybeSingle();
   if (error) throw new Error(error.message);
-  await admin.from("audit_logs").insert({
-    order_id: orderId,
-    profile_id: profileId ?? null,
-    entity: "client_portal_link",
-    action: "revoke_client_portal_link",
-    new_value: revokedAt,
-  });
+  if (!data) throw new Error("El enlace ya no está disponible.");
+
+  return data.order_id;
 }
 
 export async function getClientPortalOrder(token: string): Promise<ClientPortalOrder | undefined> {
@@ -149,49 +206,63 @@ export async function getClientPortalOrder(token: string): Promise<ClientPortalO
     if (!link) return undefined;
     const root = await getLocalOrder(link.orderId);
     if (!root) return undefined;
+    const clientKey = link.clientKey || clientPortalKeyForOrder(root);
     const orders = (await listLocalOrders()).filter(
-      (order) => order.store === root.store && order.groupCode === root.groupCode,
+      (order) => order.documentType !== "quote" && clientPortalKeyForOrder(order) === clientKey,
     );
-    return mapPortalOrder(root, orders);
+    return orders.length ? mapLocalPortal(root, orders) : undefined;
   }
 
-  if (!hasSupabaseAdminConfig()) return undefined;
-  const admin = getSupabaseAdmin();
-  const { data: link, error: linkError } = await admin
-    .from("client_portal_links")
-    .select("order_id")
-    .eq("token_hash", tokenHash)
-    .is("revoked_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .maybeSingle();
-  if (linkError || !link) return undefined;
-
-  const { data: root, error: rootError } = await admin
-    .from("orders")
-    .select("id, group_code, store_id")
-    .eq("id", link.order_id)
-    .maybeSingle();
-  if (rootError || !root) return undefined;
-
-  const { data, error } = await admin
-    .from("orders")
-    .select("id, internal_code, group_code, store_id, client_name, product_name, color, quantity, status, entry_date, delivery_date, production_steps(step, step_label, status, sort_order)")
-    .eq("group_code", root.group_code)
-    .eq("store_id", root.store_id)
-    .order("internal_code", { ascending: true });
+  const supabase = createPublicClient();
+  const { data, error } = await supabase.rpc("get_client_portal_orders", { p_token_hash: tokenHash });
   if (error || !data?.length) return undefined;
-  return mapSafeRows(data as SafeOrderRow[]);
+
+  const rows: SafeOrderRow[] = data.map((row) => ({
+    id: row.order_id,
+    internal_code: row.internal_code,
+    group_code: row.group_code,
+    store_id: row.store_id,
+    client_name: row.client_name,
+    document_type: row.document_type,
+    product_name: row.product_name,
+    color: row.color,
+    quantity: row.quantity,
+    status: row.status as OrderStatus,
+    entry_date: row.entry_date,
+    delivery_date: row.delivery_date ?? row.entry_date,
+    stores: { code: row.store_code },
+    production_steps: Array.isArray(row.production_steps)
+      ? row.production_steps as SafeOrderRow["production_steps"]
+      : [],
+  }));
+  return mapSafeRows(rows, data[0].link_order_id);
 }
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function summarizeLink(link: ClientPortalLink): ClientPortalLinkSummary {
-  return { id: link.id, createdAt: link.createdAt, expiresAt: link.expiresAt };
+function keyForRow(row: IdentityOrderRow) {
+  return clientPortalKey({
+    store: row.store_id,
+    code: row.internal_code,
+    groupCode: row.group_code,
+    customerRut: row.customer_rut,
+    customerEmail: row.customer_email,
+    customerPhone: row.customer_phone,
+  });
 }
 
-function mapPortalOrder(root: Order, orders: Order[]): ClientPortalOrder {
+function mapLocalPortal(root: Order, orders: Order[]): ClientPortalOrder {
+  const groups = groupByDocument(orders, (order) => `${order.store}:${order.groupCode || order.code}`);
+  return {
+    client: root.client,
+    orders: groups.map((group) => mapLocalGroup(group)),
+  };
+}
+
+function mapLocalGroup(orders: Order[]): ClientPortalOrder["orders"][number] {
+  const first = orders[0];
   const items = orders.map((order) => ({
     id: order.id,
     code: order.code,
@@ -203,17 +274,27 @@ function mapPortalOrder(root: Order, orders: Order[]): ClientPortalOrder {
     steps: order.steps.map(({ key, label, status }) => ({ key, label, status })),
   }));
   return {
-    code: root.groupCode || root.code,
-    client: root.client,
-    entryDate: root.entryDate,
-    deliveryDate: root.deliveryDate,
+    code: first.groupCode || first.code,
+    store: first.store,
+    entryDate: earliestDate(orders.map((order) => order.entryDate)),
+    deliveryDate: latestDate(orders.map((order) => order.deliveryDate)),
     status: groupStatus(orders),
     progress: groupProgress(items.map((item) => item.progress)),
     items,
   };
 }
 
-function mapSafeRows(rows: SafeOrderRow[]): ClientPortalOrder {
+function mapSafeRows(rows: SafeOrderRow[], rootOrderId: string): ClientPortalOrder {
+  const root = rows.find((row) => row.id === rootOrderId) ?? rows[0];
+  const groups = groupByDocument(rows, (row) => `${row.store_id}:${row.group_code || row.internal_code}`);
+  return {
+    client: root.client_name,
+    orders: groups.map((group) => mapSafeGroup(group)),
+  };
+}
+
+function mapSafeGroup(rows: SafeOrderRow[]): ClientPortalOrder["orders"][number] {
+  const first = rows[0];
   const items = rows.map((row) => {
     const steps = [...(row.production_steps ?? [])]
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -232,20 +313,37 @@ function mapSafeRows(rows: SafeOrderRow[]): ClientPortalOrder {
       steps,
     };
   });
-  const first = rows[0];
   return {
     code: first.group_code || first.internal_code,
-    client: first.client_name,
-    entryDate: first.entry_date,
-    deliveryDate: first.delivery_date,
-    status: groupStatus(rows.map((row) => ({ status: row.status }))),
+    store: (first.stores?.code ?? "LR") as StoreCode,
+    entryDate: earliestDate(rows.map((row) => row.entry_date)),
+    deliveryDate: latestDate(rows.map((row) => row.delivery_date)),
+    status: groupStatus(rows),
     progress: groupProgress(items.map((item) => item.progress)),
     items,
   };
 }
 
+function groupByDocument<T>(items: T[], keyForItem: (item: T) => string) {
+  const grouped = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyForItem(item);
+    grouped.set(key, [...(grouped.get(key) ?? []), item]);
+  }
+  return [...grouped.values()].sort((a, b) => newestEntryDate(b).localeCompare(newestEntryDate(a)));
+}
+
+function newestEntryDate<T>(group: T[]) {
+  return group.reduce((latest, item) => {
+    const value = item as T & { entryDate?: string; entry_date?: string };
+    const entryDate = value.entryDate ?? value.entry_date ?? "";
+    return entryDate > latest ? entryDate : latest;
+  }, "");
+}
+
 function groupStatus(orders: Array<Pick<Order, "status">>) {
   if (orders.every((order) => order.status === "completed")) return "completed";
+  if (orders.every((order) => order.status === "cancelled")) return "cancelled";
   if (orders.some((order) => order.status === "blocked")) return "blocked";
   if (orders.some((order) => order.status === "urgent")) return "urgent";
   if (orders.some((order) => order.status === "quality_control")) return "quality_control";
@@ -255,4 +353,12 @@ function groupStatus(orders: Array<Pick<Order, "status">>) {
 
 function groupProgress(values: number[]) {
   return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
+}
+
+function earliestDate(values: string[]) {
+  return [...values].sort()[0];
+}
+
+function latestDate(values: string[]) {
+  return [...values].sort().at(-1) ?? values[0];
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { connection } from "next/server";
 import { AlertCircle, CalendarDays, Check, Circle, Clock3, PackageCheck } from "lucide-react";
 import { brand } from "@/lib/brand";
 import { getClientPortalOrder } from "@/lib/client-portal";
@@ -13,71 +14,78 @@ export const metadata: Metadata = {
 };
 
 export default async function ClientTrackingPage({ params }: { params: Promise<{ token: string }> }) {
+  await connection();
   const { token } = await params;
-  const order = await getClientPortalOrder(token);
+  const portal = await getClientPortalOrder(token);
 
-  if (!order) return <UnavailableLink />;
+  if (!portal) return <UnavailableLink />;
 
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-6 text-stone-950 sm:px-6 sm:py-10">
       <div className="mx-auto w-full min-w-0 max-w-5xl">
-        <header className="flex flex-col gap-5 border-b border-stone-300 pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <header className="border-b border-stone-300 pb-6">
           <div>
             <Image src={brand.logo} alt="La Reina · Muebles en cuero" width={1600} height={874} className="h-auto w-36" priority unoptimized />
             <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">Portal Cliente</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Seguimiento de tu pedido</h1>
-            <p className="mt-2 text-sm text-stone-600">Hola, {order.client}. Este es el estado actualizado de tu nota {order.code}.</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Seguimiento de tus pedidos</h1>
+            <p className="mt-2 text-sm text-stone-600">
+              Hola, {portal.client}. Aquí puedes consultar el avance actualizado {portal.orders.length === 1 ? "de tu pedido" : `de tus ${portal.orders.length} pedidos`}.
+            </p>
           </div>
-          <StatusPill status={order.status} />
         </header>
 
-        <section className="mt-6 grid gap-3 sm:grid-cols-3">
-          <SummaryCard label="Pedido" value={order.code} icon={<PackageCheck className="size-5" />} />
-          <SummaryCard label="Ingresó" value={formatDate(order.entryDate)} icon={<Clock3 className="size-5" />} />
-          <SummaryCard label="Entrega estimada" value={formatDate(order.deliveryDate)} icon={<CalendarDays className="size-5" />} />
-        </section>
-
-        <section className="mt-6 rounded-xl border border-stone-200 bg-white p-5 shadow-sm shadow-stone-200/40 sm:p-6">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">Avance general</p>
-              <p className="mt-1 text-lg font-semibold">{progressMessage(order.progress)}</p>
-            </div>
-            <p className="text-3xl font-semibold tabular-nums">{order.progress}%</p>
-          </div>
-          <div className="mt-4 h-3 overflow-hidden rounded-full bg-stone-100">
-            <div className="h-full rounded-full bg-emerald-600 transition-all" style={{ width: `${order.progress}%` }} />
-          </div>
-        </section>
-
-        <div className="mt-6 space-y-4">
-          {order.items.map((item) => (
-            <article key={item.id} className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm shadow-stone-200/40">
-              <div className="flex flex-col gap-3 border-b border-stone-200 p-5 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">{item.code}</p>
-                  <h2 className="mt-1 text-xl font-semibold">{item.product}</h2>
-                  <p className="mt-1 text-sm text-stone-600">Color: {item.color}{item.quantity > 1 ? ` · Cantidad: ${item.quantity}` : ""}</p>
+        <div className="mt-6 space-y-6">
+          {portal.orders.map((order) => (
+            <section key={`${order.store}:${order.code}`} className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm shadow-stone-200/40">
+              <div className="border-b border-stone-200 bg-stone-50 p-5 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">Pedido {order.code} · {storeLabel(order.store)}</p>
+                    <h2 className="mt-1 text-2xl font-semibold">{progressMessage(order.progress)}</h2>
+                  </div>
+                  <StatusPill status={order.status} />
                 </div>
-                <span className="text-sm font-semibold tabular-nums text-stone-600">{item.progress}%</span>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <SummaryCard label="Ingreso" value={formatDate(order.entryDate)} icon={<Clock3 className="size-5" />} />
+                  <SummaryCard label="Entrega estimada" value={formatDate(order.deliveryDate)} icon={<CalendarDays className="size-5" />} />
+                  <SummaryCard label="Avance" value={`${order.progress}%`} icon={<PackageCheck className="size-5" />} />
+                </div>
+                <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-stone-200">
+                  <div className="h-full rounded-full bg-emerald-600" style={{ width: `${order.progress}%` }} />
+                </div>
               </div>
-              <ol className="grid gap-0 p-5 sm:grid-cols-2 lg:grid-cols-4">
-                {item.steps.map((step, index) => (
-                  <li key={step.key} className="relative flex gap-3 border-l border-stone-200 pb-5 pl-5 last:pb-0 sm:border-l-0 sm:border-t sm:pb-0 sm:pl-0 sm:pt-5">
-                    <StepIcon status={step.status} />
-                    <div>
-                      <p className="text-sm font-semibold">{step.label}</p>
-                      <p className="mt-0.5 text-xs text-stone-500">{stepLabel(step.status, index, item.steps)}</p>
+
+              <div className="divide-y divide-stone-200">
+                {order.items.map((item) => (
+                  <article key={item.id} className="p-5 sm:p-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">{item.code}</p>
+                        <h3 className="mt-1 text-xl font-semibold">{item.product}</h3>
+                        <p className="mt-1 text-sm text-stone-600">Color: {item.color}{item.quantity > 1 ? ` · Cantidad: ${item.quantity}` : ""}</p>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-stone-600">{item.progress}%</span>
                     </div>
-                  </li>
+                    <ol className="mt-5 grid gap-0 lg:grid-flow-col lg:auto-cols-fr">
+                      {item.steps.map((step, index) => (
+                        <li key={step.key} className="relative flex gap-3 border-l border-stone-200 pb-5 pl-5 last:pb-0 lg:border-l-0 lg:border-t lg:pb-0 lg:pl-0 lg:pt-5">
+                          <StepIcon status={step.status} />
+                          <div>
+                            <p className="text-sm font-semibold">{step.label}</p>
+                            <p className="mt-0.5 text-xs text-stone-500">{stepLabel(step.status, index, item.steps)}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </article>
                 ))}
-              </ol>
-            </article>
+              </div>
+            </section>
           ))}
         </div>
 
         <footer className="mt-8 border-t border-stone-300 pt-5 text-center text-xs leading-5 text-stone-500">
-          Este enlace es privado. No lo publiques ni lo reenvíes fuera de tu empresa.
+          Este enlace da acceso directo a tu seguimiento. Compártelo sólo con personas de confianza.
         </footer>
       </div>
     </main>
@@ -106,10 +114,10 @@ function StatusPill({ status }: { status: OrderStatus }) {
 }
 
 function StepIcon({ status }: { status: StepStatus }) {
-  if (status === "done") return <span className="absolute -left-3 grid size-6 place-items-center rounded-full bg-emerald-600 text-white sm:-top-3 sm:left-0"><Check className="size-3.5" /></span>;
-  if (status === "active") return <span className="absolute -left-3 grid size-6 place-items-center rounded-full bg-sky-600 text-white sm:-top-3 sm:left-0"><Clock3 className="size-3.5" /></span>;
-  if (status === "blocked") return <span className="absolute -left-3 grid size-6 place-items-center rounded-full bg-amber-500 text-white sm:-top-3 sm:left-0"><AlertCircle className="size-3.5" /></span>;
-  return <span className="absolute -left-3 grid size-6 place-items-center rounded-full border border-stone-300 bg-white text-stone-400 sm:-top-3 sm:left-0"><Circle className="size-3" /></span>;
+  if (status === "done") return <span className="absolute -left-3 grid size-6 place-items-center rounded-full bg-emerald-600 text-white lg:-top-3 lg:left-0"><Check className="size-3.5" /></span>;
+  if (status === "active") return <span className="absolute -left-3 grid size-6 place-items-center rounded-full bg-sky-600 text-white lg:-top-3 lg:left-0"><Clock3 className="size-3.5" /></span>;
+  if (status === "blocked") return <span className="absolute -left-3 grid size-6 place-items-center rounded-full bg-amber-500 text-white lg:-top-3 lg:left-0"><AlertCircle className="size-3.5" /></span>;
+  return <span className="absolute -left-3 grid size-6 place-items-center rounded-full border border-stone-300 bg-white text-stone-400 lg:-top-3 lg:left-0"><Circle className="size-3" /></span>;
 }
 
 function UnavailableLink() {
@@ -137,6 +145,10 @@ function progressMessage(progress: number) {
   if (progress >= 100) return "Tu pedido está terminado";
   if (progress > 0) return "Tu pedido está en producción";
   return "Tu pedido fue recibido";
+}
+
+function storeLabel(store: "LH" | "LR") {
+  return store === "LH" ? "Leather House" : "La Reina";
 }
 
 function stepLabel(status: StepStatus, index: number, steps: Array<{ status: StepStatus }>) {

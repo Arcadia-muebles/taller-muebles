@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, BarChart3, Boxes, Building2, CalendarDays, FileText, Hammer, Home, LogOut, Menu, PackageCheck, Settings, Users, X } from "lucide-react";
+import { Archive, BarChart3, Boxes, Building2, CalendarDays, FileText, Hammer, Home, Link2, LogOut, Menu, PackageCheck, Settings, Users, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -45,6 +45,7 @@ export function MobileNavigation({
           {canUseAdmin ? (
             <>
               <NavLink href="/admin/documents" icon={FileText} label="Comercial" active={pathname.startsWith("/admin/documents")} />
+              {canEditAdmin ? <NavLink href="/admin/client-portals" icon={Link2} label="Portal clientes" active={pathname.startsWith("/admin/client-portals")} /> : null}
               <NavLink href="/admin/structures" icon={Hammer} label="Estructuras" active={pathname.startsWith("/admin/structures")} />
               <NavLink href="/admin/agenda" icon={CalendarDays} label="Agenda" active={pathname.startsWith("/admin/agenda")} />
               <NavLink href="/admin/ready" icon={PackageCheck} label="Listos para entrega" active={pathname.startsWith("/admin/ready")} />

@@ -90,6 +90,7 @@ export type Database = {
       }
       client_portal_links: {
         Row: {
+          client_key: string
           created_at: string
           created_by: string | null
           expires_at: string
@@ -97,8 +98,10 @@ export type Database = {
           order_id: string
           revoked_at: string | null
           token_hash: string
+          updated_at: string
         }
         Insert: {
+          client_key: string
           created_at?: string
           created_by?: string | null
           expires_at: string
@@ -106,8 +109,10 @@ export type Database = {
           order_id: string
           revoked_at?: string | null
           token_hash: string
+          updated_at?: string
         }
         Update: {
+          client_key?: string
           created_at?: string
           created_by?: string | null
           expires_at?: string
@@ -115,6 +120,7 @@ export type Database = {
           order_id?: string
           revoked_at?: string | null
           token_hash?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -702,6 +708,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_client_portal_orders: {
+        Args: { p_token_hash: string }
+        Returns: {
+          client_name: string
+          color: string | null
+          delivery_date: string | null
+          document_type: string
+          entry_date: string
+          group_code: string
+          internal_code: string
+          link_order_id: string
+          order_id: string
+          product_name: string
+          production_steps: Json
+          quantity: number | null
+          status: string
+          store_code: string
+          store_id: string
+        }[]
+      }
       record_stock_movement: {
         Args: {
           p_material_id: string
