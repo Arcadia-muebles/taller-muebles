@@ -229,7 +229,7 @@ export function OrderForm({
     if (readOnly) return;
     if (!(event?.target instanceof HTMLFormElement)) return;
     const formData = new FormData(event.target);
-    if (!orderId) formData.set("productItems", JSON.stringify(products));
+    formData.set("productItems", JSON.stringify(products));
     if (orderId && products[0]) {
       formData.set("productName", products[0].productName ?? "");
       formData.set("material", products[0].material ?? "");
@@ -462,6 +462,7 @@ export function OrderForm({
               <button
                 type="button"
                 onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
+                disabled={Boolean(orderId)}
                 className="btn btn-secondary w-fit"
               >
                 <Plus className="size-4" />
@@ -495,7 +496,7 @@ export function OrderForm({
                     <button
                       type="button"
                       onClick={() => removeProduct(index)}
-                      disabled={productFields.length === 1}
+                      disabled={Boolean(orderId) || productFields.length === 1}
                       className="grid size-11 place-items-center rounded-md border border-stone-200 text-stone-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                       aria-label={`Eliminar producto ${index + 1}`}
                       title="Eliminar producto"
@@ -741,7 +742,7 @@ export function OrderForm({
                         <button
                           type="button"
                           onClick={() => removeProduct(index)}
-                          disabled={productFields.length === 1}
+                          disabled={Boolean(orderId) || productFields.length === 1}
                           className="grid size-8 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="Eliminar producto"
                           title="Eliminar producto"
@@ -762,6 +763,7 @@ export function OrderForm({
                 <button
                   type="button"
                   onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
+                  disabled={Boolean(orderId)}
                   className="btn btn-secondary border-dashed"
                 >
                   <PackagePlus className="size-4" />
@@ -841,7 +843,13 @@ export function OrderForm({
             ) : null}
           </div>
 
-          {!isQuote ? (
+          {isQuote ? (
+            <QuotePaymentSchedule
+              total={computedTotal}
+              confirmationDate={entryDateValue}
+              deliveryDate={deliveryDateValue}
+            />
+          ) : (
             <div className="sales-note-payment-grid grid gap-4 border-b border-stone-300 px-4 py-4 md:grid-cols-2 md:px-6">
               <PaymentDocumentBox title="Abono" amount={formatCurrency(computedPaid)}>
                 <PaymentRows
@@ -876,7 +884,7 @@ export function OrderForm({
                 </div>
               </PaymentDocumentBox>
             </div>
-          ) : null}
+          )}
 
           {!isQuote ? (
             <div className="sales-note-print-signature px-4 py-3 text-center md:px-6">
@@ -1143,6 +1151,7 @@ export function OrderForm({
             <button
               type="button"
               onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
+              disabled={Boolean(orderId)}
               className="btn btn-secondary w-fit"
             >
               <PackagePlus className="size-4" />
@@ -1202,7 +1211,7 @@ export function OrderForm({
                       <button
                         type="button"
                         onClick={() => removeProduct(index)}
-                        disabled={productFields.length === 1}
+                        disabled={Boolean(orderId) || productFields.length === 1}
                         className="grid size-10 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                         aria-label="Eliminar producto"
                         title="Eliminar producto"
@@ -1644,6 +1653,53 @@ function PaymentDocumentBox({
         <p className="text-xl font-bold text-stone-950">{amount}</p>
       </div>
       <div className="pt-3">{children}</div>
+    </section>
+  );
+}
+
+function QuotePaymentSchedule({
+  total,
+  confirmationDate,
+  deliveryDate,
+}: {
+  total: number;
+  confirmationDate?: string;
+  deliveryDate?: string;
+}) {
+  const initialPayment = Math.round(total / 2);
+  const deliveryPayment = Math.max(total - initialPayment, 0);
+  const schedule = [
+    {
+      label: "50% al confirmar",
+      date: confirmationDate ? formatChileanDocumentDate(confirmationDate) : "Fecha de confirmación",
+      amount: initialPayment,
+    },
+    {
+      label: "50% contra entrega",
+      date: deliveryDate ? formatChileanDocumentDate(deliveryDate) : "Fecha de entrega",
+      amount: deliveryPayment,
+    },
+  ];
+
+  return (
+    <section className="border-b border-stone-300 px-4 py-4 md:px-6">
+      <div className="mb-3">
+        <h3 className="text-sm font-bold uppercase text-stone-950">Condiciones de pago</h3>
+        <p className="mt-1 text-xs text-stone-500">Distribución automática del total de la cotización.</p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {schedule.map((payment) => (
+          <div key={payment.label} className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.08em] text-stone-700">{payment.label}</p>
+                <p className="mt-1 text-xs text-stone-500">{payment.date}</p>
+              </div>
+              <p className="text-lg font-bold text-stone-950">{formatCurrency(payment.amount)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

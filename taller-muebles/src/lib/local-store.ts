@@ -1053,6 +1053,17 @@ export async function createLocalOrderComment(orderId: string, author: string, b
   await writeData(data);
 }
 
+export async function resolveLocalOrderComment(orderId: string, commentId: string, resolvedBy: string) {
+  const data = await readData();
+  const comment = data.comments.find((item) => item.id === commentId && item.orderId === orderId);
+  if (!comment || comment.resolvedAt) return false;
+  comment.resolvedAt = new Date().toISOString();
+  comment.resolvedBy = resolvedBy;
+  addAudit(data, orderId, "resolve_comment", `${resolvedBy} marcó una observación como lista`);
+  await writeData(data);
+  return true;
+}
+
 export async function updateLocalProductionStepComment(
   orderId: string,
   stepKey: AreaKey,

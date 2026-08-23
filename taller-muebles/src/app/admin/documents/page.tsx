@@ -1,4 +1,4 @@
-import { ChevronDown, FileText, Plus } from "lucide-react";
+import { ChevronDown, FileText, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -26,11 +26,17 @@ type DocumentSummary = {
 
 const documentOrder: CommercialDocumentType[] = ["sales_note", "quote", "purchase_order", "warranty"];
 
-export default async function DocumentsPage() {
+export default async function DocumentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
   const user = await requireSession(["admin", "manager", "viewer"]);
-  const [orders, settings] = await Promise.all([listOrders(), getSystemSettings()]);
+  const [orders, settings, queryParams] = await Promise.all([listOrders(), getSystemSettings(), searchParams]);
   const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
   const documents = groupDocuments(orders);
+  const query = (Array.isArray(queryParams.q) ? queryParams.q[0] : queryParams.q)?.trim() ?? "";
+  const filteredDocuments = filterDocuments(documents, query);
 
   return (
     <AppShell active="admin" user={user}>
@@ -54,9 +60,38 @@ export default async function DocumentsPage() {
         ) : null}
       </header>
 
+      <form action="/admin/documents" method="get" className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <label className="relative block min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+          <input
+            name="q"
+            type="search"
+            defaultValue={query}
+            placeholder="Buscar cliente, código o producto..."
+            aria-label="Buscar documentos comerciales"
+            className="control h-11 w-full bg-white pl-9 pr-3"
+          />
+        </label>
+        <button type="submit" className="btn btn-primary h-11 sm:w-auto">
+          <Search className="size-4" />
+          Buscar
+        </button>
+        {query ? (
+          <Link href="/admin/documents" className="btn btn-secondary h-11 sm:w-auto">
+            <X className="size-4" />
+            Limpiar
+          </Link>
+        ) : null}
+      </form>
+      {query ? (
+        <p className="mt-2 text-sm text-stone-500">
+          {filteredDocuments.length} {filteredDocuments.length === 1 ? "documento encontrado" : "documentos encontrados"} para “{query}”.
+        </p>
+      ) : null}
+
       <section className="mt-5 grid gap-4">
         {documentOrder.map((type) => {
-          const rows = documents.filter((document) => document.type === type);
+          const rows = filteredDocuments.filter((document) => document.type === type);
           const isQuote = type === "quote";
           return (
             <details key={type} open={isQuote} className="panel group/document overflow-hidden">
@@ -237,6 +272,23 @@ function groupDocuments(orders: Order[]): DocumentSummary[] {
     const entryDiff = dateTime(b.entryDate) - dateTime(a.entryDate);
     return entryDiff || b.code.localeCompare(a.code);
   });
+}
+
+function filterDocuments(documents: DocumentSummary[], query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return documents;
+  return documents.filter((document) => normalizeSearchText([
+    document.client,
+    document.code,
+    ...document.orders.flatMap((order) => [order.product, order.material, order.color]),
+  ].join(" ")).includes(normalizedQuery));
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es-CL");
 }
 
 function dateTime(value?: string) {

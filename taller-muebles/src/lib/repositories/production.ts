@@ -604,7 +604,7 @@ export async function listCommentsForOrders(orderIds: string[]): Promise<Record<
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_comments")
-    .select("id, order_id, body, created_at, profiles(full_name, role, area)")
+    .select("id, order_id, body, created_at, resolved_at, resolved_by, profiles!order_comments_profile_id_fkey(full_name, role, area)")
     .in("order_id", uniqueOrderIds)
     .order("created_at", { ascending: false });
   if (error || !data) return {};
@@ -614,6 +614,8 @@ export async function listCommentsForOrders(orderIds: string[]): Promise<Record<
     order_id: string;
     body: string;
     created_at: string;
+    resolved_at: string | null;
+    resolved_by: string | null;
     profiles: { full_name: string; role: string; area: string | string[] | null } | null;
   }>).map((comment) => ({
     id: comment.id,
@@ -622,6 +624,8 @@ export async function listCommentsForOrders(orderIds: string[]): Promise<Record<
     authorContext: profileContext(comment.profiles),
     body: comment.body,
     createdAt: comment.created_at,
+    resolvedAt: comment.resolved_at ?? undefined,
+    resolvedBy: comment.resolved_by ?? undefined,
   }));
   return groupCommentsByOrder(comments);
 }

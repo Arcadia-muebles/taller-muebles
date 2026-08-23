@@ -242,6 +242,8 @@ export type OrderComment = {
   authorContext?: string;
   body: string;
   createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
 };
 
 export type OrderAttachment = {

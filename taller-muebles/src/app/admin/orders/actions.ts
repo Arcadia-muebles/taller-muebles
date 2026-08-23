@@ -7,7 +7,7 @@ import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, deleteLocalOrderGroup, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder, updateLocalOrderObservations, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
-import { isIndependentStartStep, isProductionOrder, orderGroupKey } from "@/lib/orders";
+import { compareOrderGroupMembers, isIndependentStartStep, isProductionOrder, orderGroupKey } from "@/lib/orders";
 import { createClient } from "@/lib/supabase/server";
 import { listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -297,19 +297,27 @@ export async function updateOrder(
   const allOrders = await listOrders();
   const previousOrder = allOrders.find((order) => order.id === orderId);
   if (!previousOrder) return { status: "error", message: "No se encontró la orden." };
-  const documentOrderIds = allOrders
-    .filter((order) => order.store === previousOrder.store && order.groupCode === previousOrder.groupCode)
-    .map((order) => order.id);
+  const documentOrders = allOrders
+    .filter((order) => orderGroupKey(order) === orderGroupKey(previousOrder))
+    .sort(compareOrderGroupMembers);
+  const canonicalOrder = documentOrders[0] ?? previousOrder;
+  const documentOrderIds = documentOrders.map((order) => order.id);
+  const productItems = parseProductItems(formData);
+  if (!productItems.success) return { status: "error", message: formatZodError(productItems.error) };
+  if (productItems.data.length !== documentOrders.length) {
+    return { status: "error", message: "La edición debe conservar todos los productos de la nota de venta." };
+  }
+  const firstProduct = productItems.data[0];
   const paymentItems = parsePaymentItems(formData);
   if (!paymentItems.success) return { status: "error", message: formatZodError(paymentItems.error) };
   const recordedPayments = paymentItems.data.filter((payment) => (payment.amount ?? 0) > 0);
-  const shouldSyncPayments = previousOrder.store === "LR" && previousOrder.documentType !== "quote" && recordedPayments.length > 0;
+  const shouldSyncPayments = canonicalOrder.store === "LR" && canonicalOrder.documentType !== "quote" && recordedPayments.length > 0;
   const recordedPaidAmount = recordedPayments.reduce((sum, payment) => sum + (payment.amount ?? 0), 0);
-  if (paymentItems.data.length > 0 && recordedPayments.length === 0 && (previousOrder.payments?.length || previousOrder.paidAmount)) {
+  if (paymentItems.data.length > 0 && recordedPayments.length === 0 && (canonicalOrder.payments?.length || canonicalOrder.paidAmount)) {
     return { status: "error", message: "Mantén al menos un abono mayor a $0 o elimina el abono desde su historial." };
   }
   if (shouldSyncPayments) {
-    const existingPaymentIds = new Set((previousOrder.payments ?? []).map((payment) => payment.id));
+    const existingPaymentIds = new Set((canonicalOrder.payments ?? []).map((payment) => payment.id));
     if (recordedPayments.some((payment) => payment.id && !existingPaymentIds.has(payment.id))) {
       return { status: "error", message: "Uno de los abonos no pertenece a esta orden." };
     }
@@ -327,11 +335,11 @@ export async function updateOrder(
     customerRut: formData.get("customerRut")?.toString() || undefined,
     customerEmail: formData.get("customerEmail")?.toString() || undefined,
     customerPhone: formData.get("customerPhone")?.toString() || undefined,
-    productName: formData.get("productName"),
-    material: formData.get("material")?.toString() || defaultMaterial(formData.get("store")?.toString()),
-    color: formData.get("color"),
-    quantity: formData.get("quantity"),
-    unitPrice: formData.get("unitPrice"),
+    productName: firstProduct.productName,
+    material: firstProduct.material || defaultMaterial(formData.get("store")?.toString()),
+    color: firstProduct.color,
+    quantity: firstProduct.quantity,
+    unitPrice: firstProduct.unitPrice,
     subtotal: formData.get("subtotal"),
     discount: formData.get("discount"),
     total: formData.get("total"),
@@ -348,8 +356,8 @@ export async function updateOrder(
   });
   if (!parsed.success) return { status: "error", message: formatZodError(parsed.error) };
   const isQuote = parsed.data.documentType === "quote";
-  const wasQuote = previousOrder.documentType === "quote";
-  const ruleError = await validateOrderRules(parsed.data, settings, orderId);
+  const wasQuote = canonicalOrder.documentType === "quote";
+  const ruleError = await validateOrderRules(parsed.data, settings, canonicalOrder.id);
   if (ruleError) return { status: "error", message: ruleError };
   const orderPriority = priorityFromDeliveryDate(parsed.data.deliveryDate, {
     urgentDays: settings.alerts.urgentDeliveryDays,
@@ -357,15 +365,17 @@ export async function updateOrder(
   });
 
   if (!hasSupabaseConfig()) {
-    const updated = await updateLocalOrder(orderId, {
-      ...parsed.data,
-      material: parsed.data.material || defaultMaterial(parsed.data.store),
-      color: parsed.data.color || "Por definir",
-      priority: orderPriority,
-      steps: settings.production.steps,
-      payments: shouldSyncPayments ? recordedPayments : undefined,
-    });
-    if (!updated) return { status: "error", message: "No se encontró la orden." };
+    for (const [index, documentOrder] of documentOrders.entries()) {
+      const product = normalizedProductForStore(productItems.data[index], parsed.data.store);
+      const updated = await updateLocalOrder(documentOrder.id, {
+        ...parsed.data,
+        ...product,
+        priority: orderPriority,
+        steps: settings.production.steps,
+        payments: index === 0 && shouldSyncPayments ? recordedPayments : undefined,
+      });
+      if (!updated) return { status: "error", message: "No se encontró uno de los productos de la orden." };
+    }
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
@@ -391,11 +401,6 @@ export async function updateOrder(
       customer_rut: parsed.data.customerRut || null,
       customer_email: parsed.data.customerEmail || null,
       customer_phone: parsed.data.customerPhone || null,
-      product_name: parsed.data.productName,
-      material: parsed.data.material || defaultMaterial(parsed.data.store),
-      color: parsed.data.color || "Por definir",
-      quantity: parsed.data.quantity ?? 1,
-      unit_price: parsed.data.unitPrice ?? null,
       subtotal_amount: parsed.data.subtotal ?? null,
       discount_amount: parsed.data.discount ?? 0,
       total_amount: parsed.data.total ?? null,
@@ -412,9 +417,20 @@ export async function updateOrder(
       delivery_date: parsed.data.deliveryDate,
       observations: parsed.data.observations,
       assigned_to: isQuote ? null : assignee?.id ?? null,
-      status: isQuote ? "draft" : wasQuote ? "scheduled" : previousOrder.status,
-    } as never).eq("id", orderId);
+      ...(isQuote ? { status: "draft" as const } : wasQuote ? { status: "scheduled" as const } : {}),
+    } as never).in("id", documentOrderIds);
     if (error) return { status: "error", message: error.message };
+    for (const [index, documentOrder] of documentOrders.entries()) {
+      const product = normalizedProductForStore(productItems.data[index], parsed.data.store);
+      const { error: productError } = await supabase.from("orders").update({
+        product_name: product.productName,
+        material: product.material,
+        color: product.color,
+        quantity: product.quantity ?? 1,
+        unit_price: product.unitPrice ?? null,
+      } as never).eq("id", documentOrder.id);
+      if (productError) return { status: "error", message: productError.message };
+    }
     if (documentOrderIds.length > 1) {
       const { error: vatSyncError } = await supabase
         .from("orders")
@@ -425,17 +441,13 @@ export async function updateOrder(
     if (shouldSyncPayments) {
       const paymentError = await syncSupabaseOrderPayments({
         supabase,
-        orderId,
+        orderId: canonicalOrder.id,
         profileId,
-        previousPayments: previousOrder.payments ?? [],
+        previousPayments: canonicalOrder.payments ?? [],
         payments: recordedPayments,
       });
       if (paymentError) return { status: "error", message: paymentError };
-      const groupOrderIds = (await listOrders())
-        .filter((item) => (
-          item.store === previousOrder.store && item.groupCode === previousOrder.groupCode
-        ))
-        .map((item) => item.id);
+      const groupOrderIds = documentOrderIds;
       const ordersTable = supabase.from("orders") as unknown as {
         update: (patch: Record<string, unknown>) => {
           in: (column: string, values: string[]) => Promise<{ error: { message: string } | null }>;
@@ -450,42 +462,43 @@ export async function updateOrder(
         .in("id", groupOrderIds);
       if (totalsError) return { status: "error", message: totalsError.message };
     }
-    if (wasQuote && !isQuote && !previousOrder.steps.length) {
+    const ordersNeedingSteps = documentOrders.filter((item) => !item.steps.length);
+    if (wasQuote && !isQuote && ordersNeedingSteps.length) {
       const enabledSteps = settings.production.steps.filter((step) => step.enabled);
       const operatorByArea = operatorMapByArea(await listUsers());
       const { error: stepsError } = await supabase.from("production_steps").insert(
-        enabledSteps.map((step, index) => ({
-          order_id: orderId,
+        ordersNeedingSteps.flatMap((documentOrder) => enabledSteps.map((step, index) => ({
+          order_id: documentOrder.id,
           step: step.key,
           step_label: step.label,
           sort_order: index + 1,
           status: "pending",
           started_at: null,
           assigned_to: operatorByArea.get(step.key) ?? (index === 0 ? assignee?.id ?? null : null),
-        })),
+        }))),
       );
       if (stepsError) {
-        await supabase.from("orders").update({ status: "draft" }).eq("id", orderId);
+        await supabase.from("orders").update({ status: "draft" }).in("id", documentOrderIds);
         return { status: "error", message: `No se pudieron generar las etapas productivas: ${stepsError.message}` };
       }
     }
     await supabase.from("audit_logs").insert({
-      order_id: orderId,
+      order_id: canonicalOrder.id,
       action: "update_order",
       entity: "orders",
-      entity_id: orderId,
+      entity_id: canonicalOrder.id,
       profile_id: profileId,
       new_value: parsed.data.groupCode?.trim() || undefined,
     });
-    if (previousOrder.includesVat !== parsed.data.includesVat) {
+    if (canonicalOrder.includesVat !== parsed.data.includesVat) {
       await supabase.from("audit_logs").insert({
-        order_id: orderId,
+        order_id: canonicalOrder.id,
         action: "update_order_vat",
         entity: "orders",
-        entity_id: orderId,
+        entity_id: canonicalOrder.id,
         profile_id: profileId,
         field_name: "includes_vat",
-        old_value: String(previousOrder.includesVat),
+        old_value: String(canonicalOrder.includesVat),
         new_value: String(parsed.data.includesVat),
       });
     }

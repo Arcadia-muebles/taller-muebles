@@ -7,6 +7,7 @@ import { hasSupabaseConfig } from "@/lib/env";
 import {
   createLocalOrderAttachment,
   createLocalOrderComment,
+  resolveLocalOrderComment,
   updateLocalProductionStepComment,
 } from "@/lib/local-store";
 import { getOrder, getWorkshopOrder } from "@/lib/repositories/production";
@@ -18,6 +19,11 @@ const maxAttachmentSize = 10 * 1024 * 1024;
 const commentSchema = z.object({
   orderId: z.string().min(1),
   body: z.string().trim().min(2).max(1000),
+});
+
+const resolveCommentSchema = z.object({
+  orderId: z.string().min(1),
+  commentId: z.string().min(1),
 });
 
 const stepCommentSchema = z.object({
@@ -72,6 +78,51 @@ export async function addOrderComment(formData: FormData) {
   revalidatePath(`/taller/orders/${parsed.data.orderId}`);
   revalidatePath("/taller");
   return { ok: true, message: "Comentario publicado." };
+}
+
+export async function resolveOrderComment(input: { orderId: string; commentId: string }): Promise<CollaborationActionResult> {
+  const user = await requireSession(["admin", "manager", "operator"]);
+  const parsed = resolveCommentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "No se pudo identificar la observación." };
+  if (!(await canAccessOrder(user, parsed.data.orderId))) {
+    return { ok: false, message: "No tienes acceso a esta orden." };
+  }
+
+  if (!hasSupabaseConfig()) {
+    const resolved = await resolveLocalOrderComment(parsed.data.orderId, parsed.data.commentId, user.name);
+    if (!resolved) return { ok: false, message: "La observación ya estaba lista o no existe." };
+  } else {
+    const supabase = await createClient();
+    const profileId = await getCurrentProfileId(supabase);
+    if (!profileId) return { ok: false, message: "No se pudo identificar tu perfil." };
+
+    const { data: resolved, error } = await supabase
+      .from("order_comments")
+      .update({ resolved_at: new Date().toISOString(), resolved_by: profileId })
+      .eq("id", parsed.data.commentId)
+      .eq("order_id", parsed.data.orderId)
+      .is("resolved_at", null)
+      .select("id")
+      .maybeSingle();
+    if (error || !resolved) {
+      return { ok: false, message: error?.message ?? "La observación ya estaba lista o no existe." };
+    }
+
+    await supabase.from("audit_logs").insert({
+      order_id: parsed.data.orderId,
+      action: "resolve_comment",
+      entity: "order_comments",
+      entity_id: parsed.data.commentId,
+      profile_id: profileId,
+      new_value: "Observación marcada como lista",
+    });
+  }
+
+  revalidatePath(`/admin/orders/${parsed.data.orderId}`);
+  revalidatePath("/admin");
+  revalidatePath(`/taller/orders/${parsed.data.orderId}`);
+  revalidatePath("/taller");
+  return { ok: true, message: "Observación marcada como lista." };
 }
 
 export async function uploadOrderAttachment(formData: FormData) {

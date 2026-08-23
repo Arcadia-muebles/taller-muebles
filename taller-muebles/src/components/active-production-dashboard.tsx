@@ -766,20 +766,20 @@ function StoreStripe({ store }: { store: Order["store"] }) {
 }
 
 function DeliveryBlock({ order }: { order: Order }) {
-  const stopped = order.status === "completed" || order.condition === "Entregado";
-  const stoppedAt = order.completedAt ?? latestCompletedStepDate(order);
-  const days = stopped ? (stoppedAt ? daysUntil(order.deliveryDate, stoppedAt) : 0) : daysUntil(order.deliveryDate);
+  const delivered = isDeliveredOrder(order);
+  const deliveredAt = order.completedAt ?? latestCompletedStepDate(order);
+  const days = delivered ? (deliveredAt ? daysUntil(order.deliveryDate, deliveredAt) : 0) : daysUntil(order.deliveryDate);
   const late = days < 0;
-  const label = stopped
+  const label = delivered
     ? late ? `Vencido ${Math.abs(days)}d` : "Listo"
-    : deliveryLabel(order.deliveryDate, false);
+    : late ? `Atrasado ${Math.abs(days)}d` : deliveryLabel(order.deliveryDate, false);
   return (
     <div className="min-w-0">
       <p className="inline-flex items-center gap-1 text-xs font-semibold text-stone-900">
         <CalendarDays className="size-3.5 text-stone-400" />
         {formatDate(order.deliveryDate)}
       </p>
-      <p className={cn("mt-1 text-xs font-semibold", late ? "text-rose-700" : stopped ? "text-emerald-700" : days <= 7 ? "text-amber-700" : "text-emerald-700")}>
+      <p className={cn("mt-1 text-xs font-semibold", late ? "text-rose-700" : delivered ? "text-emerald-700" : days <= 7 ? "text-amber-700" : "text-emerald-700")}>
         {label}
       </p>
     </div>
@@ -914,7 +914,7 @@ function visiblePageNumbers(currentPage: number, totalPages: number) {
 function statusPresentation(order: Order, structureStage?: StructureStage): { label: string; tone: Tone; icon: React.ElementType } {
   if (order.status === "completed") return { label: "Terminado", tone: "green", icon: Truck };
   if (order.status === "blocked" || order.steps.some((step) => step.status === "blocked")) return { label: "Bloqueada", tone: "rose", icon: CircleDashed };
-  if (isReadyForDelivery(order)) return { label: "Terminado", tone: "green", icon: CheckCircle2 };
+  if (isReadyForDelivery(order)) return { label: "Listo para entrega", tone: "green", icon: CheckCircle2 };
   const current = currentDashboardStep(order);
   if (current?.key === "structure" && structureStage === "unrequested") {
     return { label: "Sin empezar", tone: "stone", icon: Clock3 };

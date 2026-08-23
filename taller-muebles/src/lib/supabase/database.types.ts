@@ -307,6 +307,8 @@ export type Database = {
           id: string
           order_id: string
           profile_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
         }
         Insert: {
           body: string
@@ -314,6 +316,8 @@ export type Database = {
           id?: string
           order_id: string
           profile_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
         }
         Update: {
           body?: string
@@ -321,6 +325,8 @@ export type Database = {
           id?: string
           order_id?: string
           profile_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
         }
         Relationships: [
           {
@@ -333,6 +339,13 @@ export type Database = {
           {
             foreignKeyName: "order_comments_profile_id_fkey"
             columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_comments_resolved_by_fkey"
+            columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

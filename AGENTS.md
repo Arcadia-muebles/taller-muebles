@@ -206,6 +206,7 @@ La base existente incluye, como mínimo:
 - Listado, creación, edición y detalle de órdenes.
 - Cola y detalle específico para taller.
 - Acciones sobre etapas de producción y comentarios.
+- Cierre trazable de observaciones internas, que deja de mostrarlas como pendientes sin borrar su historial.
 - Historial y vista de órdenes listas.
 - Adjuntos con ruta local y soporte previsto para Storage.
 - Agenda.

@@ -21,7 +21,8 @@ export function OrderNotesDialog({
 }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
-  const notificationCount = comments.length + attachments.length;
+  const activeCommentCount = comments.filter((comment) => !comment.resolvedAt).length;
+  const notificationCount = activeCommentCount + attachments.length;
 
   useCloseOnEscape(open, close);
 
@@ -48,7 +49,7 @@ export function OrderNotesDialog({
             ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
             : "border-stone-200 bg-white text-stone-500 hover:border-stone-300 hover:bg-stone-50 hover:text-stone-800",
         )}
-        title={notificationCount ? `${comments.length} notas y ${attachments.length} adjuntos` : "Agregar observación"}
+        title={notificationCount ? `${activeCommentCount} observaciones pendientes y ${attachments.length} adjuntos` : "Agregar observación"}
       >
         <MessageSquareText className="size-3.5" />
         {notificationCount ? (
