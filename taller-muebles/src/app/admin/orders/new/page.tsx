@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { OrderForm } from "@/components/order-form";
-import { requireSession } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/auth";
+import { canEditCommercial } from "@/lib/module-access";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -12,9 +13,9 @@ export default async function NewOrderPage({
 }: {
   searchParams: Promise<{ type?: string | string[] }>;
 }) {
-  const user = await requireSession(["admin", "manager"]);
+  const user = await requireModuleAccess("commercial");
   const settings = await getSystemSettings();
-  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) redirect("/admin");
+  if (!canEditCommercial(user, settings.permissions.managersCanEditOrders)) redirect("/admin/documents");
   const requestedType = (await searchParams).type;
   const initialDocumentType = commercialDocumentType(Array.isArray(requestedType) ? requestedType[0] : requestedType);
   const isQuote = initialDocumentType === "quote";
@@ -38,7 +39,7 @@ export default async function NewOrderPage({
       </header>
 
       <div className="mt-5 max-w-5xl">
-        <OrderForm nextCodes={nextCodes} initialDocumentType={initialDocumentType} />
+        <OrderForm nextCodes={nextCodes} initialDocumentType={initialDocumentType} commercialOnly={user.role === "operator"} />
       </div>
     </AppShell>
   );

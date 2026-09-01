@@ -148,6 +148,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["agenda_item_kind"]
           notes: string | null
           order_id: string | null
+          priority: Database["public"]["Enums"]["agenda_priority"]
           scheduled_date: string
           start_time: string
           status: Database["public"]["Enums"]["agenda_item_status"]
@@ -163,6 +164,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["agenda_item_kind"]
           notes?: string | null
           order_id?: string | null
+          priority?: Database["public"]["Enums"]["agenda_priority"]
           scheduled_date: string
           start_time: string
           status?: Database["public"]["Enums"]["agenda_item_status"]
@@ -178,6 +180,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["agenda_item_kind"]
           notes?: string | null
           order_id?: string | null
+          priority?: Database["public"]["Enums"]["agenda_priority"]
           scheduled_date?: string
           start_time?: string
           status?: Database["public"]["Enums"]["agenda_item_status"]
@@ -758,6 +761,7 @@ export type Database = {
     Enums: {
       agenda_item_kind: "delivery" | "task"
       agenda_item_status: "pending" | "done" | "cancelled"
+      agenda_priority: "low" | "normal" | "high" | "critical"
       agenda_time_slot: "AM" | "PM"
       order_condition:
         | "none"
@@ -913,6 +917,7 @@ export const Constants = {
     Enums: {
       agenda_item_kind: ["delivery", "task"],
       agenda_item_status: ["pending", "done", "cancelled"],
+      agenda_priority: ["low", "normal", "high", "critical"],
       agenda_time_slot: ["AM", "PM"],
       order_condition: [
         "none",

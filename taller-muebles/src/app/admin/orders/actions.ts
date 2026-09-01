@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
+import { canAccessModule } from "@/lib/module-access";
 import { cancelLocalOrder, closeLocalOrder, createLocalOrder, createLocalOrderAttachment, deleteLocalOrderGroup, moveLocalOrderToStep, nextLocalOrderCode, updateLocalOrder, updateLocalOrderObservations, updateLocalProductionStep } from "@/lib/local-store";
 import { nextOrderCodeForStore } from "@/lib/order-codes";
 import { compareOrderGroupMembers, isIndependentStartStep, isProductionOrder, orderGroupKey } from "@/lib/orders";
@@ -39,8 +40,11 @@ export async function createOrder(
   _prevState: CreateOrderState,
   formData: FormData,
 ): Promise<CreateOrderState> {
-  const user = await requireSession(["admin", "manager"]);
+  const user = await requireSession(["admin", "manager", "operator"]);
   const settings = await getSystemSettings();
+  if (user.role === "operator" && (!canAccessModule(user, "commercial") || formData.get("store") !== "LR")) {
+    return { status: "error", message: "Tu perfil no tiene permiso para crear este documento." };
+  }
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
     return { status: "error", message: "Tu perfil no tiene permiso para crear órdenes." };
   }
@@ -289,7 +293,7 @@ export async function updateOrder(
   _prevState: CreateOrderState,
   formData: FormData,
 ): Promise<CreateOrderState> {
-  const user = await requireSession(["admin", "manager"]);
+  const user = await requireSession(["admin", "manager", "operator"]);
   const settings = await getSystemSettings();
   if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
     return { status: "error", message: "Tu perfil no tiene permiso para editar órdenes." };
@@ -301,12 +305,16 @@ export async function updateOrder(
     .filter((order) => orderGroupKey(order) === orderGroupKey(previousOrder))
     .sort(compareOrderGroupMembers);
   const canonicalOrder = documentOrders[0] ?? previousOrder;
+  if (user.role === "operator" && (!canAccessModule(user, "commercial") || canonicalOrder.documentType === "production_intake" || formData.get("store") !== "LR")) {
+    return { status: "error", message: "Tu perfil no tiene permiso para editar este documento." };
+  }
   const documentOrderIds = documentOrders.map((order) => order.id);
   const productItems = parseProductItems(formData);
   if (!productItems.success) return { status: "error", message: formatZodError(productItems.error) };
-  if (productItems.data.length !== documentOrders.length) {
-    return { status: "error", message: "La edición debe conservar todos los productos de la nota de venta." };
+  if (productItems.data.length < documentOrders.length) {
+    return { status: "error", message: "La edición debe conservar los productos existentes de la nota de venta." };
   }
+  const addedProducts = productItems.data.slice(documentOrders.length);
   const firstProduct = productItems.data[0];
   const paymentItems = parsePaymentItems(formData);
   if (!paymentItems.success) return { status: "error", message: formatZodError(paymentItems.error) };
@@ -376,6 +384,18 @@ export async function updateOrder(
       });
       if (!updated) return { status: "error", message: "No se encontró uno de los productos de la orden." };
     }
+    for (const [addedIndex, productInput] of addedProducts.entries()) {
+      const product = normalizedProductForStore(productInput, parsed.data.store);
+      await createLocalOrder({
+        ...parsed.data,
+        ...product,
+        salesNoteNumber: parsed.data.salesNoteNumber?.trim() || canonicalOrder.code,
+        groupCode: parsed.data.groupCode?.trim() || canonicalOrder.groupCode || canonicalOrder.code,
+        productPosition: documentOrders.length + addedIndex + 1,
+        priority: orderPriority,
+        steps: settings.production.steps,
+      });
+    }
   } else {
     const supabase = await createClient();
     const profileId = await getCurrentProfileId(supabase);
@@ -430,6 +450,77 @@ export async function updateOrder(
         unit_price: product.unitPrice ?? null,
       } as never).eq("id", documentOrder.id);
       if (productError) return { status: "error", message: productError.message };
+    }
+    let addedOrderIds: string[] = [];
+    if (addedProducts.length) {
+      const { data: addedOrders, error: addedOrdersError } = await supabase
+        .from("orders")
+        .insert(addedProducts.map((productInput, addedIndex) => {
+          const product = normalizedProductForStore(productInput, parsed.data.store);
+          return {
+            store_id: store.id,
+            internal_code: parsed.data.salesNoteNumber?.trim() || canonicalOrder.code,
+            sales_note_number: parsed.data.salesNoteNumber?.trim() || canonicalOrder.code,
+            group_code: parsed.data.groupCode?.trim() || canonicalOrder.groupCode || canonicalOrder.code,
+            document_type: parsed.data.documentType,
+            document_status: parsed.data.documentStatus,
+            client_name: parsed.data.clientName,
+            customer_contact: parsed.data.customerContact || null,
+            customer_address: parsed.data.customerAddress || null,
+            customer_commune: parsed.data.customerCommune || null,
+            customer_rut: parsed.data.customerRut || null,
+            customer_email: parsed.data.customerEmail || null,
+            customer_phone: parsed.data.customerPhone || null,
+            product_name: product.productName,
+            product_position: documentOrders.length + addedIndex + 1,
+            material: product.material,
+            color: product.color,
+            quantity: product.quantity ?? 1,
+            unit_price: product.unitPrice ?? null,
+            subtotal_amount: parsed.data.subtotal ?? null,
+            discount_amount: parsed.data.discount ?? 0,
+            total_amount: parsed.data.total ?? null,
+            includes_vat: parsed.data.includesVat,
+            paid_amount: parsed.data.paidAmount ?? 0,
+            balance_amount: parsed.data.total !== undefined ? Math.max(parsed.data.total - (parsed.data.paidAmount ?? 0), 0) : null,
+            seller_name: parsed.data.sellerName || null,
+            payment_method: parsed.data.paymentMethod || null,
+            delivery_terms: parsed.data.deliveryTerms || null,
+            status: isQuote ? "draft" : "scheduled",
+            condition: "none",
+            priority: orderPriority,
+            is_warranty: parsed.data.isWarranty,
+            entry_date: parsed.data.entryDate,
+            delivery_date: parsed.data.deliveryDate,
+            observations: parsed.data.observations,
+            assigned_to: isQuote ? null : assignee?.id ?? null,
+            created_by: profileId,
+          } as never;
+        }))
+        .select("id");
+      if (addedOrdersError || !addedOrders?.length) {
+        return { status: "error", message: addedOrdersError?.message ?? "No se pudo agregar el producto." };
+      }
+      addedOrderIds = addedOrders.map((order) => order.id);
+      if (!isQuote) {
+        const enabledSteps = settings.production.steps.filter((step) => step.enabled);
+        const operatorByArea = operatorMapByArea(await listUsers());
+        const { error: addedStepsError } = await supabase.from("production_steps").insert(
+          addedOrderIds.flatMap((addedOrderId) => enabledSteps.map((step, index) => ({
+            order_id: addedOrderId,
+            step: step.key,
+            step_label: step.label,
+            sort_order: index + 1,
+            status: "pending",
+            started_at: null,
+            assigned_to: operatorByArea.get(step.key) ?? (index === 0 ? assignee?.id ?? null : null),
+          }))),
+        );
+        if (addedStepsError) {
+          await supabase.from("orders").update({ status: "cancelled" }).in("id", addedOrderIds);
+          return { status: "error", message: `El producto se agregó, pero no se pudieron crear sus etapas: ${addedStepsError.message}` };
+        }
+      }
     }
     if (documentOrderIds.length > 1) {
       const { error: vatSyncError } = await supabase
@@ -511,7 +602,13 @@ export async function updateOrder(
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders/${orderId}/edit`);
   revalidatePath("/taller");
-  return { status: "success", message: "Cambios guardados correctamente.", orderId };
+  return {
+    status: "success",
+    message: addedProducts.length
+      ? `Cambios guardados y ${addedProducts.length} producto${addedProducts.length === 1 ? " agregado" : "s agregados"}.`
+      : "Cambios guardados correctamente.",
+    orderId,
+  };
 }
 
 export async function cancelOrder(formData: FormData) {

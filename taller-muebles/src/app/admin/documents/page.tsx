@@ -2,7 +2,8 @@ import { ChevronDown, FileText, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
-import { requireSession } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/auth";
+import { canEditCommercial } from "@/lib/module-access";
 import { compareOrderGroupMembers } from "@/lib/orders";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -31,9 +32,9 @@ export default async function DocumentsPage({
 }: {
   searchParams: Promise<{ q?: string | string[] }>;
 }) {
-  const user = await requireSession(["admin", "manager", "viewer"]);
+  const user = await requireModuleAccess("commercial");
   const [orders, settings, queryParams] = await Promise.all([listOrders(), getSystemSettings(), searchParams]);
-  const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
+  const canEditOrders = canEditCommercial(user, settings.permissions.managersCanEditOrders);
   const documents = groupDocuments(orders);
   const query = (Array.isArray(queryParams.q) ? queryParams.q[0] : queryParams.q)?.trim() ?? "";
   const filteredDocuments = filterDocuments(documents, query);
@@ -112,16 +113,17 @@ export default async function DocumentsPage({
                     return (
                       <details key={document.key} className="group/note overflow-hidden rounded-lg border border-stone-200 bg-white">
                         <summary className="flex cursor-pointer list-none items-center gap-4 px-4 py-3 transition hover:bg-stone-50 [&::-webkit-details-marker]:hidden">
-                          <div className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-[minmax(220px,1.4fr)_110px_repeat(3,minmax(120px,0.7fr))]">
+                          <div className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-[minmax(220px,1.4fr)_110px_130px_repeat(3,minmax(110px,0.7fr))]">
                             <SummaryField label="Nombre del cliente" value={document.client} className="col-span-2 lg:col-span-1" />
                             <SummaryField label="Código" value={document.code} mono />
+                            <SummaryField label="Fecha emisión" value={formatDate(document.entryDate)} />
                             <SummaryField label="Total de la compra" value={formatCurrency(document.total)} />
                             <SummaryField label="Abonó" value={formatCurrency(document.paidAmount)} />
                             <SummaryField label="Debe" value={formatCurrency(document.balance)} strong />
                           </div>
                           <div className="flex shrink-0 items-center gap-3 text-xs font-medium text-stone-500">
                             <span className="hidden xl:inline">
-                              {firstOrder?.documentStatus === "issued" ? "Emitida" : documentStatusLabel(document.status)} · {formatDate(document.entryDate)}
+                              {firstOrder?.documentStatus === "issued" ? "Emitida" : documentStatusLabel(document.status)}
                             </span>
                             <ChevronDown className="size-4 transition group-open/note:rotate-180" />
                           </div>

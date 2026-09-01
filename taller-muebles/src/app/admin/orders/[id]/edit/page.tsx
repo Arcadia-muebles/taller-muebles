@@ -1,18 +1,20 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { OrderForm } from "@/components/order-form";
-import { requireSession } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/auth";
+import { canEditCommercial } from "@/lib/module-access";
 import { compareOrderGroupMembers, orderGroupKey } from "@/lib/orders";
 import { getOrder, listOrders, listUsers } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { redirect } from "next/navigation";
 
 export default async function EditOrderPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireSession(["admin", "manager"]);
+  const user = await requireModuleAccess("commercial");
   const { id } = await params;
   const [order, settings, users, orders] = await Promise.all([getOrder(id), getSystemSettings(), listUsers(), listOrders()]);
-  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) redirect(`/admin/orders/${id}`);
+  if (!canEditCommercial(user, settings.permissions.managersCanEditOrders)) redirect(`/admin/orders/${id}`);
   if (!order) notFound();
+  if (user.role === "operator" && order.documentType === "production_intake") redirect("/admin/documents");
   const groupOrders = orders
     .filter((item) => orderGroupKey(item) === orderGroupKey(order))
     .sort(compareOrderGroupMembers);
@@ -30,6 +32,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
       <div className="mt-5 max-w-5xl">
         <OrderForm
           orderId={documentOrder.id}
+          commercialOnly={user.role === "operator"}
           assignees={Array.from(new Set([documentOrder.assignedTo, ...users.filter((item) => item.active && item.role === "operator").map((item) => item.name)]))}
           initialValues={{
             store: documentOrder.store,

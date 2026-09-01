@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { AppUser, Role } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
 import { getLocalUserByEmail } from "@/lib/local-store";
+import { canAccessModule, type ModuleKey } from "@/lib/module-access";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -99,6 +100,12 @@ export async function requireSession(allowedRoles?: Role[]) {
     redirect(dashboardPathForRole(user.role));
   }
 
+  return user;
+}
+
+export async function requireModuleAccess(module: ModuleKey) {
+  const user = await requireSession();
+  if (!canAccessModule(user, module)) redirect(dashboardPathForRole(user.role));
   return user;
 }
 

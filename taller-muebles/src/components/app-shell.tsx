@@ -4,7 +4,8 @@ import { logout } from "@/app/login/actions";
 import { roleLabel } from "@/lib/auth";
 import { brand } from "@/lib/brand";
 import { hasSupabaseConfig } from "@/lib/env";
-import type { Role } from "@/lib/types";
+import { canAccessModule } from "@/lib/module-access";
+import type { AreaKey, Role } from "@/lib/types";
 import { DesktopShell } from "./desktop-shell";
 import { MobileNavigation } from "./mobile-navigation";
 import { SidebarNavigation } from "./sidebar-navigation";
@@ -14,12 +15,15 @@ type AppShellProps = {
   user?: {
     name: string;
     role: Role;
+    area?: AreaKey;
+    areas?: AreaKey[];
   };
   children: React.ReactNode;
 };
 
 export function AppShell({ active, user, children }: AppShellProps) {
   const canUseAdmin = user?.role !== "operator";
+  const canUseCommercial = canAccessModule(user, "commercial");
   const canEditAdmin = user?.role === "admin";
   const localMode = !hasSupabaseConfig();
   return (
@@ -44,7 +48,7 @@ export function AppShell({ active, user, children }: AppShellProps) {
             </div>
           ) : null}
 
-          <SidebarNavigation active={active} canUseAdmin={canUseAdmin} canEditAdmin={canEditAdmin} />
+          <SidebarNavigation active={active} canUseAdmin={canUseAdmin} canUseCommercial={canUseCommercial} canEditAdmin={canEditAdmin} />
 
           <div className="mt-auto pt-5">
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">

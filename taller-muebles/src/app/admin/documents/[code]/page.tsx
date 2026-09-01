@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, CalendarDays, FileText, Pencil, Wrench } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { requireSession } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/auth";
+import { canEditCommercial } from "@/lib/module-access";
 import { compareOrderGroupMembers } from "@/lib/orders";
 import { listOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -15,7 +16,7 @@ type DocumentDetailPageProps = {
 };
 
 export default async function DocumentDetailPage({ params }: DocumentDetailPageProps) {
-  const user = await requireSession(["admin", "manager", "viewer"]);
+  const user = await requireModuleAccess("commercial");
   const [{ code }, orders, settings] = await Promise.all([params, listOrders(), getSystemSettings()]);
   const documentCode = decodeURIComponent(code);
   const documentOrders = orders
@@ -33,7 +34,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
   }
 
   const financials = documentFinancials(document, documentOrders);
-  const canEditOrders = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
+  const canEditOrders = canEditCommercial(user, settings.permissions.managersCanEditOrders);
 
   return (
     <AppShell active="admin" user={user}>
@@ -171,7 +172,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
               </div>
             </div>
             <div className="mt-4 grid gap-3">
-              <Info label="Fecha ingreso" value={formatDate(document.entryDate)} />
+              <Info label="Fecha emisión" value={formatDate(document.entryDate)} />
               <Info label="Fecha entrega" value={formatDate(document.deliveryDate)} />
             </div>
           </section>

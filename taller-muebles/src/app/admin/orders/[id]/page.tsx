@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
@@ -18,6 +18,7 @@ import { ProductionStepControls } from "@/components/production-step-controls";
 import { StepCommentButton } from "@/components/step-comment-button";
 import { StatusBadge } from "@/components/status-badge";
 import { requireSession } from "@/lib/auth";
+import { canAccessModule, canEditCommercial } from "@/lib/module-access";
 import { completionPercent } from "@/lib/metrics";
 import { compareOrderGroupMembers, productionStepPrerequisitesMet } from "@/lib/orders";
 import { getSystemSettings } from "@/lib/repositories/settings";
@@ -30,7 +31,7 @@ type OrderDetailPageProps = {
 };
 
 export default async function OrderDetailPage({ params, searchParams }: OrderDetailPageProps) {
-  const user = await requireSession(["admin", "manager", "viewer"]);
+  const user = await requireSession(["admin", "manager", "operator"]);
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const [order, audit, comments, attachments, settings, orders] = await Promise.all([
     getOrder(id),
@@ -44,8 +45,12 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   if (!order) {
     notFound();
   }
+  const hasCommercialAccess = canAccessModule(user, "commercial");
+  if (user.role === "operator" && (!hasCommercialAccess || order.documentType === "production_intake")) {
+    redirect("/taller");
+  }
   const progress = completionPercent(order);
-  const canEditOrder = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
+  const canEditOrder = canEditCommercial(user, settings.permissions.managersCanEditOrders);
   const canCommentOnSteps = user.role === "admin" || user.role === "manager";
   const canClose = order.steps.every((step) => step.status === "done");
   const documentCode = order.groupCode || order.code;
@@ -55,6 +60,8 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
     .sort(compareOrderGroupMembers);
   const showProductionView = query.view === "production";
   const isQuote = order.documentType === "quote";
+
+  if (showProductionView && user.role === "operator") redirect("/admin/documents");
 
   if (!showProductionView) {
     return (
@@ -78,6 +85,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
         </div>
         <OrderForm
           orderId={order.id}
+          commercialOnly={user.role === "operator"}
           readOnly={!canEditOrder}
           initialDocumentType={order.documentType}
           initialValues={{

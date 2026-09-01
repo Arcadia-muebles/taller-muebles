@@ -3,6 +3,7 @@
 import { CheckCircle2, Plus, XCircle } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
 import { createUser, type UserActionResult } from "@/app/admin/users/actions";
+import { moduleAccessKeys } from "@/lib/module-access";
 import type { SystemSettings } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
 
@@ -57,7 +58,7 @@ export function UserCreateForm({
         </Field>
         {role === "operator" ? (
           <fieldset className="xl:col-span-2">
-            <legend className="text-xs font-medium text-stone-600">Procesos</legend>
+            <legend className="text-xs font-medium text-stone-600">Procesos y módulos</legend>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {enabledSteps.map((step) => (
                 <label key={step.key} className="inline-flex h-9 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
@@ -65,6 +66,10 @@ export function UserCreateForm({
                   {step.label}
                 </label>
               ))}
+              <label className="inline-flex h-9 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
+                <input disabled={disabled} type="checkbox" name="areas" value={moduleAccessKeys.commercial} className="size-4 accent-stone-950" />
+                Comercial
+              </label>
             </div>
           </fieldset>
         ) : null}

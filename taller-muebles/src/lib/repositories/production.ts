@@ -909,6 +909,7 @@ function mapAgendaItemRecord(record: AgendaItemRow): AgendaItem {
     notes: record.notes ?? undefined,
     scheduledDate: record.scheduled_date,
     timeSlot: record.time_slot,
+    priority: record.priority ?? "normal",
     startTime: record.start_time.slice(0, 5),
     endTime: record.end_time.slice(0, 5),
     status: record.status,

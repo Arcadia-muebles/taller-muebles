@@ -29,6 +29,8 @@ const createTaskSchema = z.object({
   notes: z.string().trim().max(400).optional(),
   scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   timeSlot: z.enum(["AM", "PM"]).optional(),
+  priority: z.enum(["low", "normal", "high", "critical"]).optional(),
+  returnTo: z.enum(["/admin/agenda", "/admin/planning"]).optional(),
 });
 
 const updateAgendaSchema = z.object({
@@ -38,6 +40,8 @@ const updateAgendaSchema = z.object({
   notes: z.string().trim().max(500).optional(),
   scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   timeSlot: z.enum(["AM", "PM"]),
+  priority: z.enum(["low", "normal", "high", "critical"]).optional(),
+  returnTo: z.enum(["/admin/agenda", "/admin/planning"]).optional(),
 });
 
 export async function scheduleOrderDelivery(formData: FormData) {
@@ -147,6 +151,8 @@ export async function createAgendaTask(formData: FormData) {
     notes: formData.get("notes")?.toString() || undefined,
     scheduledDate: formData.get("scheduledDate")?.toString() || undefined,
     timeSlot: formData.get("timeSlot")?.toString() || undefined,
+    priority: formData.get("priority")?.toString() || undefined,
+    returnTo: formData.get("returnTo")?.toString() || undefined,
   });
   if (!parsed.success) return;
 
@@ -159,6 +165,7 @@ export async function createAgendaTask(formData: FormData) {
       notes: parsed.data.notes,
       scheduledDate,
       timeSlot,
+      priority: parsed.data.priority ?? "normal",
     });
   } else {
     const supabase = await createClient();
@@ -171,6 +178,7 @@ export async function createAgendaTask(formData: FormData) {
       notes: parsed.data.notes || null,
       scheduled_date: scheduledDate,
       time_slot: timeSlot,
+      priority: parsed.data.priority ?? "normal",
       start_time: times.startTime,
       end_time: times.endTime,
       created_by: profileId,
@@ -182,7 +190,7 @@ export async function createAgendaTask(formData: FormData) {
   }
 
   revalidateAgendaPaths();
-  redirect(`/admin/agenda?date=${scheduledDate}`);
+  redirect(`${parsed.data.returnTo ?? "/admin/agenda"}?date=${scheduledDate}`);
 }
 
 export async function updateAgendaItem(formData: FormData) {
@@ -196,6 +204,8 @@ export async function updateAgendaItem(formData: FormData) {
     notes: formData.get("notes")?.toString() || undefined,
     scheduledDate: formData.get("scheduledDate")?.toString(),
     timeSlot: formData.get("timeSlot")?.toString(),
+    priority: formData.get("priority")?.toString() || undefined,
+    returnTo: formData.get("returnTo")?.toString() || undefined,
   });
   if (!parsed.success) return;
 
@@ -213,6 +223,7 @@ export async function updateAgendaItem(formData: FormData) {
       time_slot: parsed.data.timeSlot,
       start_time: times.startTime,
       end_time: times.endTime,
+      priority: parsed.data.kind === "task" ? parsed.data.priority ?? "normal" : undefined,
     };
     const { error } = await supabase.from("agenda_items").update(updatePayload).eq("id", parsed.data.itemId);
     if (error) {
@@ -236,7 +247,7 @@ export async function updateAgendaItem(formData: FormData) {
   }
 
   revalidateAgendaPaths();
-  redirect(`/admin/agenda?date=${parsed.data.scheduledDate}`);
+  redirect(`${parsed.data.returnTo ?? "/admin/agenda"}?date=${parsed.data.scheduledDate}`);
 }
 
 export async function completeAgendaItem(formData: FormData) {
@@ -391,6 +402,7 @@ async function getCurrentProfileId(supabase: Awaited<ReturnType<typeof createCli
 function revalidateAgendaPaths(orderIds?: string | string[]) {
   revalidatePath("/admin");
   revalidatePath("/admin/agenda");
+  revalidatePath("/admin/planning");
   revalidatePath("/admin/ready");
   revalidatePath("/admin/history");
   revalidatePath("/taller");

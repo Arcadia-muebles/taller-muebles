@@ -3,6 +3,7 @@
 import { CheckCircle2, Save, XCircle } from "lucide-react";
 import { useActionState, useState } from "react";
 import { updateUser, type UserActionResult } from "@/app/admin/users/actions";
+import { moduleAccessKeys } from "@/lib/module-access";
 import type { AppUser, SystemSettings } from "@/lib/types";
 import { SubmitButton } from "./submit-button";
 
@@ -47,7 +48,7 @@ export function UserEditForm({
       </div>
       {role === "operator" ? (
         <fieldset className="md:col-span-3">
-          <legend className="text-xs font-medium text-stone-600">Procesos habilitados</legend>
+          <legend className="text-xs font-medium text-stone-600">Procesos y módulos habilitados</legend>
           <div className="mt-2 flex flex-wrap gap-2">
             {enabledSteps.map((step) => (
               <label key={step.key} className="inline-flex h-9 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
@@ -62,6 +63,17 @@ export function UserEditForm({
                 {step.label}
               </label>
             ))}
+            <label className="inline-flex h-9 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700">
+              <input
+                type="checkbox"
+                name="areas"
+                value={moduleAccessKeys.commercial}
+                defaultChecked={selectedAreas.includes(moduleAccessKeys.commercial)}
+                disabled={disabled}
+                className="size-4 accent-stone-950"
+              />
+              Comercial
+            </label>
           </div>
         </fieldset>
       ) : null}

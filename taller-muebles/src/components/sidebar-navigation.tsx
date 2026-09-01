@@ -1,20 +1,22 @@
 "use client";
 
-import { Archive, BarChart3, Boxes, Building2, CalendarDays, FileText, Hammer, Home, Link2, PackageCheck, Settings, Users } from "lucide-react";
+import { Archive, BarChart3, Boxes, Building2, CalendarDays, ClipboardList, FileText, Hammer, Home, Link2, PackageCheck, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 type SidebarNavigationProps = {
   active: "admin" | "taller";
   canUseAdmin: boolean;
+  canUseCommercial: boolean;
   canEditAdmin: boolean;
 };
 
 const primaryModuleLinks = [
-  { href: "/admin/documents", label: "Comercial", icon: FileText },
+  { href: "/admin/documents", label: "Comercial", icon: FileText, module: "commercial" },
   { href: "/admin/client-portals", label: "Portal clientes", icon: Link2, requiresEdit: true },
   { href: "/admin/structures", label: "Estructuras", icon: Hammer },
-  { href: "/admin/agenda", label: "Agenda", icon: CalendarDays },
+  { href: "/admin/agenda", label: "Despachos", icon: CalendarDays },
+  { href: "/admin/planning", label: "Planificación diaria", icon: ClipboardList },
   { href: "/admin/ready", label: "Listos para entrega", icon: PackageCheck },
   { href: "/admin/stock", label: "Stock", icon: Boxes },
 ];
@@ -27,9 +29,9 @@ const secondaryModuleLinks = [
   { href: "/admin/settings", label: "Configuración", icon: Settings },
 ];
 
-export function SidebarNavigation({ active, canUseAdmin, canEditAdmin }: SidebarNavigationProps) {
+export function SidebarNavigation({ active, canUseAdmin, canUseCommercial, canEditAdmin }: SidebarNavigationProps) {
   const pathname = usePathname();
-  const homeHref = active === "admin" ? "/admin" : "/taller";
+  const homeHref = canUseAdmin && active === "admin" ? "/admin" : "/taller";
   const isHome = pathname === homeHref || pathname.startsWith(`${homeHref}/orders`);
 
   return (
@@ -56,11 +58,13 @@ export function SidebarNavigation({ active, canUseAdmin, canEditAdmin }: Sidebar
         </Link>
       </nav>
 
-      {canUseAdmin ? (
+      {canUseAdmin || canUseCommercial ? (
         <div className="mt-5">
           <p className="px-3 text-xs font-medium uppercase tracking-[0.16em] text-stone-400">Trabajo</p>
           <div className="mt-3 space-y-1 text-sm">
-            {primaryModuleLinks.map(({ href, label, icon: Icon, requiresEdit }) => {
+            {primaryModuleLinks.map(({ href, label, icon: Icon, requiresEdit, module }) => {
+              if (module === "commercial" && !canUseCommercial) return null;
+              if (!module && !canUseAdmin) return null;
               if (requiresEdit && !canEditAdmin) return null;
               const isActive = pathname === href || pathname.startsWith(`${href}/`);
 
@@ -80,7 +84,7 @@ export function SidebarNavigation({ active, canUseAdmin, canEditAdmin }: Sidebar
             })}
           </div>
 
-          <details className="mt-4" open={secondaryModuleLinks.some(({ href }) => pathname === href || pathname.startsWith(`${href}/`))}>
+          {canUseAdmin ? <details className="mt-4" open={secondaryModuleLinks.some(({ href }) => pathname === href || pathname.startsWith(`${href}/`))}>
             <summary className="cursor-pointer rounded-md px-3 py-2 text-xs font-medium uppercase tracking-[0.16em] text-stone-400 transition hover:bg-stone-100 hover:text-stone-600">
               Más
             </summary>
@@ -104,7 +108,7 @@ export function SidebarNavigation({ active, canUseAdmin, canEditAdmin }: Sidebar
               );
             })}
             </div>
-          </details>
+          </details> : null}
         </div>
       ) : null}
     </>

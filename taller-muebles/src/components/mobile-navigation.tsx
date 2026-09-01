@@ -1,30 +1,33 @@
 "use client";
 
-import { Archive, BarChart3, Boxes, Building2, CalendarDays, FileText, Hammer, Home, Link2, LogOut, Menu, PackageCheck, Settings, Users, X } from "lucide-react";
+import { Archive, BarChart3, Boxes, Building2, CalendarDays, ClipboardList, FileText, Hammer, Home, Link2, LogOut, Menu, PackageCheck, Settings, Users, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { logout } from "@/app/login/actions";
 import { brand } from "@/lib/brand";
-import type { Role } from "@/lib/types";
+import { canAccessModule } from "@/lib/module-access";
+import type { AreaKey, Role } from "@/lib/types";
 
 export function MobileNavigation({
   active,
   user,
 }: {
   active: "admin" | "taller";
-  user?: { name: string; role: Role };
+  user?: { name: string; role: Role; area?: AreaKey; areas?: AreaKey[] };
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const canUseAdmin = user?.role !== "operator";
+  const canUseCommercial = canAccessModule(user, "commercial");
   const canEditAdmin = user?.role === "admin";
+  const homeHref = canUseAdmin && active === "admin" ? "/admin" : "/taller";
 
   return (
     <div className="sticky top-0 z-40 -mx-4 mb-4 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
       <div className="flex items-center justify-between">
-        <Link href={active === "admin" ? "/admin" : "/taller"} className="flex items-center gap-2">
+        <Link href={homeHref} className="flex items-center gap-2">
           <Image src={brand.logo} alt="La Reina · Muebles en cuero" width={1600} height={874} className="h-auto w-24 shrink-0" priority unoptimized />
           <span className="hidden text-sm font-semibold min-[390px]:inline">{brand.appName}</span>
         </Link>
@@ -41,13 +44,15 @@ export function MobileNavigation({
 
       {open ? (
         <div className="mt-3 rounded-lg border border-stone-200 bg-white p-2 shadow-xl shadow-stone-950/5">
-          <NavLink href={active === "admin" ? "/admin" : "/taller"} icon={Home} label="Inicio" active={pathname === (active === "admin" ? "/admin" : "/taller")} />
-          {canUseAdmin ? (
+          <NavLink href={homeHref} icon={Home} label="Inicio" active={pathname === homeHref} />
+          {canUseAdmin || canUseCommercial ? (
             <>
-              <NavLink href="/admin/documents" icon={FileText} label="Comercial" active={pathname.startsWith("/admin/documents")} />
+              {canUseCommercial ? <NavLink href="/admin/documents" icon={FileText} label="Comercial" active={pathname.startsWith("/admin/documents")} /> : null}
+              {canUseAdmin ? <>
               {canEditAdmin ? <NavLink href="/admin/client-portals" icon={Link2} label="Portal clientes" active={pathname.startsWith("/admin/client-portals")} /> : null}
               <NavLink href="/admin/structures" icon={Hammer} label="Estructuras" active={pathname.startsWith("/admin/structures")} />
-              <NavLink href="/admin/agenda" icon={CalendarDays} label="Agenda" active={pathname.startsWith("/admin/agenda")} />
+              <NavLink href="/admin/agenda" icon={CalendarDays} label="Despachos" active={pathname.startsWith("/admin/agenda")} />
+              <NavLink href="/admin/planning" icon={ClipboardList} label="Planificación diaria" active={pathname.startsWith("/admin/planning")} />
               <NavLink href="/admin/ready" icon={PackageCheck} label="Listos para entrega" active={pathname.startsWith("/admin/ready")} />
               <NavLink href="/admin/stock" icon={Boxes} label="Stock" active={pathname.startsWith("/admin/stock")} />
               <details className="mt-1" open={isSecondaryActive(pathname)}>
@@ -62,6 +67,7 @@ export function MobileNavigation({
                   <NavLink href="/admin/settings" icon={Settings} label="Configuración" active={pathname.startsWith("/admin/settings")} />
                 </div>
               </details>
+              </> : null}
             </>
           ) : null}
           <div className="mt-2 flex items-center justify-between gap-3 border-t border-stone-200 px-2 pt-3">

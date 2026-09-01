@@ -54,6 +54,7 @@ export function OrderForm({
   initialDocumentType = "sales_note",
   nextCodes = { LH: "LH-001", LR: "LR-001" },
   readOnly = false,
+  commercialOnly = false,
 }: {
   orderId?: string;
   initialValues?: FormValues;
@@ -61,11 +62,12 @@ export function OrderForm({
   assignees?: string[];
   nextCodes?: Record<StoreCode, string>;
   readOnly?: boolean;
+  commercialOnly?: boolean;
 }) {
   const action = orderId ? updateOrder.bind(null, orderId) : createOrder;
   const [state, formAction, actionPending] = useActionState(action, initialState);
   const [formPending, startTransition] = useTransition();
-  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountPercent, setDiscountPercent] = useState(() => discountPercentFromValues(initialValues));
   const [pdfSaving, setPdfSaving] = useState(false);
   const [printPreparing, setPrintPreparing] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -73,8 +75,10 @@ export function OrderForm({
   const [pdfNameDialogOpen, setPdfNameDialogOpen] = useState(false);
   const [pdfName, setPdfName] = useState("");
   const preparedPdfRef = useRef<{ blob: Blob; formSnapshot: string } | null>(null);
+  const pdfFileHandleRef = useRef<{ handle: SaveFileHandle; fileName: string } | null>(null);
   const lastAutoCode = useRef<string | null>(initialValues?.salesNoteNumber ?? nextCodes.LR);
   const defaultEntryDate = new Date().toISOString().slice(0, 10);
+  const initialProductCount = initialValues && "products" in initialValues ? initialValues.products?.length ?? 0 : orderId ? 1 : 0;
   const {
     register,
     handleSubmit,
@@ -158,12 +162,16 @@ export function OrderForm({
   }, [getValues, nextCodes, orderId, setValue, store]);
 
   useEffect(() => {
+    if (commercialOnly && store !== "LR") {
+      setValue("store", "LR", { shouldDirty: false, shouldValidate: true });
+      return;
+    }
     if (store === "LH") {
       setValue("documentType", "production_intake", { shouldDirty: false, shouldValidate: true });
     } else if (documentType === "production_intake") {
       setValue("documentType", "sales_note", { shouldDirty: false, shouldValidate: true });
     }
-  }, [documentType, setValue, store]);
+  }, [commercialOnly, documentType, setValue, store]);
 
   const computedSubtotal = isCommercialDocument
     ? products.length
@@ -171,7 +179,7 @@ export function OrderForm({
       : lineTotal(quantity, unitPrice)
     : 0;
   const computedDiscountPercent = clampPercent(discountPercent);
-  const computedDiscount = !orderId && isCommercialDocument
+  const computedDiscount = isCommercialDocument
     ? Math.round((computedSubtotal * computedDiscountPercent) / 100)
     : Number(discountValue ?? 0) || 0;
   const computedTotal = Math.max(computedSubtotal - computedDiscount, 0);
@@ -306,29 +314,37 @@ export function OrderForm({
       const saveFilePicker = getSaveFilePicker();
 
       if (saveFilePicker) {
+        const previousHandle = pdfFileHandleRef.current?.fileName === fileName
+          ? pdfFileHandleRef.current.handle
+          : null;
         let fileHandle: SaveFileHandle;
 
-        try {
-          fileHandle = await saveFilePicker({
-            suggestedName: fileName,
-            types: [
-              {
-                description: "Documento PDF",
-                accept: { "application/pdf": [".pdf"] },
-              },
-            ],
-          });
-        } catch (error) {
-          if (isFilePickerCancellation(error)) return;
-          throw error;
+        if (previousHandle) {
+          fileHandle = previousHandle;
+        } else {
+          try {
+            fileHandle = await saveFilePicker({
+              suggestedName: fileName,
+              types: [
+                {
+                  description: "Documento PDF",
+                  accept: { "application/pdf": [".pdf"] },
+                },
+              ],
+            });
+          } catch (error) {
+            if (isFilePickerCancellation(error)) return;
+            throw error;
+          }
         }
 
         const writable = await fileHandle.createWritable();
         await writable.write(preparedPdf.blob);
         await writable.close();
+        pdfFileHandleRef.current = { handle: fileHandle, fileName };
         preparedPdfRef.current = null;
         setPdfNameDialogOpen(false);
-        setPdfSuccess(`PDF guardado como “${fileName}”.`);
+        setPdfSuccess(previousHandle ? `PDF anterior reemplazado: “${fileName}”.` : `PDF guardado como “${fileName}”.`);
         return;
       }
 
@@ -462,7 +478,6 @@ export function OrderForm({
               <button
                 type="button"
                 onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
-                disabled={Boolean(orderId)}
                 className="btn btn-secondary w-fit"
               >
                 <Plus className="size-4" />
@@ -496,7 +511,7 @@ export function OrderForm({
                     <button
                       type="button"
                       onClick={() => removeProduct(index)}
-                      disabled={Boolean(orderId) || productFields.length === 1}
+                      disabled={productFields.length === 1 || Boolean(orderId && index < initialProductCount)}
                       className="grid size-11 place-items-center rounded-md border border-stone-200 text-stone-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                       aria-label={`Eliminar producto ${index + 1}`}
                       title="Eliminar producto"
@@ -567,7 +582,7 @@ export function OrderForm({
                   {printPreparing ? "Preparando..." : "Imprimir"}
                 </button>
                 <select {...register("store")} className="control bg-white">
-                  <option value="LH">LH - producción</option>
+                  {!commercialOnly ? <option value="LH">LH - producción</option> : null}
                   <option value="LR">LR - comercial</option>
                 </select>
                 {isCommercialDocument ? (
@@ -742,7 +757,7 @@ export function OrderForm({
                         <button
                           type="button"
                           onClick={() => removeProduct(index)}
-                          disabled={Boolean(orderId) || productFields.length === 1}
+                          disabled={productFields.length === 1 || Boolean(orderId && index < initialProductCount)}
                           className="grid size-8 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="Eliminar producto"
                           title="Eliminar producto"
@@ -763,7 +778,6 @@ export function OrderForm({
                 <button
                   type="button"
                   onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
-                  disabled={Boolean(orderId)}
                   className="btn btn-secondary border-dashed"
                 >
                   <PackagePlus className="size-4" />
@@ -795,8 +809,8 @@ export function OrderForm({
                 <div className="bg-stone-950 px-4 py-2 text-center text-xs font-bold uppercase tracking-[0.14em] text-white">Total</div>
                 <div className="divide-y divide-stone-200 text-sm">
                   <SummaryRow label="Subtotal" value={formatCurrency(computedSubtotal)} />
-                  <div className="grid grid-cols-[1fr_120px] items-center gap-3 px-4 py-2">
-                    <span className="text-stone-500">Descuento</span>
+                  <div className="grid grid-cols-[1fr_72px_108px] items-center gap-2 px-4 py-2">
+                    <span className="text-stone-500">Descuento aplicado</span>
                     <label className="grid grid-cols-[1fr_auto] items-center gap-1 border-b border-stone-200 focus-within:border-stone-500">
                       <input
                         value={discountPercent}
@@ -804,11 +818,12 @@ export function OrderForm({
                         type="number"
                         min="0"
                         max="100"
-                        step="1"
+                        step="0.1"
                         className="border-0 bg-transparent text-right font-bold text-stone-950 outline-none"
                       />
                       <span className="text-sm font-bold text-stone-500">%</span>
                     </label>
+                    <span className="text-right font-bold text-stone-950">-{formatCurrency(computedDiscount)}</span>
                   </div>
                   <SummaryRow label="Neto" value={formatCurrency(computedNet)} />
                   <SummaryRow label={includesVat ? "IVA 19%" : "IVA no aplicado"} value={formatCurrency(computedVat)} />
@@ -1151,7 +1166,6 @@ export function OrderForm({
             <button
               type="button"
               onClick={() => appendProduct({ productName: "", material: "", color: "", quantity: 1 })}
-              disabled={Boolean(orderId)}
               className="btn btn-secondary w-fit"
             >
               <PackagePlus className="size-4" />
@@ -1211,7 +1225,7 @@ export function OrderForm({
                       <button
                         type="button"
                         onClick={() => removeProduct(index)}
-                        disabled={Boolean(orderId) || productFields.length === 1}
+                        disabled={productFields.length === 1 || Boolean(orderId && index < initialProductCount)}
                         className="grid size-10 place-items-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30"
                         aria-label="Eliminar producto"
                         title="Eliminar producto"
@@ -2063,6 +2077,17 @@ function commercialDocumentLabel(type?: CommercialDocumentType) {
     warranty: "Garantía",
   };
   return type ? labels[type] ?? "Documento comercial" : "Documento comercial";
+}
+
+function discountPercentFromValues(values?: FormValues) {
+  if (!values) return 0;
+  const products = "products" in values ? values.products ?? [] : [];
+  const subtotal = products.length
+    ? products.reduce((sum, product) => sum + lineTotal(product.quantity, product.unitPrice), 0)
+    : Number(values.subtotal ?? 0) || 0;
+  const discount = Number(values.discount ?? 0) || 0;
+  if (subtotal <= 0 || discount <= 0) return 0;
+  return Math.round((discount / subtotal) * 1000) / 10;
 }
 
 function clampPercent(value: number | string) {

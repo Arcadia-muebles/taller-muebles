@@ -32,6 +32,8 @@ export type AgendaItemStatus = "pending" | "done" | "cancelled";
 
 export type AgendaTimeSlot = "AM" | "PM";
 
+export type AgendaPriority = "low" | "normal" | "high" | "critical";
+
 export type AgendaItem = {
   id: string;
   kind: AgendaItemKind;
@@ -40,6 +42,7 @@ export type AgendaItem = {
   notes?: string;
   scheduledDate: string;
   timeSlot: AgendaTimeSlot;
+  priority: AgendaPriority;
   startTime: string;
   endTime: string;
   status: AgendaItemStatus;

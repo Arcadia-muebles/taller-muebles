@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireSession } from "@/lib/auth";
+import { requireModuleAccess } from "@/lib/auth";
 import { hasSupabaseConfig } from "@/lib/env";
 import { addLocalDocumentPayment, deleteLocalDocumentPayment, updateLocalDocumentPayment } from "@/lib/local-store";
 import { getOrder, listOrders } from "@/lib/repositories/production";
@@ -19,7 +19,7 @@ const paymentCorrectionSchema = paymentSchema.extend({ paymentId: z.string().uui
 const paymentDeleteSchema = z.object({ orderId: z.string().min(1), paymentId: z.string().uuid() });
 
 export async function addDocumentPayment(formData: FormData) {
-  await requireSession(["admin", "manager"]);
+  await requireModuleAccess("commercial");
   const parsed = paymentSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { status: "error" as const, message: parsed.error.issues[0]?.message ?? "Revisa el abono." };
   const order = await getOrder(parsed.data.orderId);
@@ -52,7 +52,7 @@ export async function addDocumentPayment(formData: FormData) {
 }
 
 export async function updateDocumentPayment(input: z.infer<typeof paymentCorrectionSchema>) {
-  await requireSession(["admin", "manager"]);
+  await requireModuleAccess("commercial");
   const parsed = paymentCorrectionSchema.safeParse(input);
   if (!parsed.success) return { status: "error" as const, message: parsed.error.issues[0]?.message ?? "Revisa el abono." };
   const order = await getOrder(parsed.data.orderId);
@@ -76,7 +76,7 @@ export async function updateDocumentPayment(input: z.infer<typeof paymentCorrect
 }
 
 export async function deleteDocumentPayment(input: z.infer<typeof paymentDeleteSchema>) {
-  await requireSession(["admin", "manager"]);
+  await requireModuleAccess("commercial");
   const parsed = paymentDeleteSchema.safeParse(input);
   if (!parsed.success) return { status: "error" as const, message: "Abono inválido." };
   const order = await getOrder(parsed.data.orderId);

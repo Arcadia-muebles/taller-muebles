@@ -1,7 +1,7 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Plus, Sun, Trash2, Truck } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Plus, Sun, Truck } from "lucide-react";
 import Link from "next/link";
 import type { ElementType, ReactNode } from "react";
-import { cancelAgendaItem, completeAgendaItem, createAgendaTask, scheduleOrderDelivery, updateAgendaItem } from "@/app/admin/agenda/actions";
+import { cancelAgendaItem, completeAgendaItem, scheduleOrderDelivery, updateAgendaItem } from "@/app/admin/agenda/actions";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { DismissibleDetails } from "@/components/dismissible-details";
@@ -41,20 +41,17 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
   const ready = readyForDeliveryOrders(productionOrders, allAgendaItems).sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
   const ordersById = new Map(productionOrders.map((order) => [order.id, order]));
   const visibleItems = filterAgendaItems(
-    dayAgendaItems.filter((item) => item.status !== "cancelled" && (!item.orderId || ordersById.has(item.orderId))),
+    dayAgendaItems.filter((item) => item.kind === "delivery" && item.status !== "cancelled" && item.orderId && ordersById.has(item.orderId)),
     filters,
   );
-  const pendingTasks = allAgendaItems
-    .filter((item) => item.kind === "task" && item.status === "pending" && item.scheduledDate === selectedDate)
-    .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const activeFilters = activeFilterCount(filters);
 
   return (
     <AppShell active="admin" user={user}>
       <header className="page-header">
         <div>
-          <h1 className="page-title">Agenda</h1>
-          <p className="page-description">Organiza y gestiona las entregas de muebles y las tareas del taller.</p>
+          <h1 className="page-title">Despachos</h1>
+          <p className="page-description">Organiza las entregas listas, sus bloques horarios y la información necesaria para cada ruta.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <ActionDetails
@@ -83,32 +80,14 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
             </form>
           </ActionDetails>
 
-          <ActionDetails icon={Plus} label="Nueva tarea" disabled={!canEdit}>
-            <form action={createAgendaTask} className="space-y-3">
-              <label className="block">
-                <span className="field-label">Tarea</span>
-                <input name="title" className="control mt-1" required minLength={3} maxLength={120} placeholder="Retirar estructuras de bodega" disabled={!canEdit} />
-              </label>
-              <label className="block">
-                <span className="field-label">Detalle</span>
-                <textarea name="notes" className="textarea-control mt-1 min-h-20" maxLength={400} placeholder="Cliente, proveedor o contexto" disabled={!canEdit} />
-              </label>
-              <AgendaFormFields selectedDate={selectedDate} />
-              <button type="submit" className="btn btn-primary w-full" disabled={!canEdit}>Crear tarea</button>
-            </form>
-          </ActionDetails>
+          <Link href={`/admin/planning?date=${selectedDate}`} className="btn btn-primary">
+            <Plus className="size-4" />
+            Planificación diaria
+          </Link>
 
           <ActionDetails icon={Filter} label="Filtros" description={activeFilters ? `${activeFilters} activos` : undefined}>
             <form action="/admin/agenda" className="space-y-3">
               <input type="hidden" name="date" value={selectedDate} />
-              <label className="block">
-                <span className="field-label">Tipo</span>
-                <select name="kind" defaultValue={filters.kind} className="control mt-1">
-                  <option value="all">Todas</option>
-                  <option value="delivery">Entregas</option>
-                  <option value="task">Tareas</option>
-                </select>
-              </label>
               <label className="block">
                 <span className="field-label">Estado</span>
                 <select name="status" defaultValue={filters.status} className="control mt-1">
@@ -135,15 +114,15 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
       </header>
       {params.scheduled === "local" ? (
         <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
-          Agenda guardada en modo local. Aplica la migracion de Supabase para persistir estas agendas en la base de datos.
+          Despacho guardado en modo local. Aplica la migración de Supabase para persistir estos datos en la base de datos.
         </div>
       ) : null}
 
       <div className="agenda-print-area agenda-print-content mt-5 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <header className="agenda-print-heading hidden">
           <div>
-            <h1>Agenda diaria</h1>
-            <p>Entregas y tareas programadas</p>
+            <h1>Despachos</h1>
+            <p>Entregas programadas</p>
           </div>
           <p>{formatDate(selectedDate)}</p>
         </header>
@@ -185,11 +164,6 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
             ))}
             {ready.length > 3 ? <Link href="/admin/ready" className="block rounded-md bg-stone-50 py-2 text-center text-xs font-medium text-stone-700">Ver todas</Link> : null}
           </SidebarList>
-          <DailyTasksSidebar
-            tasks={pendingTasks}
-            selectedDate={selectedDate}
-            canEdit={canEdit}
-          />
         </aside>
       </div>
     </AppShell>
@@ -228,14 +202,14 @@ function AgendaSection({
           </span>
           <p className="text-sm font-semibold">{slot} <span className="ml-2 text-stone-600">{label}</span></p>
         </div>
-        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-700">{slotItems.length} actividades</span>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-700">{slotItems.length} entregas</span>
       </header>
       <div className="divide-y divide-stone-100">
         {slotItems.map((item) => (
           <AgendaCard key={item.id} item={item} order={item.orderId ? ordersById.get(item.orderId) : undefined} canEdit={canEdit} />
         ))}
         {!slotItems.length ? (
-          <div className="p-6 text-sm text-stone-500">Sin actividades para este bloque.</div>
+          <div className="p-6 text-sm text-stone-500">Sin despachos para este bloque.</div>
         ) : null}
       </div>
     </section>
@@ -316,11 +290,11 @@ function AgendaCard({ item, order, canEdit }: { item: AgendaItem; order?: Order;
               <form action={cancelAgendaItem}>
                 <input type="hidden" name="itemId" value={item.id} />
                 <ConfirmSubmitButton
-                  title="Quitar de la agenda"
-                  description="La actividad se ocultará de la agenda, pero conservará su registro para trazabilidad."
-                  confirmLabel="Quitar actividad"
+                  title="Quitar de despachos"
+                  description="El despacho se ocultará de la vista, pero conservará su registro para trazabilidad."
+                  confirmLabel="Quitar despacho"
                   pendingLabel="Quitando..."
-                  trigger="Quitar de la agenda"
+                  trigger="Quitar de despachos"
                   triggerClassName="w-full rounded px-3 py-2 text-left text-xs font-medium text-rose-700 hover:bg-rose-50"
                 />
               </form>
@@ -457,56 +431,6 @@ function SidebarList({ title, count, tone, empty, children }: { title: string; c
   );
 }
 
-function DailyTasksSidebar({
-  tasks,
-  selectedDate,
-  canEdit,
-}: {
-  tasks: AgendaItem[];
-  selectedDate: string;
-  canEdit: boolean;
-}) {
-  return (
-    <section className="panel-pad">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-stone-950">Tareas pendientes</h2>
-        <span className="rounded-full bg-orange-500 px-2 py-0.5 text-xs font-semibold text-white">{tasks.length}</span>
-      </div>
-
-      <div className="my-3 grid grid-cols-[32px_1fr_32px] items-center gap-2 rounded-md border border-stone-200 bg-stone-50 p-1.5">
-        <DateNavButton
-          href={`/admin/agenda?date=${addDays(selectedDate, -1)}`}
-          icon={ChevronLeft}
-          label="Tareas del día anterior"
-          compact
-        />
-        <div className="min-w-0 text-center">
-          <p className="text-sm font-semibold text-stone-950">{relativeDayLabel(selectedDate)}</p>
-          <p className="truncate text-[10px] font-medium capitalize text-stone-500">{shortDateLabel(selectedDate)}</p>
-        </div>
-        <DateNavButton
-          href={`/admin/agenda?date=${addDays(selectedDate, 1)}`}
-          icon={ChevronRight}
-          label="Tareas del día siguiente"
-          compact
-        />
-      </div>
-
-      {tasks.length ? (
-        <div className="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
-          {tasks.map((item) => (
-            <TaskSidebarItem key={item.id} item={item} canEdit={canEdit} />
-          ))}
-        </div>
-      ) : (
-        <p className="rounded-md bg-stone-50 p-3 text-xs text-stone-500">
-          No hay tareas pendientes para {relativeDayLabel(selectedDate).toLocaleLowerCase("es-CL")}.
-        </p>
-      )}
-    </section>
-  );
-}
-
 function ReadySidebarItem({
   order,
   groupOrders,
@@ -540,76 +464,8 @@ function ReadySidebarItem({
               <span className="field-label">Info entrega</span>
               <textarea name="notes" className="textarea-control mt-1 min-h-16" maxLength={500} placeholder="Referencia o instrucción" />
             </label>
-            <button type="submit" className="mt-2 h-8 w-full rounded-md bg-emerald-700 px-2 text-xs font-semibold text-white hover:bg-emerald-800">Confirmar agenda</button>
+            <button type="submit" className="mt-2 h-8 w-full rounded-md bg-emerald-700 px-2 text-xs font-semibold text-white hover:bg-emerald-800">Confirmar despacho</button>
           </form>
-        </details>
-      ) : null}
-    </div>
-  );
-}
-
-function TaskSidebarItem({ item, canEdit }: { item: AgendaItem; canEdit: boolean }) {
-  const overdue = item.scheduledDate < todayLocalDate();
-  return (
-    <div className={cn("rounded-md border p-3", overdue ? "border-rose-200 bg-rose-50/70" : "border-orange-100 bg-orange-50")}>
-      <div className="flex gap-2">
-        <ClipboardCheck className={cn("mt-0.5 size-4 shrink-0", overdue ? "text-rose-600" : "text-orange-600")} />
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold leading-4 text-stone-950">{item.title}</p>
-          {item.notes ? <p className="mt-1 line-clamp-2 text-xs leading-4 text-stone-500">{item.notes}</p> : null}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", overdue ? "bg-rose-100 text-rose-700" : "bg-white text-stone-600")}>
-              {overdue ? "Vencida" : "Programada"} · {formatDate(item.scheduledDate)}
-            </span>
-            <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-stone-600">{item.timeSlot}</span>
-          </div>
-        </div>
-      </div>
-      {canEdit ? (
-        <details className="mt-2">
-          <summary className={cn(
-            "grid h-8 w-full cursor-pointer list-none place-items-center rounded-md border bg-white px-2 text-xs font-semibold transition",
-            overdue ? "border-rose-200 text-rose-700 hover:bg-rose-50" : "border-orange-200 text-orange-700 hover:bg-orange-50",
-          )}>
-            {overdue ? "Reagendar o gestionar" : "Gestionar"}
-          </summary>
-          <div className="mt-2 rounded-md border border-stone-200 bg-white p-2.5 shadow-sm">
-            <form action={updateAgendaItem} className="space-y-2">
-              <input type="hidden" name="itemId" value={item.id} />
-              <input type="hidden" name="kind" value="task" />
-              <label className="block">
-                <span className="field-label">Tarea</span>
-                <input name="title" defaultValue={item.title} className="control mt-1" required minLength={3} maxLength={120} />
-              </label>
-              <AgendaFormFields selectedDate={item.scheduledDate} defaultSlot={item.timeSlot} compact />
-              <label className="block">
-                <span className="field-label">Detalle</span>
-                <textarea name="notes" defaultValue={item.notes} className="textarea-control mt-1 min-h-16" maxLength={500} placeholder="Cliente, proveedor o contexto" />
-              </label>
-              <button type="submit" className="h-8 w-full rounded-md bg-stone-950 px-2 text-xs font-semibold text-white hover:bg-stone-800">
-                {overdue ? "Reagendar tarea" : "Guardar cambios"}
-              </button>
-            </form>
-            <div className="mt-2 grid grid-cols-2 gap-2 border-t border-stone-100 pt-2">
-              <form action={completeAgendaItem}>
-                <input type="hidden" name="itemId" value={item.id} />
-                <button type="submit" className="h-8 w-full rounded-md border border-emerald-200 bg-emerald-50 px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
-                  Marcar hecha
-                </button>
-              </form>
-              <form action={cancelAgendaItem}>
-                <input type="hidden" name="itemId" value={item.id} />
-                <ConfirmSubmitButton
-                  title="Eliminar tarea pendiente"
-                  description="La tarea saldrá de pendientes, pero su cancelación quedará registrada para trazabilidad."
-                  confirmLabel="Eliminar tarea"
-                  pendingLabel="Eliminando..."
-                  trigger={<span className="inline-flex items-center gap-1"><Trash2 className="size-3.5" />Eliminar</span>}
-                  triggerClassName="grid h-8 w-full place-items-center rounded-md border border-rose-200 bg-rose-50 px-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
-                />
-              </form>
-            </div>
-          </div>
         </details>
       ) : null}
     </div>
@@ -699,22 +555,6 @@ function longDateLabel(date: string) {
     year: "numeric",
   }).format(value);
   return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-function relativeDayLabel(date: string) {
-  const today = todayLocalDate();
-  if (date === today) return "Hoy";
-  if (date === addDays(today, 1)) return "Mañana";
-  if (date === addDays(today, -1)) return "Ayer";
-  return new Intl.DateTimeFormat("es-CL", { weekday: "long" }).format(parseLocalDate(date))
-    .replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function shortDateLabel(date: string) {
-  return new Intl.DateTimeFormat("es-CL", {
-    day: "numeric",
-    month: "long",
-  }).format(parseLocalDate(date));
 }
 
 function calendarDays(date: string) {

@@ -2,7 +2,7 @@ import "server-only";
 
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AgendaItem, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, ClientPortalLink, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
+import type { AgendaItem, AgendaPriority, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, ClientPortalLink, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
 import { clientPortalKeyForOrder } from "@/lib/client-portal-identity";
 import { defaultSystemSettings } from "@/lib/system-settings";
 import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
@@ -754,6 +754,7 @@ function scheduleDeliveryAgendaItem(
       notes: input.notes?.trim() || undefined,
       scheduledDate: input.scheduledDate,
       timeSlot: input.timeSlot,
+      priority: "normal",
       startTime: times.startTime,
       endTime: times.endTime,
       status: "pending",
@@ -768,6 +769,7 @@ export async function createLocalAgendaTask(input: {
   notes?: string;
   scheduledDate: string;
   timeSlot: AgendaTimeSlot;
+  priority?: AgendaPriority;
 }) {
   const data = await readData();
   const times = timeSlotTimes(input.timeSlot);
@@ -778,6 +780,7 @@ export async function createLocalAgendaTask(input: {
     notes: input.notes?.trim() || undefined,
     scheduledDate: input.scheduledDate,
     timeSlot: input.timeSlot,
+    priority: input.priority ?? "normal",
     startTime: times.startTime,
     endTime: times.endTime,
     status: "pending",
@@ -794,6 +797,7 @@ export async function updateLocalAgendaItem(input: {
   notes?: string;
   scheduledDate: string;
   timeSlot: AgendaTimeSlot;
+  priority?: AgendaPriority;
 }) {
   const data = await readData();
   const item = data.agendaItems.find((agendaItem) => agendaItem.id === input.itemId);
@@ -803,6 +807,7 @@ export async function updateLocalAgendaItem(input: {
   item.notes = input.notes?.trim() || undefined;
   item.scheduledDate = input.scheduledDate;
   item.timeSlot = input.timeSlot;
+  if (input.priority) item.priority = input.priority;
   item.startTime = times.startTime;
   item.endTime = times.endTime;
   item.updatedAt = nowIso();
@@ -1465,6 +1470,12 @@ function addAudit(data: LocalData, orderId: string, action: string, summary: str
 
 function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolean } {
   let changed = false;
+  for (const item of data.agendaItems) {
+    if (!item.priority) {
+      item.priority = "normal";
+      changed = true;
+    }
+  }
   const nextProductPositionByGroup = new Map<string, number>();
   for (const order of data.orders) {
     if (typeof order.includesVat !== "boolean") {
