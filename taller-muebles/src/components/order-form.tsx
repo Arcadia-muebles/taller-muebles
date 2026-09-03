@@ -809,9 +809,9 @@ export function OrderForm({
                 <div className="bg-stone-950 px-4 py-2 text-center text-xs font-bold uppercase tracking-[0.14em] text-white">Total</div>
                 <div className="divide-y divide-stone-200 text-sm">
                   <SummaryRow label="Subtotal" value={formatCurrency(computedSubtotal)} />
-                  <div className="grid grid-cols-[1fr_72px_108px] items-center gap-2 px-4 py-2">
-                    <span className="text-stone-500">Descuento aplicado</span>
-                    <label className="grid grid-cols-[1fr_auto] items-center gap-1 border-b border-stone-200 focus-within:border-stone-500">
+                  <div className="grid grid-cols-[minmax(0,1fr)_72px_108px] items-center gap-2 px-4 py-2">
+                    <span className="min-w-0 text-stone-500">Descuento aplicado</span>
+                    <label className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 border-b border-stone-200 focus-within:border-stone-500">
                       <input
                         value={discountPercent}
                         onChange={(event) => setDiscountPercent(clampPercent(event.target.value))}
@@ -819,11 +819,11 @@ export function OrderForm({
                         min="0"
                         max="100"
                         step="0.1"
-                        className="border-0 bg-transparent text-right font-bold text-stone-950 outline-none"
+                        className="min-w-0 border-0 bg-transparent text-right font-bold text-stone-950 outline-none"
                       />
                       <span className="text-sm font-bold text-stone-500">%</span>
                     </label>
-                    <span className="text-right font-bold text-stone-950">{formatCurrency(computedDiscount)}</span>
+                    <span className="whitespace-nowrap text-right font-bold text-stone-950">{formatCurrency(computedDiscount)}</span>
                   </div>
                   <SummaryRow label="Neto" value={formatCurrency(computedNet)} />
                   <SummaryRow label={includesVat ? "IVA 19%" : "IVA no aplicado"} value={formatCurrency(computedVat)} />
