@@ -1,7 +1,7 @@
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Plus, Sun, Truck } from "lucide-react";
 import Link from "next/link";
 import type { ElementType, ReactNode } from "react";
-import { cancelAgendaItem, completeAgendaItem, scheduleOrderDelivery, updateAgendaItem } from "@/app/admin/agenda/actions";
+import { cancelAgendaItem, completeAgendaItem, createAgendaTask, scheduleOrderDelivery, updateAgendaItem } from "@/app/admin/agenda/actions";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { DismissibleDetails } from "@/components/dismissible-details";
@@ -77,6 +77,50 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
                 <textarea name="notes" className="textarea-control mt-1 min-h-20" maxLength={500} placeholder="Referencia, contacto, acceso, instrucciones o datos relevantes" disabled={!canEdit || !ready.length} />
               </label>
               <button type="submit" className="btn btn-primary w-full" disabled={!canEdit || !ready.length}>Agendar</button>
+            </form>
+          </ActionDetails>
+
+          <ActionDetails
+            icon={ClipboardCheck}
+            label="Nueva tarea"
+            description="Para planificación diaria"
+            disabled={!canEdit}
+          >
+            <form action={createAgendaTask} className="space-y-3">
+              <input type="hidden" name="returnTo" value="/admin/agenda" />
+              <label className="block">
+                <span className="field-label">Tarea</span>
+                <input
+                  name="title"
+                  className="control mt-1"
+                  required
+                  minLength={3}
+                  maxLength={120}
+                  placeholder="Ej. Confirmar horario con cliente"
+                  disabled={!canEdit}
+                />
+              </label>
+              <label className="block">
+                <span className="field-label">Importancia</span>
+                <select name="priority" defaultValue="normal" className="control mt-1" disabled={!canEdit}>
+                  <option value="critical">Urgente</option>
+                  <option value="high">Alta</option>
+                  <option value="normal">Normal</option>
+                  <option value="low">Baja</option>
+                </select>
+              </label>
+              <AgendaFormFields selectedDate={selectedDate} />
+              <label className="block">
+                <span className="field-label">Detalle</span>
+                <textarea
+                  name="notes"
+                  className="textarea-control mt-1 min-h-20"
+                  maxLength={400}
+                  placeholder="Responsable, contexto o resultado esperado"
+                  disabled={!canEdit}
+                />
+              </label>
+              <button type="submit" className="btn btn-primary w-full" disabled={!canEdit}>Crear tarea</button>
             </form>
           </ActionDetails>
 

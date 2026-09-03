@@ -823,7 +823,7 @@ export function OrderForm({
                       />
                       <span className="text-sm font-bold text-stone-500">%</span>
                     </label>
-                    <span className="text-right font-bold text-stone-950">-{formatCurrency(computedDiscount)}</span>
+                    <span className="text-right font-bold text-stone-950">{formatCurrency(computedDiscount)}</span>
                   </div>
                   <SummaryRow label="Neto" value={formatCurrency(computedNet)} />
                   <SummaryRow label={includesVat ? "IVA 19%" : "IVA no aplicado"} value={formatCurrency(computedVat)} />
