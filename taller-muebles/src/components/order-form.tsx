@@ -703,24 +703,22 @@ export function OrderForm({
                         ) : null}
                       </td>
                       <td className="px-4 py-4 align-top">
-                        <input
+                        <AutoGrowingTextarea
                           {...register(`products.${index}.productName`)}
-                          className="w-full border-0 bg-transparent text-sm font-semibold text-stone-950 outline-none placeholder:text-stone-400 focus:bg-stone-50"
-                          placeholder="Producto / modelo"
+                          rows={1}
+                          aria-label={`Descripción del producto ${index + 1}`}
+                          data-multiline="true"
+                          className="block min-h-11 w-full resize-none overflow-hidden border-0 bg-transparent text-sm font-semibold leading-6 text-stone-950 outline-none placeholder:text-stone-400 focus:bg-stone-50"
+                          placeholder="Descripción del producto"
                         />
                         {typedErrors.products?.[index]?.productName?.message ? (
                           <p className="mt-1 text-xs font-medium text-rose-600">{typedErrors.products[index]?.productName?.message}</p>
                         ) : null}
                         <input type="hidden" {...register(`products.${index}.material`)} value="Por definir" />
                         <div className="mt-2">
-                          <textarea
+                          <AutoGrowingTextarea
                             {...colorRegistration}
-                            ref={(element) => {
-                              colorRegistration.ref(element);
-                              if (element) resizeTextareaToContent(element);
-                            }}
                             rows={1}
-                            onInput={(event) => resizeTextareaToContent(event.currentTarget)}
                             className="block min-h-5 w-full resize-none overflow-hidden border-0 border-b border-stone-200 bg-transparent pb-1 text-xs leading-5 text-stone-600 outline-none placeholder:text-stone-400 focus:border-stone-500"
                             placeholder="Color"
                           />
@@ -1626,6 +1624,45 @@ function DocumentField({
   );
 }
 
+const AutoGrowingTextarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function AutoGrowingTextarea({ onInput, ...props }, forwardedRef) {
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+    useEffect(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const resize = () => resizeTextareaToContent(textarea);
+      const observedElement = textarea.parentElement ?? textarea;
+      const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
+
+      resize();
+      observer?.observe(observedElement);
+      window.addEventListener("resize", resize);
+
+      return () => {
+        observer?.disconnect();
+        window.removeEventListener("resize", resize);
+      };
+    }, []);
+
+    return (
+      <textarea
+        {...props}
+        ref={(element) => {
+          textareaRef.current = element;
+          if (typeof forwardedRef === "function") forwardedRef(element);
+          else if (forwardedRef) forwardedRef.current = element;
+        }}
+        onInput={(event) => {
+          onInput?.(event);
+          resizeTextareaToContent(event.currentTarget);
+        }}
+      />
+    );
+  },
+);
+
 const DocumentInput = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement> & { strong?: boolean }>(
   function DocumentInput({ className = "", strong, ...props }, ref) {
     return (
@@ -2019,7 +2056,7 @@ function moveToNextFormFieldOnEnter(event: React.KeyboardEvent<HTMLFormElement>)
     return;
   }
 
-  if (currentField instanceof HTMLTextAreaElement && event.shiftKey) return;
+  if (currentField instanceof HTMLTextAreaElement && (event.shiftKey || currentField.dataset.multiline === "true")) return;
 
   event.preventDefault();
 

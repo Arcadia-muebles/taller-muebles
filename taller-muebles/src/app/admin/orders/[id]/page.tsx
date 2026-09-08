@@ -375,7 +375,7 @@ function Info({ label, value, strong }: { label: string; value: string; strong?:
   return (
     <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-3">
       <p className="text-xs font-medium uppercase tracking-[0.14em] text-stone-500">{label}</p>
-      <p className={`mt-1 text-sm ${strong ? "font-semibold text-rose-600" : "font-medium text-stone-900"}`}>
+      <p className={`mt-1 whitespace-pre-wrap break-words text-sm ${strong ? "font-semibold text-rose-600" : "font-medium text-stone-900"}`}>
         {value}
       </p>
     </div>

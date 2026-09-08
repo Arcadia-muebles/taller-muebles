@@ -122,9 +122,9 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
                     <tr key={order.id} className="border-b border-stone-100 last:border-0 hover:bg-stone-50">
                       <td className="px-4 py-3 align-middle">
                         {isQuote ? (
-                          <span className="text-sm font-semibold text-stone-950">{order.product}</span>
+                          <span className="block whitespace-pre-wrap break-words text-sm font-semibold leading-5 text-stone-950">{order.product}</span>
                         ) : (
-                          <Link href={`/admin/orders/${order.id}?view=production`} className="text-sm font-semibold text-stone-950 underline-offset-4 hover:underline">
+                          <Link href={`/admin/orders/${order.id}?view=production`} className="block whitespace-pre-wrap break-words text-sm font-semibold leading-5 text-stone-950 underline-offset-4 hover:underline">
                             {order.product}
                           </Link>
                         )}
@@ -155,7 +155,7 @@ export default async function DocumentDetailPage({ params }: DocumentDetailPageP
               {documentOrders.map((order) => (
                 <div key={order.id} className="rounded-md border border-stone-200 bg-stone-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{order.product}</p>
-                  <p className="mt-1 text-sm leading-6 text-stone-700">{order.observations || "Sin observaciones."}</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-stone-700">{order.observations || "Sin observaciones."}</p>
                 </div>
               ))}
             </div>
