@@ -5,12 +5,12 @@ import { AppShell } from "@/components/app-shell";
 import { requireSession } from "@/lib/auth";
 import { isReadyForDelivery, readyForDeliveryOrders } from "@/lib/metrics";
 import { isProductionOrder } from "@/lib/orders";
-import { listAgendaItems, listAttachmentsForOrders, listCommentsForOrders, listOrders, listStructureRequests } from "@/lib/repositories/production";
+import { listAgendaItems, listAttachmentsForOrders, listCommentsForOrders, listStructureRequestStatuses, listWorkshopOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 
 export default async function AdminPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
-  const [orders, settings, structureRequests, agendaItems] = await Promise.all([listOrders(), getSystemSettings(), listStructureRequests(), listAgendaItems()]);
+  const [orders, settings, structureRequests, agendaItems] = await Promise.all([listWorkshopOrders(), getSystemSettings(), listStructureRequestStatuses(), listAgendaItems()]);
   const productionOrders = orders.filter(isProductionOrder);
   const productionOrderIds = productionOrders.map((order) => order.id);
   const [commentsByOrder, attachmentsByOrder] = await Promise.all([

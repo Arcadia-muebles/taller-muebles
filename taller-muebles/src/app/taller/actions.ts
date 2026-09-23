@@ -13,7 +13,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { priorityFromDeliveryDate } from "@/lib/utils";
 import { updateStepSchema, type UpdateStepInput } from "@/lib/validation/production";
-import { canWorkerUseStep } from "@/lib/workshop-access";
+import { canWorkerUseStep, isWithinUndoWindow } from "@/lib/workshop-access";
 
 export type UpdateStepResult = {
   status: "success" | "error";
@@ -195,6 +195,12 @@ export async function updateProductionStep(
   const currentStep = currentOrder?.steps.find((step) => step.key === parsed.data.stepKey);
   if (!currentOrder || !currentStep) return { status: "error", message: "No se encontró la etapa seleccionada." };
   if (!isProductionOrder(currentOrder)) return { status: "error", message: "Las cotizaciones no pertenecen al flujo de producción." };
+  if (["completed", "cancelled"].includes(currentOrder.status)) {
+    return { status: "error", message: "No puedes modificar la producción de una orden entregada o cancelada." };
+  }
+  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
+    return { status: "error", message: "La edición de órdenes está deshabilitada para supervisores." };
+  }
   const structureRequest = parsed.data.stepKey === "structure"
     ? (await listStructureRequests()).find((request) => request.orderId === parsed.data.orderId && request.status !== "cancelled")
     : undefined;
@@ -252,6 +258,9 @@ export async function updateProductionStep(
     const allowed = isOperatorTransitionAllowed(currentStep.status, parsed.data.status, permissions);
     if (!allowed) return { status: "error", message: "Esta acción está deshabilitada para operarios." };
     if (!canWorkerUseStep(user, currentStep)) return { status: "error", message: "No puedes operar esta etapa." };
+    if (isReversal && currentStep.status === "done" && !isWithinUndoWindow(currentStep.completedAt)) {
+      return { status: "error", message: "El plazo de 30 minutos para reabrir terminó. Pide la corrección a un supervisor." };
+    }
     if (isReversal && laterStepsToReset.some(hasRecordedWork)) {
       return {
         status: "error",

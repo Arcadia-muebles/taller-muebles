@@ -14,29 +14,35 @@ export function UserEditForm({
   user,
   steps,
   disabled,
+  isSelf = false,
 }: {
   user: AppUser;
   steps: SystemSettings["production"]["steps"];
   disabled: boolean;
+  isSelf?: boolean;
 }) {
   const [role, setRole] = useState(user.role);
+  const [name, setName] = useState(user.name);
+  const [selectedAreas, setSelectedAreas] = useState(user.areas?.length ? user.areas : user.area ? [user.area] : []);
   const [state, action] = useActionState(async (_state: UserActionResult, formData: FormData) => {
     return updateUser(formData);
   }, initialState);
   const enabledSteps = steps.filter((step) => step.enabled);
-  const selectedAreas = user.areas?.length ? user.areas : user.area ? [user.area] : [];
+  function toggleArea(area: string, checked: boolean) {
+    setSelectedAreas((current) => checked ? [...current, area] : current.filter((item) => item !== area));
+  }
 
   return (
     <form action={action} className="grid gap-3 border-t border-stone-100 p-4 md:grid-cols-[minmax(0,1.2fr)_160px_auto] md:items-end">
       <input type="hidden" name="userId" value={user.id} />
       <Field label="Nombre">
-        <input name="name" defaultValue={user.name} disabled={disabled} required className={inputClass} />
+        <input name="name" value={name} onChange={(event) => setName(event.target.value)} disabled={disabled} required minLength={2} className={inputClass} />
       </Field>
       <Field label="Rol">
         <select name="role" value={role} disabled={disabled} onChange={(event) => setRole(event.target.value as AppUser["role"])} className={inputClass}>
           <option value="admin">Administrador</option>
-          <option value="manager">Supervisor</option>
-          <option value="operator">Trabajador</option>
+          <option value="manager" disabled={isSelf}>Supervisor</option>
+          <option value="operator" disabled={isSelf}>Trabajador</option>
         </select>
       </Field>
       <div className="flex flex-col gap-2">
@@ -56,7 +62,8 @@ export function UserEditForm({
                   type="checkbox"
                   name="areas"
                   value={step.key}
-                  defaultChecked={selectedAreas.includes(step.key)}
+                  checked={selectedAreas.includes(step.key)}
+                  onChange={(event) => toggleArea(step.key, event.target.checked)}
                   disabled={disabled}
                   className="size-4 accent-stone-950"
                 />
@@ -68,7 +75,8 @@ export function UserEditForm({
                 type="checkbox"
                 name="areas"
                 value={moduleAccessKeys.commercial}
-                defaultChecked={selectedAreas.includes(moduleAccessKeys.commercial)}
+                checked={selectedAreas.includes(moduleAccessKeys.commercial)}
+                onChange={(event) => toggleArea(moduleAccessKeys.commercial, event.target.checked)}
                 disabled={disabled}
                 className="size-4 accent-stone-950"
               />

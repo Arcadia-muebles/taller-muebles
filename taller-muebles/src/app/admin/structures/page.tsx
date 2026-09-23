@@ -2,7 +2,7 @@ import { AppShell } from "@/components/app-shell";
 import { StructuresWorkspace } from "@/components/structures-workspace";
 import { requireSession } from "@/lib/auth";
 import { activeOrders } from "@/lib/metrics";
-import { getStructureRequestsSnapshot, listOrders } from "@/lib/repositories/production";
+import { getStructureRequestsSnapshot, listWorkshopOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import type { Order, StructureRequest } from "@/lib/types";
 
@@ -16,7 +16,7 @@ export type StructureListRow = {
 export default async function StructuresPage() {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const [orders, requestSnapshot, settings] = await Promise.all([
-    listOrders(),
+    listWorkshopOrders(),
     getStructureRequestsSnapshot(),
     getSystemSettings(),
   ]);

@@ -5,7 +5,7 @@ import { hasSupabaseConfig } from "@/lib/env";
 
 export default async function LoginPage() {
   const user = await getSessionUser();
-  if (user) redirect(dashboardPathForRole(user.role));
+  if (user) redirect(dashboardPathForRole(user.role, user));
 
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-6 text-stone-950">

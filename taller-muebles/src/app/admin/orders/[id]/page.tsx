@@ -22,7 +22,7 @@ import { canAccessModule, canEditCommercial } from "@/lib/module-access";
 import { completionPercent } from "@/lib/metrics";
 import { compareOrderGroupMembers, productionStepPrerequisitesMet } from "@/lib/orders";
 import { getSystemSettings } from "@/lib/repositories/settings";
-import { getOrder, listOrderAttachments, listOrderAudit, listOrderComments, listOrders } from "@/lib/repositories/production";
+import { getOrder, getWorkshopOrder, listOrderAttachments, listOrderAudit, listOrderComments, listOrders, listWorkshopOrders } from "@/lib/repositories/production";
 import { deliveryLabel, durationLabel, formatDate, formatDateTime, priorityLabel } from "@/lib/utils";
 
 type OrderDetailPageProps = {
@@ -33,13 +33,14 @@ type OrderDetailPageProps = {
 export default async function OrderDetailPage({ params, searchParams }: OrderDetailPageProps) {
   const user = await requireSession(["admin", "manager", "operator"]);
   const [{ id }, query] = await Promise.all([params, searchParams]);
+  const isSupervisor = user.role === "manager";
   const [order, audit, comments, attachments, settings, orders] = await Promise.all([
-    getOrder(id),
-    listOrderAudit(id),
+    isSupervisor ? getWorkshopOrder(id) : getOrder(id),
+    isSupervisor ? Promise.resolve([]) : listOrderAudit(id),
     listOrderComments(id),
-    listOrderAttachments(id),
+    isSupervisor ? Promise.resolve([]) : listOrderAttachments(id),
     getSystemSettings(),
-    listOrders(),
+    isSupervisor ? listWorkshopOrders() : listOrders(),
   ]);
 
   if (!order) {
@@ -51,6 +52,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
   }
   const progress = completionPercent(order);
   const canEditOrder = canEditCommercial(user, settings.permissions.managersCanEditOrders);
+  const canEditProduction = user.role === "admin" || (isSupervisor && settings.permissions.managersCanEditOrders);
   const canCommentOnSteps = user.role === "admin" || user.role === "manager";
   const canClose = order.steps.every((step) => step.status === "done");
   const documentCode = order.groupCode || order.code;
@@ -58,7 +60,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
     .filter((item) => item.store === order.store)
     .filter((item) => (item.groupCode || item.code) === documentCode)
     .sort(compareOrderGroupMembers);
-  const showProductionView = query.view === "production";
+  const showProductionView = isSupervisor || query.view === "production";
   const isQuote = order.documentType === "quote";
 
   if (showProductionView && user.role === "operator") redirect("/admin/documents");
@@ -170,7 +172,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
 
         <div className="flex flex-wrap gap-2">
           <OrderLabelPrintButton order={order} groupOrders={groupOrders} />
-          {canEditOrder ? (
+          {canEditProduction ? (
             <OrderActions
               orderId={order.id}
               orderCode={documentCode}
@@ -207,7 +209,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
               {order.documentType === "production_intake" ? <Info label="Material" value={order.material} /> : null}
               <Info label="Color" value={order.color} />
               {order.quantity ? <Info label="Cantidad" value={String(order.quantity)} /> : null}
-              {order.unitPrice !== undefined ? <Info label="Precio unit." value={formatCurrency(order.unitPrice)} /> : null}
+              {!isSupervisor && order.unitPrice !== undefined ? <Info label="Precio unit." value={formatCurrency(order.unitPrice)} /> : null}
               <Info label="Responsable" value={order.assignedTo} />
               <Info label="Condición" value={conditionLabel(order.condition)} />
               <Info label="Urgencia por fecha" value={priorityLabel(order.priority)} />
@@ -264,7 +266,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
                       <p className="text-xs text-stone-500">
                         {durationLabel(step.startedAt, step.completedAt)}
                       </p>
-                      {canEditOrder ? (
+                      {canEditProduction ? (
                         <ProductionStepControls
                           orderId={order.id}
                           stepKey={step.key}
@@ -300,7 +302,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
             </div>
           </section>
 
-          {order.documentType !== "production_intake" ? (
+          {!isSupervisor && order.documentType !== "production_intake" ? (
             <section className="rounded-lg border border-stone-200 bg-white p-4">
               <div className="flex items-center gap-3">
                 <FileText className="size-5 text-stone-500" />
@@ -364,7 +366,7 @@ export default async function OrderDetailPage({ params, searchParams }: OrderDet
           comments={comments}
           attachments={attachments}
           canComment={user.role !== "viewer"}
-          canUpload={canEditOrder}
+          canUpload={canEditProduction}
         />
       </div>
     </AppShell>

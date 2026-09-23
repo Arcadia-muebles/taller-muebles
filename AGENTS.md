@@ -73,14 +73,14 @@ Esta versión de Next.js puede diferir de patrones antiguos. Antes de tocar rout
 Roles de aplicación:
 
 - `admin`: administración completa.
-- `manager`: supervisión y operación administrativa permitida.
+- `manager`: supervisión productiva, sin acceso a documentos comerciales ni precios.
 - `operator`: trabajador de una o más áreas productivas.
 - `viewer`: consulta sin edición operacional.
 
 Reglas de acceso:
 
 - Los operadores no deben editar información comercial o administrativa.
-- Admin y manager gestionan órdenes y configuración según las políticas vigentes.
+- Admin gestiona documentos comerciales; manager gestiona producción según las políticas vigentes.
 - Los operadores sólo actualizan pasos y órdenes dentro de sus áreas autorizadas.
 - Una validación en la interfaz nunca reemplaza RLS ni la autorización del servidor.
 - El `SUPABASE_SERVICE_ROLE_KEY` es exclusivamente de servidor.

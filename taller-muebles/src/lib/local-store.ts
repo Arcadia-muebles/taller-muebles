@@ -24,7 +24,9 @@ type LocalData = {
   settings?: SystemSettings;
 };
 
-const dataDir = path.join(process.cwd(), ".local-data");
+const dataDir = process.env.NODE_ENV !== "production" && process.env.LOCAL_DATA_DIR
+  ? path.resolve(/* turbopackIgnore: true */ process.env.LOCAL_DATA_DIR)
+  : path.join(process.cwd(), ".local-data");
 const dataFile = path.join(dataDir, "production.json");
 
 const emptyData: LocalData = {
@@ -327,6 +329,7 @@ export async function createLocalOrder(input: {
   observations?: string;
   isWarranty: boolean;
   steps?: SystemSettings["production"]["steps"];
+  skippedStepKeys?: string[];
 }) {
   const data = await readData();
   const id = crypto.randomUUID();
@@ -341,11 +344,13 @@ export async function createLocalOrder(input: {
     key: step.key,
     label: step.label,
     owner: pickLocalStepOwner(data, step.key, input.assignedTo?.trim() || "Sin responsable asignado"),
-    status: "pending",
+    status: input.skippedStepKeys?.includes(step.key) ? "done" : "pending",
+    notes: input.skippedStepKeys?.includes(step.key) ? "Omitida al crear el pedido" : undefined,
+    completedAt: input.skippedStepKeys?.includes(step.key) ? new Date().toISOString() : undefined,
   }));
   const assignedTo = input.documentType === "quote"
     ? "Sin responsable asignado"
-    : input.assignedTo?.trim() || steps[0]?.owner || "Equipo Taller";
+    : input.assignedTo?.trim() || steps.find((step) => step.status !== "done")?.owner || "Equipo Taller";
 
   const order: Order = {
     id,
@@ -399,7 +404,7 @@ export async function createLocalOrder(input: {
     data,
     order.id,
     input.documentType === "quote" ? "create_quote" : "create_order",
-    input.documentType === "quote" ? `Cotización ${order.code} creada` : `Orden ${order.code} creada`,
+    input.documentType === "quote" ? `Cotización ${order.code} creada` : `Orden ${order.code} creada${input.skippedStepKeys?.length ? `; etapas omitidas: ${input.skippedStepKeys.join(", ")}` : ""}`,
   );
   await writeData(data);
   return order;
@@ -1131,6 +1136,12 @@ export async function createLocalOrderAttachment(orderId: string, file: File) {
   return id;
 }
 
+export async function listLocalStructureRequestStatuses(): Promise<Array<Pick<StructureRequest, "orderId" | "status">>> {
+  return [...(await readData()).structureRequests]
+    .sort((first, second) => first.requestedAt.localeCompare(second.requestedAt))
+    .map(({ orderId, status }) => ({ orderId, status }));
+}
+
 export async function listLocalStructureRequests(): Promise<StructureRequest[]> {
   const data = await readData();
   return data.structureRequests.map((request) => ({
@@ -1387,29 +1398,25 @@ export async function getLocalUserByEmail(email: string) {
   return (await readData()).users.find((user) => user.email.toLowerCase() === normalizedEmail);
 }
 
-export async function upsertLocalUser(user: Omit<AppUser, "id" | "active">) {
+export async function upsertLocalUser(user: Omit<AppUser, "id" | "active">, actorId: string) {
   const data = await readData();
-  const existing = data.users.find((item) => item.email === user.email);
-
-  if (existing) {
-    existing.name = user.name;
-    existing.role = user.role;
-    existing.area = user.area;
-    existing.areas = user.areas ?? parseAreas(user.area);
-    existing.active = true;
-  } else {
-    data.users.unshift({ ...user, areas: user.areas ?? parseAreas(user.area), id: crypto.randomUUID(), active: true });
+  const email = user.email.trim().toLowerCase();
+  if (data.users.some((item) => item.email.toLowerCase() === email)) {
+    throw new Error("Ya existe una cuenta con ese correo. Edita o reactiva la cuenta existente.");
   }
+  const id = crypto.randomUUID();
+  data.users.unshift({ ...user, email, areas: user.areas ?? parseAreas(user.area), id, active: true });
+  addAudit(data, "", "create_user", `${actorId}: cuenta ${id} creada con rol ${user.role}.`);
 
   await writeData(data);
 }
 
-export async function deleteLocalUser(id: string) {
+export async function setLocalUserActive(id: string, active: boolean, actorId: string) {
   const data = await readData();
-  const index = data.users.findIndex((item) => item.id === id);
-  if (index < 0) return false;
-  data.deletedUserIds = Array.from(new Set([...(data.deletedUserIds ?? []), id]));
-  data.users.splice(index, 1);
+  const user = data.users.find((item) => item.id === id && item.role !== "viewer");
+  if (!user) return false;
+  user.active = active;
+  addAudit(data, "", active ? "activate_user" : "deactivate_user", `${actorId}: cuenta ${id}: ${active ? "activa" : "inactiva"}.`);
   await writeData(data);
   return true;
 }
@@ -1420,7 +1427,7 @@ export async function updateLocalUser(input: {
   role: AppUser["role"];
   area?: AreaKey;
   areas?: AreaKey[];
-}) {
+}, actorId: string) {
   const data = await readData();
   const user = data.users.find((item) => item.id === input.id);
   if (!user) return false;
@@ -1428,6 +1435,7 @@ export async function updateLocalUser(input: {
   user.role = input.role;
   user.areas = input.role === "operator" ? input.areas ?? parseAreas(input.area) : undefined;
   user.area = input.role === "operator" ? user.areas?.[0] : undefined;
+  addAudit(data, "", "update_user", `${actorId}: cuenta ${user.id}: rol ${user.role}; áreas ${(user.areas ?? []).join(", ")}.`);
   await writeData(data);
   return true;
 }

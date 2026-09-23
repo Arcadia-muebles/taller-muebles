@@ -35,7 +35,7 @@ type ActiveProductionDashboardProps = {
   canComment: boolean;
   commentsByOrder?: Record<string, OrderComment[]>;
   attachmentsByOrder?: Record<string, OrderAttachment[]>;
-  structureRequests?: StructureRequest[];
+  structureRequests?: Array<Pick<StructureRequest, "orderId" | "status">>;
   finishedCount?: number;
 };
 

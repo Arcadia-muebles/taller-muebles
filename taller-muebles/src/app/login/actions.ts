@@ -46,14 +46,14 @@ export async function requestLogin(
       await supabase.auth.signOut();
       return { status: "error", message: "Tu perfil no está activo o no tiene permisos asignados." };
     }
-    redirect(dashboardPathForRole(user.role));
+    redirect(dashboardPathForRole(user.role, user));
   } else {
     const localUser = await getLocalUserByEmail(parsed.data.email);
     if (!localUser?.active) {
       return { status: "error", message: "No existe un usuario activo con ese correo." };
     }
     await signInLocal(localUser);
-    redirect(dashboardPathForRole(localUser.role));
+    redirect(dashboardPathForRole(localUser.role, localUser));
   }
 }
 

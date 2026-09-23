@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import type { AppUser, Role } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
 import { getLocalUserByEmail } from "@/lib/local-store";
-import { canAccessModule, type ModuleKey } from "@/lib/module-access";
+import { canAccessModule, userAreas, moduleAccessKeys, type ModuleKey } from "@/lib/module-access";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,7 +13,11 @@ const sessionCookie = "tm_session";
 
 export type SessionUser = Pick<AppUser, "id" | "email" | "name" | "role" | "area" | "areas">;
 
-export function dashboardPathForRole(role: Role) {
+export function dashboardPathForRole(role: Role, user?: Pick<SessionUser, "area" | "areas">) {
+  if (role === "operator" && user) {
+    const areas = userAreas(user);
+    if (areas.length && areas.every((area) => area === moduleAccessKeys.commercial)) return "/admin/documents";
+  }
   return role === "operator" ? "/taller" : "/admin";
 }
 
@@ -97,7 +101,7 @@ export async function requireSession(allowedRoles?: Role[]) {
   if (!user) redirect("/login");
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    redirect(dashboardPathForRole(user.role));
+    redirect(dashboardPathForRole(user.role, user));
   }
 
   return user;
@@ -105,7 +109,7 @@ export async function requireSession(allowedRoles?: Role[]) {
 
 export async function requireModuleAccess(module: ModuleKey) {
   const user = await requireSession();
-  if (!canAccessModule(user, module)) redirect(dashboardPathForRole(user.role));
+  if (!canAccessModule(user, module)) redirect(dashboardPathForRole(user.role, user));
   return user;
 }
 

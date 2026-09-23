@@ -33,7 +33,7 @@ export async function GET(
     areas: user.areas ?? parseAreas(user.area),
   };
   await signInLocal(session);
-  redirect(dashboardPathForRole(session.role));
+  redirect(dashboardPathForRole(session.role, session));
 }
 
 function parseAreas(value?: string | null) {

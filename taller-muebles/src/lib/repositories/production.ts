@@ -21,7 +21,7 @@ import type {
   CommercialDocumentType,
 } from "@/lib/types";
 import { hasSupabaseAdminConfig, hasSupabaseConfig } from "@/lib/env";
-import { getLocalOrder, listLocalAgendaItems, listLocalAuditLogs, listLocalOrderAttachmentsForOrders, listLocalOrderCommentsForOrders, listLocalOrders, listLocalStockItems, listLocalStockMovements, listLocalStructureRequests, listLocalSuppliers } from "@/lib/local-store";
+import { getLocalOrder, listLocalAgendaItems, listLocalAuditLogs, listLocalOrderAttachmentsForOrders, listLocalOrderCommentsForOrders, listLocalOrders, listLocalStockItems, listLocalStockMovements, listLocalStructureRequests, listLocalStructureRequestStatuses, listLocalSuppliers } from "@/lib/local-store";
 import { shortOrderCode } from "@/lib/order-codes";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -142,9 +142,9 @@ type ReportOrderRecord = Pick<
 type OrderPaymentRecord = { id: string; order_id: string; paid_at: string; amount: number | string; method: string; note: string | null };
 type PaymentQuery = { select: (columns: string) => { in: (column: string, values: string[]) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: OrderPaymentRecord[] | null; error: { message: string } | null }> } } };
 
-export type ProductionOrderState = Pick<Order, "id" | "documentType" | "priority" | "steps">;
+export type ProductionOrderState = Pick<Order, "id" | "documentType" | "priority" | "status" | "steps">;
 
-type ProductionStateRecord = Pick<OrderRow, "id" | "document_type" | "priority"> & {
+type ProductionStateRecord = Pick<OrderRow, "id" | "document_type" | "priority" | "status"> & {
   production_steps: Array<Pick<StepRow, "step" | "step_label" | "status" | "notes" | "started_at" | "completed_at" | "sort_order">> | null;
 };
 
@@ -229,7 +229,7 @@ export async function listOrders(): Promise<Order[]> {
  * cross the Server Component boundary for an operator.
  */
 export async function listWorkshopOrders(): Promise<Order[]> {
-  if (!hasSupabaseConfig()) return listLocalOrders();
+  if (!hasSupabaseConfig()) return (await listLocalOrders()).map(toWorkshopOrder);
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -250,7 +250,10 @@ export async function listWorkshopOrders(): Promise<Order[]> {
 }
 
 export async function getWorkshopOrder(id: string): Promise<Order | undefined> {
-  if (!hasSupabaseConfig()) return getLocalOrder(id);
+  if (!hasSupabaseConfig()) {
+    const order = await getLocalOrder(id);
+    return order ? toWorkshopOrder(order) : undefined;
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -353,6 +356,7 @@ export async function getOrderProductionState(id: string): Promise<ProductionOrd
       id: order.id,
       documentType: order.documentType,
       priority: order.priority,
+      status: order.status,
       steps: order.steps,
     };
   }
@@ -364,6 +368,7 @@ export async function getOrderProductionState(id: string): Promise<ProductionOrd
       id,
       document_type,
       priority,
+      status,
       production_steps (step, step_label, status, notes, started_at, completed_at, sort_order)
     `)
     .eq("id", id)
@@ -379,6 +384,7 @@ export async function getOrderProductionState(id: string): Promise<ProductionOrd
     id: record.id,
     documentType: record.document_type as CommercialDocumentType,
     priority: record.priority as Order["priority"],
+    status: record.status as OrderStatus,
     steps: (record.production_steps ?? [])
       .sort((first, second) => first.sort_order - second.sort_order)
       .map((step) => ({
@@ -538,12 +544,16 @@ export async function listUsers(): Promise<AppUser[]> {
     .from("profiles")
     .select("id, user_id, full_name, role, area, active")
     .order("full_name");
-  if (error || !data) return [];
+  if (error || !data) throw new Error("No fue posible cargar las cuentas del equipo.");
 
   const emails = new Map<string, string>();
   if (hasSupabaseAdminConfig()) {
-    const { data: authUsers } = await getSupabaseAdmin().auth.admin.listUsers();
-    authUsers.users.forEach((user) => emails.set(user.id, user.email ?? ""));
+    for (let page = 1; ; page += 1) {
+      const { data: authUsers, error: authError } = await getSupabaseAdmin().auth.admin.listUsers({ page, perPage: 1000 });
+      if (authError) throw new Error("No fue posible cargar los correos de las cuentas.");
+      authUsers.users.forEach((user) => emails.set(user.id, user.email ?? ""));
+      if (authUsers.users.length < 1000) break;
+    }
   }
 
   return data.map((profile) => ({
@@ -788,6 +798,19 @@ function mapWorkshopOrderRecord(record: WorkshopOrderRecord): Order {
   };
 }
 
+function toWorkshopOrder(order: Order): Order {
+  return {
+    id: order.id, code: order.code, groupCode: order.groupCode, store: order.store,
+    documentType: order.documentType, documentStatus: order.documentStatus,
+    client: order.client, product: order.product, productPosition: order.productPosition,
+    material: order.material, color: order.color, quantity: order.quantity, includesVat: true,
+    status: order.status, condition: order.condition, priority: order.priority,
+    isWarranty: order.isWarranty, entryDate: order.entryDate, deliveryDate: order.deliveryDate,
+    completedAt: order.completedAt, assignedTo: order.assignedTo,
+    observations: order.observations, steps: order.steps,
+  };
+}
+
 function toReportOrder(order: Order): ReportOrder {
   return {
     id: order.id,
@@ -801,6 +824,19 @@ function toReportOrder(order: Order): ReportOrder {
 
 export async function listStructureRequests(): Promise<StructureRequest[]> {
   return (await getStructureRequestsSnapshot()).requests;
+}
+
+export async function listStructureRequestStatuses(): Promise<Array<Pick<StructureRequest, "orderId" | "status">>> {
+  if (!hasSupabaseConfig()) {
+    return listLocalStructureRequestStatuses();
+  }
+  const supabase = await createClient();
+  const { data, error } = await (supabase as unknown as LooseDb<{ order_id: string; status: StructureRequest["status"] }>)
+    .from("structure_requests")
+    .select("order_id, status, requested_at")
+    .order("requested_at", { ascending: true });
+  if (error || !data) throw new Error("No fue posible cargar el estado de las estructuras.");
+  return data.map((request) => ({ orderId: request.order_id, status: request.status }));
 }
 
 export async function getStructureRequestsSnapshot(): Promise<StructureRequestsSnapshot> {
@@ -832,13 +868,7 @@ export async function getStructureRequestsSnapshot(): Promise<StructureRequestsS
     return { requests: [], loadError: true };
   }
 
-  const attachmentsByOrder = await Promise.all(
-    Array.from(new Set(data.map((request) => request.order_id))).map(async (orderId) => [
-      orderId,
-      await listOrderAttachments(orderId),
-    ] as const),
-  );
-  const attachmentMap = new Map(attachmentsByOrder);
+  const attachmentMap = await listAttachmentsForOrders(data.map((request) => request.order_id));
 
   return {
     loadError: false,
@@ -854,7 +884,7 @@ export async function getStructureRequestsSnapshot(): Promise<StructureRequestsS
     requestedAt: request.requested_at,
     completedAt: request.completed_at ?? undefined,
     updatedAt: request.updated_at,
-    attachments: attachmentMap.get(request.order_id) ?? [],
+    attachments: attachmentMap[request.order_id] ?? [],
     })),
   };
 }

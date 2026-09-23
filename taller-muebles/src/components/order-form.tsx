@@ -25,7 +25,7 @@ import { createPortal } from "react-dom";
 import { Controller, useFieldArray, useForm, useWatch, type Control, type Resolver, type UseFormRegister } from "react-hook-form";
 import { createOrder, updateOrder, type CreateOrderState } from "@/app/admin/orders/actions";
 import { TouchDatePicker } from "@/components/touch-date-picker";
-import type { CommercialDocumentType, StoreCode } from "@/lib/types";
+import type { CommercialDocumentType, StoreCode, SystemSettings } from "@/lib/types";
 import { newOrderSchema, orderSchema, type NewOrderFormValues, type OrderFormValues } from "@/lib/validation/order";
 
 const inputClass = "control-lg bg-white";
@@ -55,6 +55,7 @@ export function OrderForm({
   nextCodes = { LH: "LH-001", LR: "LR-001" },
   readOnly = false,
   commercialOnly = false,
+  productionSteps = [],
 }: {
   orderId?: string;
   initialValues?: FormValues;
@@ -63,6 +64,7 @@ export function OrderForm({
   nextCodes?: Record<StoreCode, string>;
   readOnly?: boolean;
   commercialOnly?: boolean;
+  productionSteps?: SystemSettings["production"]["steps"];
 }) {
   const action = orderId ? updateOrder.bind(null, orderId) : createOrder;
   const [state, formAction, actionPending] = useActionState(action, initialState);
@@ -74,6 +76,7 @@ export function OrderForm({
   const [pdfSuccess, setPdfSuccess] = useState<string | null>(null);
   const [pdfNameDialogOpen, setPdfNameDialogOpen] = useState(false);
   const [pdfName, setPdfName] = useState("");
+  const [skippedStepKeys, setSkippedStepKeys] = useState<string[]>([]);
   const preparedPdfRef = useRef<{ blob: Blob; formSnapshot: string } | null>(null);
   const pdfFileHandleRef = useRef<{ handle: SaveFileHandle; fileName: string } | null>(null);
   const lastAutoCode = useRef<string | null>(initialValues?.salesNoteNumber ?? nextCodes.LR);
@@ -134,6 +137,21 @@ export function OrderForm({
   const documentLabel = commercialDocumentLabel(documentType);
   const pending = actionPending || formPending;
   const showValidationSummary = submitCount > 0 && Object.keys(errors).length > 0;
+  const stepSelection = !orderId && !isQuote && !commercialOnly && productionSteps.length ? (
+    <section className="sales-note-print-hidden rounded-lg border border-stone-200 bg-white p-4">
+      <h2 className="text-sm font-semibold text-stone-900">Etapas de producción</h2>
+      <p className="mt-1 text-sm text-stone-500">Marca las etapas que este pedido no necesita. Quedarán registradas como omitidas.</p>
+      <input type="hidden" name="skippedStepKeys" value={JSON.stringify(skippedStepKeys)} />
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {productionSteps.filter((step) => step.enabled).map((step) => (
+          <label key={step.key} className="flex items-center gap-2 rounded-md border border-stone-200 px-3 py-2 text-sm">
+            <input type="checkbox" checked={skippedStepKeys.includes(step.key)} onChange={(event) => setSkippedStepKeys((keys) => event.target.checked ? [...keys, step.key] : keys.filter((key) => key !== step.key))} className="size-4 accent-stone-950" />
+            Omitir {step.label}
+          </label>
+        ))}
+      </div>
+    </section>
+  ) : null;
   const typedErrors = errors as FieldErrors & {
     products?: Array<{
       productName?: { message?: string };
@@ -405,6 +423,7 @@ export function OrderForm({
   if (isLeatherHouse) {
     return (
       <form key="leather-house-intake" action={formAction} onSubmit={submit} onKeyDown={moveToNextFormFieldOnEnter} className="space-y-4">
+        {stepSelection}
         <input type="hidden" name="productItems" value={JSON.stringify(products)} readOnly />
         <input type="hidden" {...register("documentType")} value="production_intake" />
         <input type="hidden" {...register("documentStatus")} value="issued" />
@@ -558,6 +577,7 @@ export function OrderForm({
   if (isCommercialDocument) {
     return (
       <form key="la-reina-document" action={formAction} onSubmit={submit} onKeyDown={moveToNextFormFieldOnEnter} className="space-y-4">
+        {stepSelection}
         <input type="hidden" name="productItems" value={JSON.stringify(products)} readOnly />
         <input type="hidden" {...register("subtotal")} value={computedSubtotal} readOnly />
         <input type="hidden" {...register("discount")} value={computedDiscount} readOnly />

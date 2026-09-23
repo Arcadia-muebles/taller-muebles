@@ -37,6 +37,7 @@ export function RoleUserGroups({
 
   return (
     <section className="mt-5 space-y-3">
+      {disabled ? <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">La administración de cuentas no está disponible. Pide al administrador del sistema que configure el servicio de cuentas.</p> : null}
       {roleOrder.map((role) => {
         const roleUsers = users.filter((user) => user.role === role);
         const open = openRoles[role];
@@ -44,6 +45,7 @@ export function RoleUserGroups({
           <div key={role} className="panel overflow-hidden">
             <button
               type="button"
+              aria-expanded={open}
               onClick={() => setOpenRoles((current) => ({ ...current, [role]: !current[role] }))}
               className="flex w-full items-center justify-between gap-4 border-b border-stone-200 px-4 py-4 text-left"
             >
@@ -77,7 +79,7 @@ export function RoleUserGroups({
                           </div>
                           <div>
                             <p className="font-semibold">{user.name}</p>
-                            <p className="text-sm text-stone-500">
+                            <p className="break-all text-sm text-stone-500">
                               {user.email.includes("@") ? user.email : "Cuenta Supabase"}
                               {userAreas(user).length ? ` - ${areaLabels(userAreas(user), enabledSteps)}` : ""}
                             </p>
@@ -88,10 +90,11 @@ export function RoleUserGroups({
                             <ShieldCheck className="size-3.5" />
                             {roleLabel(user.role)}
                           </span>
-                          {user.id !== currentUserId ? <DeactivateUserButton userId={user.id} disabled={disabled} /> : null}
+                          <span className="text-xs text-stone-500">{user.active ? "Activo" : "Inactivo"}</span>
+                          {user.id !== currentUserId ? <DeactivateUserButton userId={user.id} active={user.active} disabled={disabled} /> : null}
                         </div>
                       </div>
-                      <UserEditForm user={user} steps={steps} disabled={disabled} />
+                      <UserEditForm user={user} steps={steps} disabled={disabled} isSelf={user.id === currentUserId} />
                     </article>
                   ))}
                   {!roleUsers.length ? (
@@ -121,10 +124,11 @@ function RoleCreateForm({
   disabled: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [draft, setDraft] = useState({ name: "", email: "", password: "", areas: [] as string[] });
   const enabledSteps = steps.filter((step) => step.enabled);
   const [state, action] = useActionState(async (_state: UserActionResult, formData: FormData) => {
     const result = await createUser(formData);
-    if (result.ok) formRef.current?.reset();
+    if (result.ok) setDraft({ name: "", email: "", password: "", areas: [] });
     return result;
   }, initialState);
 
@@ -132,19 +136,19 @@ function RoleCreateForm({
     <form ref={formRef} action={action} className="grid gap-3 bg-stone-50 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto] md:items-end">
       <input type="hidden" name="role" value={role} />
       <Field label="Nombre">
-        <input disabled={disabled} name="name" required placeholder="Nombre completo" className={inputClass} />
+        <input disabled={disabled} name="name" required minLength={2} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Nombre completo" className={inputClass} />
       </Field>
       <Field label="Correo">
-        <input disabled={disabled} name="email" required type="email" placeholder="correo@empresa.cl" className={inputClass} />
+        <input disabled={disabled} name="email" required type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} placeholder="correo@empresa.cl" className={inputClass} />
       </Field>
       {role === "operator" ? (
-        <StepCheckboxes steps={enabledSteps} disabled={disabled} />
+        <StepCheckboxes steps={enabledSteps} disabled={disabled} selected={draft.areas} onChange={(area, checked) => setDraft((current) => ({ ...current, areas: checked ? [...current.areas, area] : current.areas.filter((item) => item !== area) }))} />
       ) : (
         <input type="hidden" name="areas" value="" />
       )}
       {supabaseEnabled ? (
         <Field label="Clave temporal">
-          <input disabled={disabled} name="password" required minLength={8} type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" className={inputClass} />
+          <input disabled={disabled} name="password" required minLength={8} type="password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} autoComplete="new-password" placeholder="Mínimo 8 caracteres" className={inputClass} />
         </Field>
       ) : null}
       <div className="flex flex-col gap-2">
@@ -165,7 +169,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function ActionFeedback({ state }: { state: UserActionResult }) {
   if (!state.message) return <span className="min-h-4 text-[11px] text-stone-400"> </span>;
   return (
-    <span className={cn("text-[11px] font-medium", state.ok ? "text-emerald-700" : "text-rose-700")}>
+    <span role="status" className={cn("text-[11px] font-medium", state.ok ? "text-emerald-700" : "text-rose-700")}>
       {state.message}
     </span>
   );
@@ -175,10 +179,12 @@ function StepCheckboxes({
   steps,
   disabled,
   selected = [],
+  onChange,
 }: {
   steps: Array<{ key: string; label: string }>;
   disabled: boolean;
   selected?: string[];
+  onChange: (area: string, checked: boolean) => void;
 }) {
   return (
     <fieldset className="md:col-span-2">
@@ -190,7 +196,8 @@ function StepCheckboxes({
               type="checkbox"
               name="areas"
               value={step.key}
-              defaultChecked={selected.includes(step.key)}
+              checked={selected.includes(step.key)}
+              onChange={(event) => onChange(step.key, event.target.checked)}
               disabled={disabled}
               className="size-4 accent-stone-950"
             />
@@ -202,7 +209,8 @@ function StepCheckboxes({
             type="checkbox"
             name="areas"
             value={moduleAccessKeys.commercial}
-            defaultChecked={selected.includes(moduleAccessKeys.commercial)}
+            checked={selected.includes(moduleAccessKeys.commercial)}
+            onChange={(event) => onChange(moduleAccessKeys.commercial, event.target.checked)}
             disabled={disabled}
             className="size-4 accent-stone-950"
           />

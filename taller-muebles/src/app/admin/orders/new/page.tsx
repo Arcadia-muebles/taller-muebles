@@ -39,7 +39,7 @@ export default async function NewOrderPage({
       </header>
 
       <div className="mt-5 max-w-5xl">
-        <OrderForm nextCodes={nextCodes} initialDocumentType={initialDocumentType} commercialOnly={user.role === "operator"} />
+        <OrderForm nextCodes={nextCodes} initialDocumentType={initialDocumentType} commercialOnly={user.role === "operator"} productionSteps={settings.production.steps} />
       </div>
     </AppShell>
   );

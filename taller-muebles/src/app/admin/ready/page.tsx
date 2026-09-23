@@ -1,4 +1,4 @@
-import { CalendarDays, PackageCheck, Truck } from "lucide-react";
+import { CalendarDays, PackageCheck, Search, Truck, X } from "lucide-react";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { OrderLabelPrintButton } from "@/components/order-label-print-button";
@@ -6,14 +6,21 @@ import { ScheduleDeliveryButton } from "@/components/schedule-delivery-button";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
 import { productionOrderGroup } from "@/lib/orders";
-import { listAgendaItems, listOrders } from "@/lib/repositories/production";
+import { listAgendaItems, listWorkshopOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import { deliveryLabel, formatDate, hasMeaningfulObservations } from "@/lib/utils";
 
-export default async function ReadyForDeliveryPage() {
+export default async function ReadyForDeliveryPage({ searchParams }: { searchParams: Promise<{ q?: string | string[] }> }) {
   const user = await requireSession(["admin", "manager", "viewer"]);
-  const [orders, settings, agendaItems] = await Promise.all([listOrders(), getSystemSettings(), listAgendaItems()]);
+  const [orders, settings, agendaItems, params] = await Promise.all([listWorkshopOrders(), getSystemSettings(), listAgendaItems(), searchParams]);
   const ready = readyForDeliveryOrders(orders, agendaItems).sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate));
+  const query = (Array.isArray(params.q) ? params.q[0] : params.q)?.trim() ?? "";
+  const needle = query.toLocaleLowerCase("es-CL");
+  const filteredReady = needle ? ready.filter((order) =>
+    productionOrderGroup(orders, order).some((item) =>
+      [item.code, item.groupCode, item.client, item.product, item.color].some((value) => value?.toLocaleLowerCase("es-CL").includes(needle)),
+    ),
+  ) : ready;
   const canSchedule = user.role === "admin" || (user.role === "manager" && settings.permissions.managersCanEditOrders);
 
   return (
@@ -33,6 +40,16 @@ export default async function ReadyForDeliveryPage() {
         <Summary icon={CalendarDays} label="Vencen hoy" value={ready.filter((order) => deliveryLabel(order.deliveryDate, false) === "Hoy").length} />
         <Summary icon={Truck} label="Por agendar" value={ready.length} />
       </section>
+
+      <form action="/admin/ready" className="mt-5 flex flex-col gap-2 sm:flex-row">
+        <label className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
+          <input name="q" type="search" defaultValue={query} placeholder="Buscar código, cliente, producto o color..." aria-label="Buscar pedidos listos para entrega" className="control h-11 w-full bg-white pl-9 pr-3" />
+        </label>
+        <button type="submit" className="btn btn-primary h-11"><Search className="size-4" />Buscar</button>
+        {query ? <Link href="/admin/ready" className="btn btn-secondary h-11"><X className="size-4" />Limpiar</Link> : null}
+      </form>
+      {query ? <p className="mt-2 text-sm text-stone-500">{filteredReady.length} {filteredReady.length === 1 ? "pedido encontrado" : "pedidos encontrados"}.</p> : null}
 
       <section className="panel mt-5 overflow-hidden">
         <div className="overflow-x-auto bg-stone-50/70 p-1.5">
@@ -56,7 +73,7 @@ export default async function ReadyForDeliveryPage() {
               </tr>
             </thead>
             <tbody>
-              {ready.map((order) => {
+              {filteredReady.map((order) => {
                 const progress = 100;
                 const groupOrders = productionOrderGroup(orders, order);
                 const totalUnits = groupOrders.reduce((sum, item) => sum + orderQuantity(item.quantity), 0);
@@ -120,10 +137,10 @@ export default async function ReadyForDeliveryPage() {
                   </tr>
                 );
               })}
-              {!ready.length ? (
+              {!filteredReady.length ? (
                 <tr>
                   <td colSpan={6} className="rounded-lg border border-dashed border-stone-200 bg-white px-4 py-10 text-center text-sm text-stone-500">
-                    No hay órdenes listas para entrega.
+                    {query ? "No hay pedidos que coincidan con la búsqueda." : "No hay órdenes listas para entrega."}
                   </td>
                 </tr>
               ) : null}

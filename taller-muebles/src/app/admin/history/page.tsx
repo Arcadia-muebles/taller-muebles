@@ -2,7 +2,7 @@ import { Archive, CheckCircle2, CircleOff } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { OrderTable } from "@/components/order-table";
 import { requireSession } from "@/lib/auth";
-import { listOrders } from "@/lib/repositories/production";
+import { listWorkshopOrders } from "@/lib/repositories/production";
 import { isProductionOrder } from "@/lib/orders";
 
 type HistoryPageProps = {
@@ -15,7 +15,7 @@ type HistoryPageProps = {
 export default async function HistoryPage({ searchParams }: HistoryPageProps) {
   const user = await requireSession(["admin", "manager", "viewer"]);
   const filters = await searchParams;
-  const orders = await listOrders();
+  const orders = await listWorkshopOrders();
   const allHistorical = orders.filter((order) => isProductionOrder(order) && ["completed", "cancelled"].includes(order.status));
   const historical = filterHistoricalOrders(allHistorical, filters);
   const completed = historical.filter((order) => order.status === "completed").length;
@@ -71,7 +71,7 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
 }
 
 function filterHistoricalOrders(
-  orders: Awaited<ReturnType<typeof listOrders>>,
+  orders: Awaited<ReturnType<typeof listWorkshopOrders>>,
   filters: { range?: string; month?: string },
 ) {
   if (filters.range === "30d") {
@@ -91,7 +91,7 @@ function filterHistoricalOrders(
   return orders;
 }
 
-function historicalDate(order: Awaited<ReturnType<typeof listOrders>>[number]) {
+function historicalDate(order: Awaited<ReturnType<typeof listWorkshopOrders>>[number]) {
   const value = order.completedAt ?? order.deliveryDate ?? order.entryDate;
   const date = new Date(value.includes("T") ? value : `${value}T00:00:00`);
   return Number.isNaN(date.getTime()) ? new Date(0) : date;

@@ -37,8 +37,9 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
     listWorkshopOrders(),
   ]);
   const order = orders.find((item) => item.id === id);
+  const workshopUser = { ...user, allowParallelSteps: settings.production.allowParallelSteps };
   if (!order || order.status === "cancelled") notFound();
-  if (!canWorkerSeeOrder(user, order) && !filterWorkerFutureOrders(user, [order]).length) notFound();
+  if (!canWorkerSeeOrder(workshopUser, order) && !filterWorkerFutureOrders(workshopUser, [order]).length) notFound();
 
   const progress = completionPercent(order);
   const groupOrders = orders.filter((item) => (
@@ -46,7 +47,7 @@ export default async function WorkshopOrderPage({ params }: { params: Promise<{ 
     item.store === order.store &&
     item.groupCode === order.groupCode
   ));
-  const actionStep = workerActionStep(user, order);
+  const actionStep = workerActionStep(workshopUser, order);
   const currentStep = nextWorkStep(order);
   const visibleAudit = audit.slice(0, 5);
 

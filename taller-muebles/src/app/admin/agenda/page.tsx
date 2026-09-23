@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Plus, Sun, Truck } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Filter, MoreVertical, Pencil, Sun, Truck } from "lucide-react";
 import Link from "next/link";
 import type { ElementType, ReactNode } from "react";
 import { cancelAgendaItem, completeAgendaItem, createAgendaTask, scheduleOrderDelivery, updateAgendaItem } from "@/app/admin/agenda/actions";
@@ -9,7 +9,7 @@ import { PrintPageButton } from "@/components/print-page-button";
 import { requireSession } from "@/lib/auth";
 import { readyForDeliveryOrders } from "@/lib/metrics";
 import { isProductionOrder, productionOrderGroup } from "@/lib/orders";
-import { listAgendaItems, listOrders } from "@/lib/repositories/production";
+import { listAgendaItems, listWorkshopOrders } from "@/lib/repositories/production";
 import { getSystemSettings } from "@/lib/repositories/settings";
 import type { AgendaItem, AgendaTimeSlot, Order } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
@@ -30,7 +30,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
   const selectedDate = normalizeDateParam(params.date) ?? todayLocalDate();
   const filters = normalizeAgendaFilters(params);
   const [orders, settings, dayAgendaItems, allAgendaItems] = await Promise.all([
-    listOrders(),
+    listWorkshopOrders(),
     getSystemSettings(),
     listAgendaItems(selectedDate),
     listAgendaItems(),
@@ -123,11 +123,6 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
               <button type="submit" className="btn btn-primary w-full" disabled={!canEdit}>Crear tarea</button>
             </form>
           </ActionDetails>
-
-          <Link href={`/admin/planning?date=${selectedDate}`} className="btn btn-primary">
-            <Plus className="size-4" />
-            Planificación diaria
-          </Link>
 
           <ActionDetails icon={Filter} label="Filtros" description={activeFilters ? `${activeFilters} activos` : undefined}>
             <form action="/admin/agenda" className="space-y-3">

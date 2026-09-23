@@ -6,6 +6,7 @@ export type WorkshopUser = {
   role: Role;
   area?: AreaKey;
   areas?: AreaKey[];
+  allowParallelSteps?: boolean;
 };
 
 export function nextWorkStep(order: Order) {
@@ -49,7 +50,7 @@ export function filterWorkerFutureOrders(user: WorkshopUser, orders: Order[]) {
     const workerStepIndex = order.steps.findIndex((step) => (
       areas.includes(step.key) && step.status === "pending"
     ));
-    if (workerStepIndex < 0 || productionStepPrerequisitesMet(order.steps, workerStepIndex)) return false;
+    if (workerStepIndex < 0 || user.allowParallelSteps || productionStepPrerequisitesMet(order.steps, workerStepIndex)) return false;
 
     return order.steps.slice(0, workerStepIndex).some((step) => step.status !== "done");
   });
@@ -57,10 +58,11 @@ export function filterWorkerFutureOrders(user: WorkshopUser, orders: Order[]) {
 
 export function filterWorkerHistoryOrders(user: WorkshopUser, orders: Order[]) {
   if (user.role !== "operator") return [];
-  return orders.filter((order) => isProductionOrder(order) && workerCompletedStep(user, order));
+  return orders.filter((order) => isProductionOrder(order) && order.status !== "cancelled" && workerCompletedStep(user, order));
 }
 
 export function workerActionStep(user: WorkshopUser, order: Order) {
+  if (!isProductionOrder(order) || ["completed", "cancelled"].includes(order.status)) return undefined;
   const current = actionableWorkerStep(user, order);
   if (current) return current;
   return reversibleWorkerStep(user, order);
@@ -73,7 +75,7 @@ function actionableWorkerStep(user: WorkshopUser, order: Order) {
     order.steps.find((step, index) => (
       areas.includes(step.key) &&
       step.status === "pending" &&
-      productionStepPrerequisitesMet(order.steps, index)
+      (user.allowParallelSteps || productionStepPrerequisitesMet(order.steps, index))
     ))
   );
 }
@@ -100,8 +102,9 @@ function workerCompletedStep(user: WorkshopUser, order: Order) {
   return order.steps.some((step) => areas.includes(step.key) && step.status === "done");
 }
 
-function isWithinUndoWindow(completedAt?: string) {
-  if (!completedAt) return true;
+export function isWithinUndoWindow(completedAt?: string) {
+  if (!completedAt) return false;
   const completedTime = new Date(completedAt).getTime();
-  return Number.isFinite(completedTime) && Date.now() - completedTime <= 30 * 60 * 1000;
+  const elapsed = Date.now() - completedTime;
+  return Number.isFinite(completedTime) && elapsed >= 0 && elapsed <= 30 * 60 * 1000;
 }

@@ -42,11 +42,9 @@ export async function createOrder(
 ): Promise<CreateOrderState> {
   const user = await requireSession(["admin", "manager", "operator"]);
   const settings = await getSystemSettings();
+  if (user.role === "manager") return { status: "error", message: "Supervisión no tiene acceso a documentos comerciales." };
   if (user.role === "operator" && (!canAccessModule(user, "commercial") || formData.get("store") !== "LR")) {
     return { status: "error", message: "Tu perfil no tiene permiso para crear este documento." };
-  }
-  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
-    return { status: "error", message: "Tu perfil no tiene permiso para crear órdenes." };
   }
   const productItems = parseProductItems(formData);
   if (!productItems.success) {
@@ -96,6 +94,11 @@ export async function createOrder(
     };
   }
   const isQuote = parsed.data.documentType === "quote";
+  const enabledSteps = settings.production.steps.filter((step) => step.enabled);
+  const skippedStepKeys = parseSkippedStepKeys(formData, enabledSteps.map((step) => step.key));
+  if (!skippedStepKeys) return { status: "error", message: "Las etapas omitidas no son válidas." };
+  if (user.role === "operator" && skippedStepKeys.length) return { status: "error", message: "Tu perfil no puede omitir etapas de producción." };
+  if (!isQuote && enabledSteps.length && skippedStepKeys.length === enabledSteps.length) return { status: "error", message: "Deja al menos una etapa de producción activa." };
   const ruleError = await validateOrderRules(parsed.data, settings);
   if (ruleError) return { status: "error", message: ruleError };
   const orderCode = parsed.data.store === "LH"
@@ -118,6 +121,7 @@ export async function createOrder(
         groupCode,
         priority: orderPriority,
         steps: settings.production.steps,
+        skippedStepKeys,
         payments: recordedPayments,
       }));
     }
@@ -232,15 +236,17 @@ export async function createOrder(
   }
 
   if (!isQuote) {
-    const enabledSteps = settings.production.steps.filter((step) => step.enabled);
     const operatorByArea = operatorMapByArea(await listUsers());
+    const omittedAt = new Date().toISOString();
     const { error: stepsError } = await supabase.from("production_steps").insert(
       createdOrders.flatMap((order) => enabledSteps.map((step, index) => ({
         order_id: order.id,
         step: step.key,
         step_label: step.label,
         sort_order: index + 1,
-        status: "pending",
+        status: skippedStepKeys.includes(step.key) ? "done" : "pending",
+        notes: skippedStepKeys.includes(step.key) ? "Omitida al crear el pedido" : null,
+        completed_at: skippedStepKeys.includes(step.key) ? omittedAt : null,
         started_at: null,
         assigned_to: operatorByArea.get(step.key) ?? (index === 0 ? assignee?.id ?? null : null),
       }))),
@@ -261,7 +267,7 @@ export async function createOrder(
     entity: "orders",
     entity_id: createdOrders[0].id,
     profile_id: profileId,
-    new_value: orderCode,
+    new_value: skippedStepKeys.length ? `${orderCode}; etapas omitidas: ${skippedStepKeys.join(", ")}` : orderCode,
   });
 
   const attachmentResult = await saveInitialAttachment({
@@ -295,9 +301,7 @@ export async function updateOrder(
 ): Promise<CreateOrderState> {
   const user = await requireSession(["admin", "manager", "operator"]);
   const settings = await getSystemSettings();
-  if (user.role === "manager" && !settings.permissions.managersCanEditOrders) {
-    return { status: "error", message: "Tu perfil no tiene permiso para editar órdenes." };
-  }
+  if (user.role === "manager") return { status: "error", message: "Supervisión no tiene acceso a documentos comerciales." };
   const allOrders = await listOrders();
   const previousOrder = allOrders.find((order) => order.id === orderId);
   if (!previousOrder) return { status: "error", message: "No se encontró la orden." };
@@ -1003,6 +1007,18 @@ export async function updateOrderObservation(input: z.infer<typeof updateOrderOb
 
 function formatZodError(error: z.ZodError) {
   return error.issues.map((issue) => issue.message).join(" ");
+}
+
+function parseSkippedStepKeys(formData: FormData, enabledKeys: string[]): string[] | null {
+  const raw = formData.get("skippedStepKeys")?.toString();
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.every((key) => typeof key === "string" && enabledKeys.includes(key))) return null;
+    return [...new Set(parsed)];
+  } catch {
+    return null;
+  }
 }
 
 function parseProductItems(formData: FormData) {

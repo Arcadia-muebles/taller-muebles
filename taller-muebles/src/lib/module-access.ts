@@ -14,13 +14,14 @@ type ModuleAccessUser = {
 
 export function canAccessModule(user: ModuleAccessUser | null | undefined, module: ModuleKey) {
   if (!user || user.role === "viewer") return false;
-  if (user.role === "admin" || user.role === "manager") return true;
+  if (user.role === "admin") return true;
+  if (user.role === "manager") return false;
   return userAreas(user).includes(moduleAccessKeys[module]);
 }
 
-export function canEditCommercial(user: ModuleAccessUser, managersCanEditOrders: boolean) {
+export function canEditCommercial(user: ModuleAccessUser, _managersCanEditOrders: boolean) {
+  void _managersCanEditOrders;
   return user.role === "admin"
-    || (user.role === "manager" && managersCanEditOrders)
     || (user.role === "operator" && canAccessModule(user, "commercial"));
 }
 

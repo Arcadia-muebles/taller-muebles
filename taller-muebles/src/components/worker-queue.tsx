@@ -42,6 +42,7 @@ type WorkerQueueProps = {
     role: Role;
     area?: AreaKey;
     areas?: AreaKey[];
+    allowParallelSteps?: boolean;
   };
   permissions: {
     canStart: boolean;
@@ -98,7 +99,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
     [orders, overrides],
   );
 
-  const visible = useMemo(() => filterWorkerOrders(user, workingOrders), [user, workingOrders]);
+  const visible = useMemo(() => filterWorkerOrders(user, workingOrders).filter((order) => workerActionStep(user, order)), [user, workingOrders]);
   const filteredVisible = useMemo(() => {
     if (filter === "all") return visible;
     return visible.filter((order) => workerActionStep(user, order)?.status === filter);
@@ -109,7 +110,7 @@ export function WorkerQueue({ orders, user, permissions, areaLabels = {} }: Work
   const filteredHistory = useMemo(() => filterOrders(history, historyQuery), [history, historyQuery]);
   const areas = workerAreas(user);
   const areaName = areas
-    .map((area) => areaLabels[area] ?? visible[0]?.steps.find((step) => step.key === area)?.label ?? area)
+    .map((area) => area === "module_commercial" ? "Comercial" : areaLabels[area] ?? visible[0]?.steps.find((step) => step.key === area)?.label ?? area)
     .join(", ") || "Sin etapa";
   const areaIcon = iconForArea(areas[0]);
 
