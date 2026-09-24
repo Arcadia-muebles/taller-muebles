@@ -135,7 +135,7 @@ function UnavailableLink() {
 function publicStatusLabel(status: OrderStatus) {
   if (status === "completed") return "Pedido terminado";
   if (status === "blocked") return "Requiere revisión";
-  if (status === "quality_control") return "En revisión final";
+  if (status === "quality_control") return "Listo para entrega";
   if (status === "scheduled" || status === "draft") return "Pedido recibido";
   if (status === "cancelled") return "Pedido cancelado";
   return "En producción";

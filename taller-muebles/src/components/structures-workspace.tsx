@@ -35,7 +35,7 @@ const structuresPerPage = 20;
 
 const statusCopy = {
   unrequested: {
-    label: "En blanco",
+    label: "Sin solicitar",
     className: "border-stone-300 bg-stone-100 text-stone-700",
     icon: Circle,
   },
@@ -159,7 +159,7 @@ export function StructuresWorkspace({
       ) : null}
 
       <section className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-        <Metric label="En blanco" value={counts.unrequested} tone="stone" />
+        <Metric label="Sin solicitar" value={counts.unrequested} tone="stone" />
         <Metric label="Pedidas" value={counts.requested} tone="amber" />
         <Metric label="En estructura" value={counts.in_progress} tone="blue" />
         <Metric label="Listas" value={counts.done} tone="emerald" />
@@ -203,7 +203,7 @@ export function StructuresWorkspace({
           <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="flex gap-1 overflow-x-auto pb-1 md:pb-0" aria-label="Filtrar estructuras por estado">
               <FilterButton active={filter === "all"} onClick={() => chooseFilter("all")}>Todas <b>{rows.length}</b></FilterButton>
-              <FilterButton active={filter === "unrequested"} onClick={() => chooseFilter("unrequested")}>En blanco <b>{counts.unrequested}</b></FilterButton>
+              <FilterButton active={filter === "unrequested"} onClick={() => chooseFilter("unrequested")}>Sin solicitar <b>{counts.unrequested}</b></FilterButton>
               <FilterButton active={filter === "requested"} onClick={() => chooseFilter("requested")}>Pedidas <b>{counts.requested}</b></FilterButton>
               <FilterButton active={filter === "in_progress"} onClick={() => chooseFilter("in_progress")}>En estructura <b>{counts.in_progress}</b></FilterButton>
               <FilterButton active={filter === "done"} onClick={() => chooseFilter("done")}>Listas <b>{counts.done}</b></FilterButton>
@@ -500,7 +500,7 @@ function StructureEditor({
         <label>
           <span className="field-label">Estado</span>
           <select name="status" defaultValue={requestStatus(row.structureStatus)} className="control mt-1.5">
-            <option value="draft">En blanco</option>
+            <option value="draft">Sin solicitar</option>
             <option value="requested">Pedida</option>
             <option value="in_progress">En estructura</option>
             <option value="done">Lista</option>

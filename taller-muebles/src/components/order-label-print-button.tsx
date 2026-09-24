@@ -175,11 +175,9 @@ function productionLabel(order: Order) {
 
   const labels: Record<string, string> = {
     structure: "EN ESTRUCTURA",
-    en_blanco: "EN BLANCO",
     cutting: "EN CORTE",
     sewing: "EN COSTURA",
     upholstery: "EN TAPICERÍA",
-    quality: "TERMINADO",
     dispatch: "TERMINADO",
   };
 

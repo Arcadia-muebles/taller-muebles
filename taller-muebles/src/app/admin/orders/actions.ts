@@ -735,7 +735,9 @@ export async function closeOrder(formData: FormData) {
     await supabase
       .from("production_steps")
       .update({ status: "done", completed_at: completedAt, updated_by: profileId })
-      .eq("order_id", id);
+      .eq("order_id", id)
+      .neq("step", "en_blanco")
+      .neq("step", "quality");
     await supabase.from("audit_logs").insert({
       order_id: id,
       action: "close_order",
@@ -794,7 +796,7 @@ export async function markProductionFinished(formData: FormData) {
       .from("orders")
       .update({
         status: "quality_control",
-        condition: "quality_control",
+        condition: "none",
         completed_at: null,
       })
       .eq("id", id);
@@ -925,17 +927,14 @@ export async function moveOrderStage(input: z.infer<typeof moveOrderStageSchema>
       if (error) return { ok: false, message: error.message };
     }
 
-    const nextStatus =
-      parsed.data.stepKey === "quality"
-        ? "quality_control"
-        : order.priority === "critical"
-          ? "urgent"
-          : "in_production";
+    const nextStatus = targetIsFinalStep
+      ? "quality_control"
+      : order.priority === "critical" ? "urgent" : "in_production";
     await supabase
       .from("orders")
       .update({
         status: nextStatus,
-        condition: parsed.data.stepKey === "quality" ? "quality_control" : "none",
+        condition: "none",
         completed_at: null,
       })
       .eq("id", parsed.data.orderId);
@@ -1267,7 +1266,7 @@ async function ensureSupabaseConfiguredOrderSteps({
     ...order,
     steps: [
       ...normalizedSteps,
-      ...order.steps.filter((step) => !configuredKeys.has(step.key)),
+      ...order.steps.filter((step) => !configuredKeys.has(step.key) && step.key !== "en_blanco" && step.key !== "quality"),
     ],
   };
 }

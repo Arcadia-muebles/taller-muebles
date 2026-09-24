@@ -262,8 +262,6 @@ function ProductionSection({ settings, setSettings, disabled }: SectionProps) {
       </button>
       <div className="grid gap-3">
         <RuleRow title="Permitir etapas en paralelo" description="Una orden puede tener más de una etapa activa al mismo tiempo." checked={settings.production.allowParallelSteps} disabled={disabled} onChange={(value) => updateProduction({ allowParallelSteps: value })} />
-        <RuleRow title="Exigir aprobación de calidad" description="Evita cerrar una orden sin completar la revisión final." checked={settings.production.requireQualityApproval} disabled={disabled} onChange={(value) => updateProduction({ requireQualityApproval: value })} />
-        <RuleRow title="Cerrar automáticamente tras calidad" description="Marca la orden como terminada al aprobar la etapa de revisión." checked={settings.production.autoCompleteAfterQuality} disabled={disabled} onChange={(value) => updateProduction({ autoCompleteAfterQuality: value })} />
       </div>
     </div>
   );

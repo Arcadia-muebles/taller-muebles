@@ -252,11 +252,9 @@ function userContext(user: Awaited<ReturnType<typeof requireSession>>) {
   const areas = user.areas ?? (user.area ? [user.area] : []);
   const labels: Record<string, string> = {
     structure: "Estructura",
-    en_blanco: "En Blanco",
     cutting: "Corte",
     sewing: "Costura",
     upholstery: "Tapicería",
-    quality: "Calidad",
     dispatch: "Despacho",
   };
   return areas.length ? areas.map((area) => labels[area] ?? area).join(", ") : "Taller";

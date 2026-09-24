@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireSession } from "@/lib/auth";
 import { saveSystemSettings as persistSystemSettings } from "@/lib/repositories/settings";
 import type { SystemSettings } from "@/lib/types";
+import { retiredProductionStepKeys } from "@/lib/production-flow";
 
 const boolean = z.boolean();
 const settingsSchema = z.object({
@@ -61,6 +62,9 @@ const settingsSchema = z.object({
     context.addIssue({ code: "custom", path: ["production", "steps"], message: "Debe existir al menos una etapa activa." });
   }
   const keys = settings.production.steps.map((step) => step.key);
+  if (keys.some((key) => retiredProductionStepKeys.has(key))) {
+    context.addIssue({ code: "custom", path: ["production", "steps"], message: "Una etapa retirada no puede volver a activarse." });
+  }
   if (new Set(keys).size !== keys.length) {
     context.addIssue({ code: "custom", path: ["production", "steps"], message: "Las claves de las etapas no pueden repetirse." });
   }

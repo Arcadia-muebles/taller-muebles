@@ -327,7 +327,9 @@ async function closeSupabaseOrderFromAgenda({
   const { error: stepsError } = await supabase
     .from("production_steps")
     .update({ status: "done", completed_at: completedAt, updated_by: profileId })
-    .in("order_id", groupOrderIds);
+    .in("order_id", groupOrderIds)
+    .neq("step", "en_blanco")
+    .neq("step", "quality");
   if (stepsError) {
     console.error("Production step completion from agenda failed:", stepsError.message);
     throw new Error("No fue posible cerrar las etapas asociadas a la entrega.");

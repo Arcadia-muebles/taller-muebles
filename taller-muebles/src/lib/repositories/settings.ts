@@ -4,16 +4,17 @@ import { hasSupabaseConfig } from "@/lib/env";
 import { getLocalSystemSettings, saveLocalSystemSettings } from "@/lib/local-store";
 import { createClient } from "@/lib/supabase/server";
 import { defaultSystemSettings } from "@/lib/system-settings";
+import { normalizeProductionSettings } from "@/lib/production-flow";
 import type { Json } from "@/lib/supabase/database.types";
 import type { SystemSettings } from "@/lib/types";
 
 export async function getSystemSettings(): Promise<SystemSettings> {
-  if (!hasSupabaseConfig()) return getLocalSystemSettings();
+  if (!hasSupabaseConfig()) return normalizeProductionSettings(await getLocalSystemSettings());
 
   const supabase = await createClient();
   const { data, error } = await supabase.from("system_settings").select("value, updated_at").eq("id", true).maybeSingle();
   if (error || !data) return defaultSystemSettings;
-  return mergeWithDefaults(data.value, data.updated_at);
+  return normalizeProductionSettings(mergeWithDefaults(data.value, data.updated_at));
 }
 
 export async function saveSystemSettings(settings: SystemSettings) {

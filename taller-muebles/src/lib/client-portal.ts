@@ -297,6 +297,7 @@ function mapSafeGroup(rows: SafeOrderRow[]): ClientPortalOrder["orders"][number]
   const first = rows[0];
   const items = rows.map((row) => {
     const steps = [...(row.production_steps ?? [])]
+      .filter((step) => step.step !== "en_blanco" && step.step !== "quality")
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(({ step, step_label, status }) => ({ key: step, label: step_label, status }));
     const progress = steps.length

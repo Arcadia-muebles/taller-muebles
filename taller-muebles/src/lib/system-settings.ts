@@ -11,15 +11,13 @@ export const defaultSystemSettings: SystemSettings = {
   production: {
     steps: [
       { key: "structure", label: "Estructura", targetDays: 2, enabled: true, required: true },
-      { key: "en_blanco", label: "En Blanco", targetDays: 1, enabled: true, required: true },
       { key: "cutting", label: "Corte", targetDays: 1, enabled: true, required: true },
       { key: "sewing", label: "Costura", targetDays: 2, enabled: true, required: true },
       { key: "upholstery", label: "Tapicería", targetDays: 3, enabled: true, required: true },
-      { key: "quality", label: "Control Calidad", targetDays: 1, enabled: true, required: true },
       { key: "dispatch", label: "Terminado", targetDays: 1, enabled: true, required: true },
     ],
     allowParallelSteps: false,
-    requireQualityApproval: true,
+    requireQualityApproval: false,
     autoCompleteAfterQuality: false,
   },
   orders: {

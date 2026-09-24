@@ -5,6 +5,7 @@ import path from "node:path";
 import type { AgendaItem, AgendaPriority, AgendaTimeSlot, AppUser, AreaKey, AuditEntry, ClientPortalLink, Order, OrderAttachment, OrderComment, ProductionStep, StepStatus, StockItem, StockMovement, StructureRequest, StructureRequestStatus, Supplier, SystemSettings } from "@/lib/types";
 import { clientPortalKeyForOrder } from "@/lib/client-portal-identity";
 import { defaultSystemSettings } from "@/lib/system-settings";
+import { activeProductionSteps, normalizeProductionSettings, retiredProductionStepKeys } from "@/lib/production-flow";
 import { nextOrderCodeForStore, shortOrderCode } from "@/lib/order-codes";
 import { canProductionStepsRunTogether, orderGroupKey, productionOrderGroup, productionStepsResetByReversal } from "@/lib/orders";
 
@@ -22,6 +23,8 @@ type LocalData = {
   clientPortalLinks?: ClientPortalLink[];
   deletedUserIds?: string[];
   settings?: SystemSettings;
+  retiredSteps?: Array<{ orderId: string; step: ProductionStep; retiredAt: string }>;
+  retiredAreaUserIds?: string[];
 };
 
 const dataDir = process.env.NODE_ENV !== "production" && process.env.LOCAL_DATA_DIR
@@ -68,14 +71,6 @@ const defaultLocalUsers: AppUser[] = [
     active: true,
   },
   {
-    id: "local-worker-en-blanco",
-    email: "enblanco@taller.local",
-    name: "Operador En Blanco",
-    role: "operator",
-    area: "en_blanco",
-    active: true,
-  },
-  {
     id: "local-worker-cutting",
     email: "corte@taller.local",
     name: "Operador Corte",
@@ -97,14 +92,6 @@ const defaultLocalUsers: AppUser[] = [
     name: "Operador Tapicería",
     role: "operator",
     area: "upholstery",
-    active: true,
-  },
-  {
-    id: "local-worker-quality",
-    email: "calidad@taller.local",
-    name: "Operador Calidad",
-    role: "operator",
-    area: "quality",
     active: true,
   },
   {
@@ -132,11 +119,9 @@ const seededDemoPeople = new Map(
 
 const stepDefinitions: Array<{ key: AreaKey; label: string; ownerFallback: string }> = [
   { key: "structure", label: "Estructura", ownerFallback: "Sin responsable asignado" },
-  { key: "en_blanco", label: "En Blanco", ownerFallback: "Sin responsable asignado" },
   { key: "cutting", label: "Corte", ownerFallback: "Sin responsable asignado" },
   { key: "sewing", label: "Costura", ownerFallback: "Sin responsable asignado" },
   { key: "upholstery", label: "Tapicería", ownerFallback: "Sin responsable asignado" },
-  { key: "quality", label: "Control Calidad", ownerFallback: "Sin responsable asignado" },
   { key: "dispatch", label: "Terminado", ownerFallback: "Sin responsable asignado" },
 ];
 
@@ -169,6 +154,8 @@ async function readData(): Promise<LocalData> {
     clientPortalLinks: parsed.clientPortalLinks ?? [],
     deletedUserIds: parsed.deletedUserIds ?? [],
     settings: parsed.settings,
+    retiredSteps: parsed.retiredSteps ?? [],
+    retiredAreaUserIds: parsed.retiredAreaUserIds ?? [],
   };
   const normalized = normalizeLocalData(data);
   if (normalized.changed) await writeData(normalized.data);
@@ -937,10 +924,7 @@ export async function updateLocalProductionStep(input: {
     order.condition = "Sin condicion";
   } else if (order.steps.every((item) => item.status === "done")) {
     order.status = "quality_control";
-    order.condition = "Control de calidad";
-  } else if (order.steps.find((item) => item.key === "quality")?.status === "active") {
-    order.status = "quality_control";
-    order.condition = "Control de calidad";
+    order.condition = "Sin condicion";
   } else {
     order.status = order.priority === "critical" ? "urgent" : "in_production";
     if (order.condition === "Entregado" || order.condition === "Control de calidad") {
@@ -996,13 +980,12 @@ export async function moveLocalOrderToStep(input: {
     };
   });
 
-  order.status = input.stepKey === "quality"
+  order.status = targetIsFinalStep
     ? "quality_control"
     : order.priority === "critical"
       ? "urgent"
       : "in_production";
-  order.condition = input.stepKey === "quality" ? "Control de calidad" : order.condition;
-  if (input.stepKey !== "quality" && order.condition === "Entregado") {
+  if (order.condition === "Entregado" || order.condition === "Control de calidad") {
     order.condition = "Sin condicion";
   }
 
@@ -1441,7 +1424,7 @@ export async function updateLocalUser(input: {
 }
 
 export async function getLocalSystemSettings() {
-  return (await readData()).settings ?? defaultSystemSettings;
+  return normalizeProductionSettings((await readData()).settings ?? defaultSystemSettings);
 }
 
 export async function saveLocalSystemSettings(settings: SystemSettings) {
@@ -1478,6 +1461,26 @@ function addAudit(data: LocalData, orderId: string, action: string, summary: str
 
 function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolean } {
   let changed = false;
+  if (data.settings) {
+    const normalizedSettings = normalizeProductionSettings(data.settings);
+    if (JSON.stringify(normalizedSettings.production) !== JSON.stringify(data.settings.production)) {
+      data.settings = normalizedSettings;
+      changed = true;
+    }
+  }
+  for (const user of data.users) {
+    if (user.role !== "operator") continue;
+    const areas = (user.areas ?? (user.area ? [user.area] : [])).filter((area) => !retiredProductionStepKeys.has(area));
+    if (areas.length !== (user.areas ?? (user.area ? [user.area] : [])).length) {
+      user.areas = areas;
+      user.area = areas[0];
+      if (!areas.length) {
+        data.retiredAreaUserIds ??= [];
+        if (!data.retiredAreaUserIds.includes(user.id)) data.retiredAreaUserIds.push(user.id);
+      }
+      changed = true;
+    }
+  }
   for (const item of data.agendaItems) {
     if (!item.priority) {
       item.priority = "normal";
@@ -1486,6 +1489,26 @@ function normalizeLocalData(data: LocalData): { data: LocalData; changed: boolea
   }
   const nextProductPositionByGroup = new Map<string, number>();
   for (const order of data.orders) {
+    const retired = order.steps.filter((step) => retiredProductionStepKeys.has(step.key));
+    if (retired.length) {
+      data.retiredSteps ??= [];
+      data.retiredSteps.push(...retired.map((step) => ({ orderId: order.id, step, retiredAt: nowIso() })));
+      order.steps = order.steps.filter((step) => !retiredProductionStepKeys.has(step.key));
+      if (order.status !== "completed" && order.status !== "cancelled") {
+        order.status = order.steps.some((step) => step.status === "blocked")
+          ? "blocked"
+          : order.steps.length > 0 && order.steps.every((step) => step.status === "done")
+            ? "quality_control"
+            : order.steps.every((step) => step.status === "pending")
+              ? "scheduled"
+              : order.priority === "critical" ? "urgent" : "in_production";
+      }
+      changed = true;
+    }
+    if (order.condition === "Control de calidad") {
+      order.condition = "Sin condicion";
+      changed = true;
+    }
     if (typeof order.includesVat !== "boolean") {
       order.includesVat = true;
       changed = true;
@@ -1643,7 +1666,7 @@ function ensureConfiguredOrderSteps(
   data: LocalData,
   configuredSteps: SystemSettings["production"]["steps"],
 ) {
-  const enabledSteps = configuredSteps.filter((step) => step.enabled);
+  const enabledSteps = activeProductionSteps(configuredSteps).filter((step) => step.enabled);
   if (!enabledSteps.length) return false;
 
   const existingByKey = new Map(order.steps.map((step) => [step.key, step]));
@@ -1675,7 +1698,7 @@ function ensureConfiguredOrderSteps(
     };
   });
 
-  const extraSteps = order.steps.filter((step) => !configuredKeys.has(step.key));
+  const extraSteps = order.steps.filter((step) => !configuredKeys.has(step.key) && !retiredProductionStepKeys.has(step.key));
   const nextSteps = [...normalizedSteps, ...extraSteps];
   const changed =
     nextSteps.length !== order.steps.length ||
@@ -1701,7 +1724,7 @@ export async function nextLocalOrderCode(store: Order["store"]) {
 function pickLocalStepOwner(data: LocalData, area: AreaKey, fallback: string) {
   return (
     data.users.find((user) => isRealLocalOperator(user) && userAreas(user).includes(area))?.name ??
-    data.users.find((user) => isRealLocalOperator(user) && !userAreas(user).length)?.name ??
+    data.users.find((user) => isRealLocalOperator(user) && !userAreas(user).length && !data.retiredAreaUserIds?.includes(user.id))?.name ??
     fallback
   );
 }

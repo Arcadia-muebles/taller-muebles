@@ -153,7 +153,7 @@ const conditionLabels: Record<string, Order["condition"]> = {
   warehouse: "En bodega",
   showroom: "En exhibicion",
   loaned: "En exhibicion",
-  quality_control: "Control de calidad",
+  quality_control: "Sin condicion",
   delivered: "Entregado",
 };
 
@@ -307,7 +307,7 @@ export async function listReportOrders(): Promise<ReportOrder[]> {
     documentType: record.document_type as CommercialDocumentType,
     client: record.client_name,
     product: record.product_name,
-    steps: (record.production_steps ?? [])
+    steps: (record.production_steps ?? []).filter((step) => step.step !== "en_blanco" && step.step !== "quality")
       .sort((first, second) => first.sort_order - second.sort_order)
       .map((step) => ({
         key: step.step,
@@ -385,7 +385,7 @@ export async function getOrderProductionState(id: string): Promise<ProductionOrd
     documentType: record.document_type as CommercialDocumentType,
     priority: record.priority as Order["priority"],
     status: record.status as OrderStatus,
-    steps: (record.production_steps ?? [])
+    steps: (record.production_steps ?? []).filter((step) => step.step !== "en_blanco" && step.step !== "quality")
       .sort((first, second) => first.sort_order - second.sort_order)
       .map((step) => ({
         key: step.step,
@@ -658,11 +658,9 @@ function profileContext(profile: { role: string; area: string | string[] | null 
 function areaLabel(area: string) {
   const labels: Record<string, string> = {
     structure: "Estructura",
-    en_blanco: "En Blanco",
     cutting: "Corte",
     sewing: "Costura",
     upholstery: "Tapicería",
-    quality: "Calidad",
     dispatch: "Despacho",
   };
   return labels[area] ?? area;
@@ -720,6 +718,7 @@ function groupAttachmentsByOrder(attachments: OrderAttachment[]) {
 
 function mapOrderRecord(record: OrderRecord): Order {
   const steps = (record.production_steps ?? [])
+    .filter((step) => step.step !== "en_blanco" && step.step !== "quality")
     .sort((a, b) => a.sort_order - b.sort_order)
     .map(mapStepRecord);
   const code = shortOrderCode(record.internal_code);
@@ -792,7 +791,7 @@ function mapWorkshopOrderRecord(record: WorkshopOrderRecord): Order {
     completedAt: record.completed_at ?? undefined,
     assignedTo: normalizeOwner(record.assigned_profile?.full_name),
     observations: record.observations ?? "Sin observaciones.",
-    steps: (record.production_steps ?? [])
+    steps: (record.production_steps ?? []).filter((step) => step.step !== "en_blanco" && step.step !== "quality")
       .sort((first, second) => first.sort_order - second.sort_order)
       .map(mapStepRecord),
   };

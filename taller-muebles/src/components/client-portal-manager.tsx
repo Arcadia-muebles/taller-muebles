@@ -422,7 +422,7 @@ function statusLabel(status: OrderStatus) {
     in_production: "En producción",
     blocked: "Bloqueado",
     urgent: "Urgente",
-    quality_control: "Control de calidad",
+    quality_control: "Listo para entrega",
     completed: "Completado",
     cancelled: "Cancelado",
   };

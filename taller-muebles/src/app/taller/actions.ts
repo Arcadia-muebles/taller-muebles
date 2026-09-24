@@ -403,9 +403,7 @@ export async function updateProductionStep(
       .from("orders")
       .update({
         status: nextOrderStatus,
-        condition: nextOrderStatus === "quality_control"
-            ? "quality_control"
-            : "none",
+        condition: "none",
         completed_at: null,
       })
       .eq("id", parsed.data.orderId),
@@ -523,7 +521,6 @@ function orderStatusAfterStepChange(
   if (steps.every((step) => step.status === "done")) {
     return "quality_control" as const;
   }
-  if (steps.find((step) => step.key === "quality")?.status === "active") return "quality_control" as const;
   return priority === "critical" ? "urgent" as const : "in_production" as const;
 }
 

@@ -100,7 +100,7 @@ export async function createStructureRequest(formData: FormData): Promise<Struct
   }
   const structureStep = order.steps.find((step) => step.key === "structure");
   if (parsed.data.status === "draft" && structureStep?.status !== "pending") {
-    return { ok: false, message: "No puedes volver a En blanco porque la estructura ya comenzó." };
+    return { ok: false, message: "No puedes volver a Sin solicitar porque la estructura ya comenzó." };
   }
 
   const fileValue = formData.get("file");
@@ -373,7 +373,7 @@ async function changeStructureOrderStatus(input: unknown): Promise<StructureStag
   }
   const structureStep = order.steps.find((step) => step.key === "structure");
   if (parsed.data.status === "draft" && structureStep?.status !== "pending") {
-    return { ok: false, message: "No puedes volver a En blanco porque la estructura ya comenzó." };
+    return { ok: false, message: "No puedes volver a Sin solicitar porque la estructura ya comenzó." };
   }
 
   if (!hasSupabaseConfig()) {
@@ -581,7 +581,7 @@ async function auditStructureChanges({
 
 function structureStageMessage(status: "draft" | "requested" | "in_progress" | "done") {
   return {
-    draft: "La estructura quedó En blanco.",
+    draft: "La estructura quedó Sin solicitar.",
     requested: "La estructura quedó Pedida.",
     in_progress: "La estructura quedó En estructura.",
     done: "La estructura quedó Lista.",
